@@ -1,0 +1,284 @@
+/* =========================================================
+   CUSTOMER UI THEME
+   Shared visual language for every customer page.
+========================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+    --ui-primary: #2563eb;
+    --ui-primary-dark: #1748b5;
+    --ui-primary-soft: #eff6ff;
+    --ui-surface: #ffffff;
+    --ui-background: #f5f7fb;
+    --ui-text: #172033;
+    --ui-muted: #64748b;
+    --ui-subtle: #94a3b8;
+    --ui-border: #e7edf5;
+    --ui-radius-sm: 10px;
+    --ui-radius-md: 15px;
+    --ui-radius-lg: 20px;
+    --ui-shadow-sm: 0 3px 12px rgba(15, 23, 42, .035);
+    --ui-shadow: 0 10px 35px rgba(15, 23, 42, .065);
+    --ui-shadow-lg: 0 20px 55px rgba(15, 23, 42, .10);
+    --ui-gradient: linear-gradient(135deg, #1555d9 0%, #2563eb 52%, #4b8df7 100%);
+    --ui-gradient-soft: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    background:
+        radial-gradient(circle at 85% 5%, rgba(37, 99, 235, .045), transparent 25%),
+        var(--ui-background);
+    color: var(--ui-text);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+    position: fixed;
+    inset: 0 0 auto;
+    height: 3px;
+    z-index: 2000;
+    content: "";
+    pointer-events: none;
+    background: var(--ui-gradient);
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+}
+
+button,
+a {
+    -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+    color: #fff;
+    background: var(--ui-primary);
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #eef2f7;
+}
+
+::-webkit-scrollbar-thumb {
+    border: 2px solid #eef2f7;
+    border-radius: 20px;
+    background: #c8d3e2;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #9fb1c8;
+}
+
+:where(.card, .content-card, .form-card, .billing-stat-card, .payment-card, .dashboard-card, .table-wrapper, .profile-card, .settings-card) {
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-md);
+    box-shadow: var(--ui-shadow-sm);
+}
+
+:where(.card, .content-card, .form-card, .billing-stat-card, .payment-card, .dashboard-card, .profile-card, .settings-card):hover {
+    box-shadow: var(--ui-shadow);
+}
+
+:where(input, select, textarea) {
+    border-color: var(--ui-border);
+    border-radius: var(--ui-radius-sm);
+    background: var(--ui-surface);
+    color: var(--ui-text);
+    transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+}
+
+:where(input, select, textarea):focus {
+    border-color: #8bb3fa;
+    outline: 0;
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, .10);
+}
+
+:where(.btn, .btn-add, .btn-primary, .btn-submit, .btn-submit-service, .btn-upgrade, .btn-confirm, .btn-pay, .btn-chat, .hero-button) {
+    border: 0;
+    border-radius: var(--ui-radius-sm);
+    font-weight: 700;
+    transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+}
+
+:where(.btn, .btn-add, .btn-primary, .btn-submit, .btn-submit-service, .btn-upgrade, .btn-confirm, .btn-pay, .btn-chat, .hero-button):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 9px 22px rgba(37, 99, 235, .18);
+}
+
+:where(.table-wrapper, .table-responsive) {
+    overflow-x: auto;
+    background: var(--ui-surface);
+}
+
+:where(table) {
+    border-collapse: collapse;
+}
+
+:where(th) {
+    color: #64748b;
+    background: #f8faff;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+}
+
+:where(td, th) {
+    border-bottom-color: #edf1f6;
+}
+
+:where(.topbar, .header, .page-header) {
+    border-bottom-color: rgba(226, 232, 240, .85);
+    background: rgba(255, 255, 255, .90);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+}
+
+/* Shared visual language for pages that use a local shell. */
+:where(.profile-page, .edit-page, .subscription-page, .renewal-page, .installation-page,
+    .payment-page, .page-wrapper, .page-background, .complaint-page, .page) {
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at 90% 0%, rgba(37, 99, 235, .08), transparent 28%),
+        var(--ui-background);
+}
+
+:where(.profile-navbar, .edit-navbar, .subscription-navbar, .renewal-navbar,
+    .installation-navbar, .payment-navbar, .top-header) {
+    min-height: 76px;
+    border-bottom: 1px solid rgba(226, 232, 240, .85);
+    background: rgba(255, 255, 255, .88);
+    box-shadow: 0 8px 26px rgba(15, 23, 42, .04);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+}
+
+:where(.profile-container, .edit-container, .subscription-container, .renewal-container,
+    .installation-container, .payment-container, .main-container, .content-container) {
+    width: min(1200px, calc(100% - 64px));
+    margin: 0 auto;
+    padding-top: 32px;
+    padding-bottom: 52px;
+}
+
+:where(.profile-card, .settings-card, .info-card, .form-card, .payment-card,
+    .package-card, .subscription-card, .installation-card, .content-card, .dashboard-card) {
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-md);
+    background: rgba(255, 255, 255, .94);
+    box-shadow: var(--ui-shadow-sm);
+}
+
+:where(.profile-card, .settings-card, .info-card, .form-card, .payment-card,
+    .package-card, .subscription-card, .installation-card, .content-card, .dashboard-card):hover {
+    box-shadow: var(--ui-shadow);
+}
+
+:where(.edit-profile-btn, .dashboard-link, .btn-primary, .btn-submit, .btn-add,
+    .btn-pay, .btn-confirm, .btn-upgrade, .hero-button, .submit-btn) {
+    background: var(--ui-gradient);
+    color: #fff;
+    border: 0;
+    box-shadow: 0 9px 22px rgba(37, 99, 235, .18);
+}
+
+:where(.edit-profile-btn, .dashboard-link, .btn-primary, .btn-submit, .btn-add,
+    .btn-pay, .btn-confirm, .btn-upgrade, .hero-button, .submit-btn):hover {
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 13px 28px rgba(37, 99, 235, .26);
+}
+
+/* Dashboard typography scale for every non-dashboard customer page. */
+body:not(.dashboard-page) {
+    font-size: 14px;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    line-height: 1.5;
+}
+
+body:not(.dashboard-page) :where(.sidebar-brand, .sidebar-logo) {
+    font-size: 12px;
+}
+
+body:not(.dashboard-page) :where(.menu-item, .sidebar-menu > a) {
+    font-size: 14px !important;
+}
+
+body:not(.dashboard-page) :where(.topbar h1, .topbar h4, .page-header h1, .header h1) {
+    font-size: 18px !important;
+    line-height: 1.2;
+}
+
+body:not(.dashboard-page) :where(.topbar span, .topbar p, .top-user span, .top-profile-info span,
+    .sidebar-user small, .sidebar-user-info span) {
+    font-size: 10px !important;
+}
+
+body:not(.dashboard-page) :where(.content h1, .content h2, .page-content h1, .page-content h2,
+    .billing-header h1, .billing-header h2) {
+    font-size: 25px;
+    line-height: 1.2;
+}
+
+body:not(.dashboard-page) :where(.content p, .page-content p, .billing-header p,
+    .profile-card p, .form-card p, .content-card p) {
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+body:not(.dashboard-page) :where(.card-title h5, .card-title h3, .card-header h3,
+    .content-card h3, .form-card h3) {
+    font-size: 15px;
+}
+
+body:not(.dashboard-page) :where(th) {
+    font-size: 11px !important;
+}
+
+body:not(.dashboard-page) :where(td) {
+    font-size: 13px;
+}
+
+body:not(.dashboard-page) :where(input, select, textarea, button) {
+    font-size: 14px;
+}
+
+@media (max-width: 768px) {
+    :where(.content, .billing-page, .page-content, .dashboard-content) {
+        padding-right: 16px;
+        padding-left: 16px;
+    }
+
+    :where(.profile-container, .edit-container, .subscription-container, .renewal-container,
+        .installation-container, .payment-container, .main-container, .content-container) {
+        width: calc(100% - 32px);
+        padding-top: 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    :where(.content, .billing-page, .page-content, .dashboard-content) {
+        padding-right: 12px;
+        padding-left: 12px;
+    }
+
+    :where(.card, .content-card, .form-card, .payment-card, .dashboard-card) {
+        border-radius: 14px;
+    }
+}

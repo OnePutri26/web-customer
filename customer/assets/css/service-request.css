@@ -1,0 +1,1593 @@
+@import url('theme.css');
+
+/* =========================================================
+   SERVICE REQUEST
+   ========================================================= */
+
+:root {
+
+    --service-primary: #2563eb;
+    --service-primary-dark: #1d4ed8;
+    --service-primary-soft: #eff6ff;
+
+    --service-success: #16a34a;
+    --service-success-soft: #f0fdf4;
+
+    --service-warning: #f59e0b;
+    --service-warning-soft: #fffbeb;
+
+    --service-danger: #dc2626;
+    --service-danger-soft: #fef2f2;
+
+    --service-text: #172033;
+    --service-muted: #64748b;
+
+    --service-border: #e5e7eb;
+
+    --service-bg: #f6f8fc;
+    --service-white: #ffffff;
+
+    --service-shadow:
+        0 10px 30px rgba(15, 23, 42, 0.06);
+
+    --service-radius: 18px;
+}
+
+
+/* =========================================================
+   CONTENT
+   ========================================================= */
+
+.service-content {
+    background: var(--service-bg);
+}
+
+
+/* =========================================================
+   PAGE HEADER
+   ========================================================= */
+
+.service-page-header {
+
+    position: relative;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    overflow: hidden;
+
+    min-height: 190px;
+
+    padding: 32px 38px;
+
+    margin-bottom: 24px;
+
+    border-radius: var(--service-radius);
+
+    background:
+        linear-gradient(
+            135deg,
+            #2563eb,
+            #1d4ed8,
+            #1e40af
+        );
+
+    color: #ffffff;
+
+    box-shadow:
+        0 15px 35px rgba(37, 99, 235, 0.18);
+}
+
+
+.service-page-header > div:first-child {
+
+    position: relative;
+
+    z-index: 2;
+
+    max-width: 720px;
+}
+
+
+.page-label {
+
+    display: block;
+
+    margin-bottom: 7px;
+
+    font-size: 10px;
+
+    font-weight: 800;
+
+    letter-spacing: 1.5px;
+
+    opacity: 0.82;
+}
+
+
+.service-page-header h1 {
+
+    margin: 0 0 8px;
+
+    font-size: 29px;
+
+    font-weight: 800;
+
+    letter-spacing: -0.5px;
+}
+
+
+.service-page-header p {
+
+    margin: 0;
+
+    max-width: 620px;
+
+    color:
+        rgba(255, 255, 255, 0.82);
+
+    font-size: 13px;
+
+    line-height: 1.7;
+}
+
+
+.service-header-icon {
+
+    width: 90px;
+
+    height: 90px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    margin-right: 30px;
+
+    border-radius: 25px;
+
+    background:
+        rgba(255, 255, 255, 0.13);
+
+    color:
+        rgba(255, 255, 255, 0.85);
+
+    font-size: 42px;
+
+    transform: rotate(-8deg);
+}
+
+
+/* =========================================================
+   ALERT
+   ========================================================= */
+
+.service-alert {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 13px;
+
+    padding: 14px 17px;
+
+    margin-bottom: 20px;
+
+    border-radius: 13px;
+
+    transition:
+        opacity 0.4s ease,
+        transform 0.4s ease;
+}
+
+
+.service-alert.success {
+
+    border: 1px solid #bbf7d0;
+
+    background:
+        var(--service-success-soft);
+
+    color:
+        var(--service-success);
+}
+
+
+.service-alert.error {
+
+    border: 1px solid #fecaca;
+
+    background:
+        var(--service-danger-soft);
+
+    color:
+        var(--service-danger);
+}
+
+
+.alert-icon {
+
+    width: 36px;
+
+    height: 36px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    border-radius: 10px;
+
+    background:
+        rgba(255, 255, 255, 0.75);
+
+    font-size: 18px;
+}
+
+
+.service-alert strong {
+
+    display: block;
+
+    margin-bottom: 2px;
+
+    font-size: 12px;
+}
+
+
+.service-alert span {
+
+    display: block;
+
+    font-size: 11px;
+}
+
+
+.hide-alert {
+
+    opacity: 0;
+
+    transform: translateY(-5px);
+
+}
+
+
+/* =========================================================
+   CARD
+   ========================================================= */
+
+.service-card {
+
+    height: 100%;
+
+    padding: 25px;
+
+    border: 1px solid var(--service-border);
+
+    border-radius: var(--service-radius);
+
+    background:
+        var(--service-white);
+
+    box-shadow:
+        var(--service-shadow);
+}
+
+
+.service-card-header {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 13px;
+
+    margin-bottom: 25px;
+
+    padding-bottom: 20px;
+
+    border-bottom:
+        1px solid var(--service-border);
+}
+
+
+.service-title-icon {
+
+    width: 45px;
+
+    height: 45px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    border-radius: 12px;
+
+    background:
+        var(--service-primary-soft);
+
+    color:
+        var(--service-primary);
+
+    font-size: 19px;
+}
+
+
+.service-card-header h2 {
+
+    margin: 0 0 3px;
+
+    color: var(--service-text);
+
+    font-size: 17px;
+
+    font-weight: 800;
+}
+
+
+.service-card-header p {
+
+    margin: 0;
+
+    color: var(--service-muted);
+
+    font-size: 11px;
+}
+
+
+/* =========================================================
+   FORM
+   ========================================================= */
+
+.service-form {
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 21px;
+}
+
+
+.form-group > label {
+
+    display: block;
+
+    margin-bottom: 9px;
+
+    color: var(--service-text);
+
+    font-size: 12px;
+
+    font-weight: 700;
+}
+
+
+.form-group > label span {
+
+    color: var(--service-danger);
+}
+
+
+/* =========================================================
+   SERVICE OPTIONS
+   ========================================================= */
+
+.service-options {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+
+    gap: 9px;
+}
+
+
+.service-option {
+
+    position: relative;
+
+    cursor: pointer;
+}
+
+
+.service-option input {
+
+    position: absolute;
+
+    opacity: 0;
+
+    pointer-events: none;
+}
+
+
+.option-box {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 9px;
+
+    min-height: 52px;
+
+    padding: 10px 12px;
+
+    border: 1px solid var(--service-border);
+
+    border-radius: 11px;
+
+    background: #ffffff;
+
+    color: #475569;
+
+    font-size: 11px;
+
+    font-weight: 600;
+
+    transition:
+        border-color 0.2s ease,
+        background 0.2s ease,
+        color 0.2s ease,
+        transform 0.2s ease;
+}
+
+
+.option-box i {
+
+    width: 28px;
+
+    height: 28px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    border-radius: 8px;
+
+    background:
+        #f1f5f9;
+
+    color: #64748b;
+
+    font-size: 13px;
+}
+
+
+.service-option:hover .option-box {
+
+    border-color:
+        rgba(37, 99, 235, 0.35);
+
+    transform: translateY(-1px);
+}
+
+
+.service-option input:checked + .option-box {
+
+    border-color:
+        var(--service-primary);
+
+    background:
+        var(--service-primary-soft);
+
+    color:
+        var(--service-primary);
+
+    box-shadow:
+        0 0 0 2px
+        rgba(37, 99, 235, 0.08);
+}
+
+
+.service-option input:checked + .option-box i {
+
+    background:
+        var(--service-primary);
+
+    color: #ffffff;
+}
+
+
+/* =========================================================
+   INPUT
+   ========================================================= */
+
+.input-icon {
+
+    position: relative;
+}
+
+
+.input-icon > i {
+
+    position: absolute;
+
+    top: 50%;
+
+    left: 14px;
+
+    z-index: 2;
+
+    color:
+        var(--service-muted);
+
+    font-size: 13px;
+
+    transform:
+        translateY(-50%);
+}
+
+
+.input-icon input {
+
+    width: 100%;
+
+    height: 43px;
+
+    padding: 0 13px 0 39px;
+
+    border:
+        1px solid var(--service-border);
+
+    border-radius: 10px;
+
+    outline: none;
+
+    background: #ffffff;
+
+    color: var(--service-text);
+
+    font-size: 12px;
+
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+
+.input-icon input:focus {
+
+    border-color:
+        var(--service-primary);
+
+    box-shadow:
+        0 0 0 3px
+        rgba(37, 99, 235, 0.08);
+}
+
+
+/* =========================================================
+   SELECT
+   ========================================================= */
+
+.select-wrapper {
+
+    position: relative;
+}
+
+
+.select-wrapper > i:first-child {
+
+    position: absolute;
+
+    top: 50%;
+
+    left: 14px;
+
+    z-index: 2;
+
+    color:
+        var(--service-muted);
+
+    font-size: 13px;
+
+    transform:
+        translateY(-50%);
+}
+
+
+.select-wrapper select {
+
+    width: 100%;
+
+    height: 43px;
+
+    padding: 0 38px 0 39px;
+
+    appearance: none;
+
+    border:
+        1px solid var(--service-border);
+
+    border-radius: 10px;
+
+    outline: none;
+
+    background: #ffffff;
+
+    color: var(--service-text);
+
+    font-size: 12px;
+
+    cursor: pointer;
+}
+
+
+.select-wrapper select:focus {
+
+    border-color:
+        var(--service-primary);
+
+    box-shadow:
+        0 0 0 3px
+        rgba(37, 99, 235, 0.08);
+}
+
+
+.select-arrow {
+
+    position: absolute;
+
+    top: 50%;
+
+    right: 14px;
+
+    color:
+        var(--service-muted);
+
+    font-size: 11px;
+
+    transform:
+        translateY(-50%);
+
+    pointer-events: none;
+}
+
+
+.form-help {
+
+    display: block;
+
+    margin-top: 6px;
+
+    color:
+        var(--service-muted);
+
+    font-size: 10px;
+
+    line-height: 1.5;
+}
+
+
+/* =========================================================
+   TEXTAREA
+   ========================================================= */
+
+.service-form textarea {
+
+    width: 100%;
+
+    padding: 12px 13px;
+
+    resize: vertical;
+
+    min-height: 120px;
+
+    border:
+        1px solid var(--service-border);
+
+    border-radius: 10px;
+
+    outline: none;
+
+    color: var(--service-text);
+
+    background: #ffffff;
+
+    font-size: 12px;
+
+    line-height: 1.6;
+
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+
+.service-form textarea:focus {
+
+    border-color:
+        var(--service-primary);
+
+    box-shadow:
+        0 0 0 3px
+        rgba(37, 99, 235, 0.08);
+}
+
+
+.textarea-footer {
+
+    display: flex;
+
+    justify-content: space-between;
+
+    gap: 10px;
+
+    margin-top: 6px;
+
+    color:
+        var(--service-muted);
+
+    font-size: 9px;
+}
+
+
+.textarea-footer span {
+
+    white-space: nowrap;
+}
+
+
+/* =========================================================
+   SUBMIT BUTTON
+   ========================================================= */
+
+.btn-submit-service {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    gap: 7px;
+
+    width: 100%;
+
+    height: 44px;
+
+    border: 0;
+
+    border-radius: 10px;
+
+    background:
+        var(--service-primary);
+
+    color: #ffffff;
+
+    font-size: 12px;
+
+    font-weight: 700;
+
+    cursor: pointer;
+
+    transition:
+        background 0.2s ease,
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+
+.btn-submit-service:hover {
+
+    background:
+        var(--service-primary-dark);
+
+    transform:
+        translateY(-1px);
+
+    box-shadow:
+        0 7px 18px
+        rgba(37, 99, 235, 0.18);
+}
+
+
+.btn-submit-service:disabled {
+
+    opacity: 0.7;
+
+    cursor: not-allowed;
+
+    transform: none;
+}
+
+
+/* =========================================================
+   PROCESS
+   ========================================================= */
+
+.process-card {
+
+    height: auto;
+
+    margin-bottom: 20px;
+}
+
+
+.service-process {
+
+    padding-top: 2px;
+}
+
+
+.process-item {
+
+    display: flex;
+
+    align-items: flex-start;
+
+    gap: 13px;
+}
+
+
+.process-number {
+
+    width: 32px;
+
+    height: 32px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    border-radius: 50%;
+
+    background:
+        var(--service-primary-soft);
+
+    color:
+        var(--service-primary);
+
+    font-size: 11px;
+
+    font-weight: 800;
+}
+
+
+.process-item strong {
+
+    display: block;
+
+    margin: 2px 0 4px;
+
+    color:
+        var(--service-text);
+
+    font-size: 12px;
+}
+
+
+.process-item span {
+
+    display: block;
+
+    color:
+        var(--service-muted);
+
+    font-size: 10px;
+
+    line-height: 1.5;
+}
+
+
+.process-line {
+
+    width: 1px;
+
+    height: 23px;
+
+    margin: 3px 0 3px 16px;
+
+    background:
+        #dbe3ef;
+}
+
+
+/* =========================================================
+   CS CARD
+   ========================================================= */
+
+.service-cs-card {
+
+    display: flex;
+
+    align-items: flex-start;
+
+    gap: 14px;
+
+    padding: 20px;
+
+    border:
+        1px solid #bfdbfe;
+
+    border-radius: 16px;
+
+    background:
+        linear-gradient(
+            135deg,
+            #f8fbff,
+            #eff6ff
+        );
+}
+
+
+.cs-avatar {
+
+    position: relative;
+
+    width: 48px;
+
+    height: 48px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    border-radius: 14px;
+
+    background:
+        var(--service-primary);
+
+    color: #ffffff;
+
+    font-size: 20px;
+}
+
+
+.online-dot {
+
+    position: absolute;
+
+    right: -1px;
+
+    bottom: -1px;
+
+    width: 12px;
+
+    height: 12px;
+
+    border: 2px solid #ffffff;
+
+    border-radius: 50%;
+
+    background:
+        var(--service-success);
+}
+
+
+.cs-content > span {
+
+    display: block;
+
+    margin-bottom: 3px;
+
+    color:
+        var(--service-primary);
+
+    font-size: 9px;
+
+    font-weight: 800;
+
+    letter-spacing: 1px;
+}
+
+
+.cs-content > strong {
+
+    display: block;
+
+    color:
+        var(--service-text);
+
+    font-size: 14px;
+}
+
+
+.cs-content p {
+
+    margin: 5px 0 10px;
+
+    color:
+        var(--service-muted);
+
+    font-size: 10px;
+
+    line-height: 1.5;
+}
+
+
+.cs-content a {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: 5px;
+
+    padding: 7px 10px;
+
+    border-radius: 8px;
+
+    background:
+        var(--service-primary);
+
+    color: #ffffff;
+
+    text-decoration: none;
+
+    font-size: 10px;
+
+    font-weight: 700;
+}
+
+
+.cs-content a:hover {
+
+    background:
+        var(--service-primary-dark);
+
+    color: #ffffff;
+}
+
+
+/* =========================================================
+   HISTORY
+   ========================================================= */
+
+.request-history {
+
+    margin-top: 35px;
+
+    padding: 25px;
+
+    border:
+        1px solid var(--service-border);
+
+    border-radius:
+        var(--service-radius);
+
+    background:
+        var(--service-white);
+
+    box-shadow:
+        var(--service-shadow);
+}
+
+
+.history-header {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    margin-bottom: 20px;
+}
+
+
+.history-header span {
+
+    display: block;
+
+    margin-bottom: 4px;
+
+    color:
+        var(--service-primary);
+
+    font-size: 10px;
+
+    font-weight: 800;
+
+    letter-spacing: 1.3px;
+}
+
+
+.history-header h2 {
+
+    margin: 0;
+
+    color:
+        var(--service-text);
+
+    font-size: 19px;
+
+    font-weight: 800;
+}
+
+
+.history-count {
+
+    min-width: 70px;
+
+    padding: 8px 12px;
+
+    text-align: center;
+
+    border-radius: 10px;
+
+    background:
+        var(--service-primary-soft);
+
+    color:
+        var(--service-primary);
+
+    font-size: 17px;
+
+    font-weight: 800;
+}
+
+
+.history-count small {
+
+    display: block;
+
+    color:
+        var(--service-muted);
+
+    font-size: 9px;
+
+    font-weight: 600;
+}
+
+
+/* =========================================================
+   EMPTY
+   ========================================================= */
+
+.empty-request {
+
+    padding: 45px 20px;
+
+    text-align: center;
+
+    border:
+        1px dashed #d7dee9;
+
+    border-radius: 13px;
+
+    background:
+        #fafbfc;
+}
+
+
+.empty-icon {
+
+    width: 55px;
+
+    height: 55px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    margin: 0 auto 12px;
+
+    border-radius: 16px;
+
+    background:
+        var(--service-primary-soft);
+
+    color:
+        var(--service-primary);
+
+    font-size: 24px;
+}
+
+
+.empty-request h3 {
+
+    margin: 0 0 5px;
+
+    color:
+        var(--service-text);
+
+    font-size: 14px;
+
+    font-weight: 800;
+}
+
+
+.empty-request p {
+
+    margin: 0;
+
+    color:
+        var(--service-muted);
+
+    font-size: 11px;
+}
+
+
+/* =========================================================
+   REQUEST LIST
+   ========================================================= */
+
+.request-list {
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 10px;
+}
+
+
+.request-item {
+
+    display: flex;
+
+    align-items: flex-start;
+
+    gap: 14px;
+
+    padding: 16px;
+
+    border:
+        1px solid var(--service-border);
+
+    border-radius: 13px;
+
+    background:
+        #ffffff;
+
+    transition:
+        border-color 0.2s ease,
+        transform 0.2s ease;
+}
+
+
+.request-item:hover {
+
+    border-color:
+        #bfdbfe;
+
+    transform:
+        translateY(-1px);
+}
+
+
+.request-type-icon {
+
+    width: 43px;
+
+    height: 43px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    border-radius: 11px;
+
+    background:
+        var(--service-primary-soft);
+
+    color:
+        var(--service-primary);
+
+    font-size: 17px;
+}
+
+
+.request-info {
+
+    flex: 1;
+
+    min-width: 0;
+}
+
+
+.request-top {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    gap: 10px;
+
+    margin-bottom: 5px;
+}
+
+
+.request-top strong {
+
+    color:
+        var(--service-text);
+
+    font-size: 12px;
+
+    font-weight: 800;
+}
+
+
+.request-status {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: 5px;
+
+    padding: 5px 8px;
+
+    white-space: nowrap;
+
+    border-radius: 50px;
+
+    background:
+        var(--service-warning-soft);
+
+    color:
+        #b45309;
+
+    font-size: 9px;
+
+    font-weight: 700;
+}
+
+
+.request-status i {
+
+    font-size: 8px;
+}
+
+
+.request-info > p {
+
+    margin: 0 0 9px;
+
+    color:
+        var(--service-muted);
+
+    font-size: 10px;
+
+    line-height: 1.5;
+
+    display: -webkit-box;
+
+    -webkit-line-clamp: 2;
+
+    -webkit-box-orient: vertical;
+
+    overflow: hidden;
+}
+
+
+.request-meta {
+
+    display: flex;
+
+    align-items: center;
+
+    flex-wrap: wrap;
+
+    gap: 12px;
+
+    color:
+        #94a3b8;
+
+    font-size: 9px;
+}
+
+
+.request-meta span {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: 4px;
+}
+
+
+.priority-normal {
+
+    color:
+        #64748b;
+}
+
+
+.priority-penting {
+
+    color:
+        var(--service-warning);
+}
+
+
+.priority-darurat {
+
+    color:
+        var(--service-danger);
+}
+
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 991px) {
+
+    .service-page-header {
+
+        padding: 28px;
+
+    }
+
+
+    .service-header-icon {
+
+        margin-right: 5px;
+
+    }
+
+}
+
+
+@media (max-width: 767px) {
+
+    .service-page-header {
+
+        min-height: auto;
+
+        padding: 25px;
+
+    }
+
+
+    .service-page-header h1 {
+
+        font-size: 23px;
+
+    }
+
+
+    .service-page-header p {
+
+        font-size: 11px;
+
+    }
+
+
+    .service-header-icon {
+
+        display: none;
+
+    }
+
+
+    .service-options {
+
+        grid-template-columns:
+            1fr;
+
+    }
+
+
+    .service-card {
+
+        padding: 20px;
+
+    }
+
+
+    .request-history {
+
+        padding: 20px;
+
+    }
+
+
+    .request-top {
+
+        align-items: flex-start;
+
+        flex-direction: column;
+
+    }
+
+
+    .request-status {
+
+        align-self: flex-start;
+
+    }
+
+}
+
+
+@media (max-width: 480px) {
+
+    .service-page-header {
+
+        padding: 21px;
+
+    }
+
+
+    .service-page-header h1 {
+
+        font-size: 20px;
+
+    }
+
+
+    .service-card {
+
+        padding: 17px;
+
+    }
+
+
+    .service-card-header {
+
+        align-items: flex-start;
+
+    }
+
+
+    .request-item {
+
+        padding: 13px;
+
+    }
+
+
+    .request-type-icon {
+
+        width: 38px;
+
+        height: 38px;
+
+        font-size: 15px;
+
+    }
+
+
+    .request-meta {
+
+        flex-direction: column;
+
+        align-items: flex-start;
+
+        gap: 5px;
+
+    }
+
+}

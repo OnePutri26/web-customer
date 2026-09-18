@@ -1,0 +1,132 @@
+@import url('theme.css');
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f5f7fb;
+}
+
+.container {
+    max-width: 700px;
+    margin: auto;
+    padding: 40px 20px;
+}
+
+.form-card {
+    background: white;
+    padding: 35px;
+    border-radius: 18px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.08);
+}
+
+h1 {
+    margin-bottom: 8px;
+}
+
+.subtitle {
+    color: #6b7280;
+    margin-bottom: 30px;
+}
+
+label {
+    display: block;
+    margin-top: 18px;
+    margin-bottom: 7px;
+    font-weight: bold;
+}
+
+input,
+textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 9px;
+    font-size: 14px;
+}
+
+textarea {
+    resize: vertical;
+}
+
+.location-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.location-btn {
+    margin-top: 15px;
+    padding: 11px 15px;
+    border: none;
+    border-radius: 9px;
+    background: #eef2ff;
+    color: #3730a3;
+    cursor: pointer;
+}
+
+.submit-btn {
+    width: 100%;
+    margin-top: 25px;
+    padding: 14px;
+    border: none;
+    border-radius: 10px;
+    background: #2563eb;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.error {
+    background: #fee2e2;
+    color: #991b1b;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+/* PROFILE-STYLE INSTALLATION */
+.installation-page { min-height: 100vh; background: #f5f7fb; color: #172033; }
+.installation-navbar { height: 78px; padding: 0 7%; display: flex; align-items: center; gap: 15px; background: #fff; border-bottom: 1px solid #e9edf3; }
+.back-dashboard { display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 11px; color: #2563eb; background: #eff6ff; font-size: 17px; text-decoration: none; transition: .2s ease; }
+.back-dashboard:hover { color: #fff; background: #2563eb; }
+.nav-title { flex: 1; }
+.nav-title strong, .nav-title span { display: block; }
+.nav-title strong { color: #111827; font-size: 17px; }
+.nav-title span { margin-top: 3px; color: #9ca3af; font-size: 12px; }
+.dashboard-link { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 10px; color: #475569; background: #f8fafc; font-size: 13px; font-weight: 600; text-decoration: none; }
+.dashboard-link:hover { color: #fff; background: #2563eb; }
+.installation-page .container { max-width: 780px; padding: 32px 24px 55px; }
+.installation-page .form-card { padding: 30px 34px; border: 1px solid #e8ebf2; border-radius: 18px; box-shadow: 0 8px 28px rgba(15,23,42,.07); }
+.form-intro { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.form-icon { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 14px; color: #2563eb; background: #eff6ff; font-size: 22px; }
+.installation-page .eyebrow { color: #2563eb; font-size: 10px; font-weight: 800; letter-spacing: 1.1px; }
+.installation-page h1 { margin: 4px 0 0; color: #172033; font-size: 25px; font-weight: 800; }
+.installation-page .subtitle { display: flex; align-items: center; gap: 7px; margin: 0 0 25px; padding: 12px 14px; border-radius: 10px; color: #667085; background: #f8fafc; font-size: 12px; }
+.installation-page .subtitle i { color: #2563eb; }
+.installation-page .subtitle strong { color: #2563eb; }
+.installation-page label { margin-top: 16px; color: #344054; font-size: 12px; }
+.installation-page label i { margin-right: 5px; color: #2563eb; }
+.installation-page input, .installation-page textarea { padding: 12px 13px; border: 1px solid #e2e8f0; border-radius: 10px; outline: 0; background: #fbfcfe; transition: .2s ease; }
+.installation-page input:focus, .installation-page textarea:focus { border-color: #93c5fd; background: #fff; box-shadow: 0 0 0 4px #eff6ff; }
+.installation-page .location-row { gap: 12px; }
+.installation-page .location-btn { display: inline-flex; align-items: center; gap: 7px; margin-top: 15px; padding: 10px 13px; border: 1px solid #bfdbfe; border-radius: 9px; color: #2563eb; background: #eff6ff; font-size: 12px; font-weight: 700; }
+.installation-page .location-btn:hover { background: #dbeafe; }
+.installation-page .submit-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; margin-top: 25px; border-radius: 10px; background: linear-gradient(135deg, #2563eb, #1d4ed8); box-shadow: 0 7px 18px rgba(37,99,235,.18); }
+.installation-page .error { display: flex; gap: 9px; align-items: center; margin-bottom: 18px; font-size: 12px; }
+@media (max-width: 600px) { .installation-navbar { padding: 0 18px; } .dashboard-link { padding: 10px; font-size: 0; } .dashboard-link i { font-size: 16px; } .installation-page .container { padding: 20px 14px 40px; } .installation-page .form-card { padding: 24px 19px; } .installation-page h1 { font-size: 22px; } .installation-page .location-row { grid-template-columns: 1fr; } }
+
+@media (max-width: 600px) {
+
+    .form-card {
+        padding: 25px 20px;
+    }
+
+    .location-row {
+        grid-template-columns: 1fr;
+    }
+
+}
