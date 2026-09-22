@@ -2,17 +2,19 @@
 
 session_start();
 
+<<<<<<< HEAD
+require_once __DIR__ . "/../config/database.php";
+require_once __DIR__ . "/../config/auth.php";
+=======
 require_once "../config/database.php";
 require_once "../config/auth.php";
 
 requireRole('customer');
+>>>>>>> 1c6c971974fd7d6bd5c1d19cfba47ce1c95b7cde
 
 date_default_timezone_set('Asia/Jakarta');
 
-mysqli_report(
-    MYSQLI_REPORT_ERROR |
-    MYSQLI_REPORT_STRICT
-);
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 
 /*
@@ -21,20 +23,19 @@ mysqli_report(
 |--------------------------------------------------------------------------
 */
 
-function e($value): string
+function e($value)
 {
     return htmlspecialchars(
-        (string) $value,
+        (string)$value,
         ENT_QUOTES,
         'UTF-8'
     );
 }
 
-
-function rupiah($value): string
+function rupiah($value)
 {
     return 'Rp ' . number_format(
-        (float) $value,
+        (float)$value,
         0,
         ',',
         '.'
@@ -46,12 +47,12 @@ function rupiah($value): string
 |--------------------------------------------------------------------------
 | CEK LOGIN
 |--------------------------------------------------------------------------
+|
+| Untuk sementara kita hanya memastikan ada user_id.
+|
 */
 
-$userId = (int) (
-    $_SESSION['user_id'] ?? 0
-);
-
+$userId = (int)($_SESSION['user_id'] ?? 0);
 
 if ($userId <= 0) {
 
@@ -62,6 +63,51 @@ if ($userId <= 0) {
 
 /*
 |--------------------------------------------------------------------------
+<<<<<<< HEAD
+| DATA DUMMY CUSTOMER
+|--------------------------------------------------------------------------
+|
+| DATA INI HANYA UNTUK TESTING DASHBOARD
+|
+*/
+
+$dummyCustomer = [
+
+    'id' => 1,
+
+    'user_id' => $userId,
+
+    'paket_id' => 1,
+
+    'nama' => $_SESSION['nama']
+        ?? $_SESSION['username']
+        ?? 'Customer Dummy',
+
+    'email' => $_SESSION['email']
+        ?? 'customer@example.com',
+
+    'telephone' => $_SESSION['telephone']
+        ?? $_SESSION['no_hp']
+        ?? '081234567890',
+
+    'nik' => '3500000000000001',
+
+    'alamat' => 'Jl. Contoh No. 123, Indonesia',
+
+    /*
+    |--------------------------------------------------------------------------
+    | PENTING
+    |--------------------------------------------------------------------------
+    |
+    | pending = dashboard customer bisa dibuka
+    | active  = layanan dianggap aktif
+    |
+    */
+
+    'status_langganan' => 'pending'
+
+];
+=======
 | VARIABEL
 |--------------------------------------------------------------------------
 */
@@ -139,41 +185,34 @@ if (!$customer) {
 
 
 $customerId = (int) $customer['id'];
+>>>>>>> 1c6c971974fd7d6bd5c1d19cfba47ce1c95b7cde
 
 
 /*
 |--------------------------------------------------------------------------
-| TENTUKAN PAKET
+| DATA DUMMY PAKET
 |--------------------------------------------------------------------------
 */
 
-if (
-    isset($_POST['paket_id']) &&
-    (int) $_POST['paket_id'] > 0
-) {
+$dummyPackage = [
 
-    $packageId = (int) $_POST['paket_id'];
+    'id' => 1,
 
-} elseif (
-    isset($_GET['paket_id']) &&
-    (int) $_GET['paket_id'] > 0
-) {
+    'nama_paket' => 'WiFi Home 50 Mbps',
 
-    $packageId = (int) $_GET['paket_id'];
+    'speed_mbps' => 50,
 
-} elseif (
-    isset($_SESSION['pengajuan_paket_id']) &&
-    (int) $_SESSION['pengajuan_paket_id'] > 0
-) {
+    'harga' => 250000,
 
-    $packageId =
-        (int) $_SESSION['pengajuan_paket_id'];
+    'deskripsi' =>
+        'Internet rumah cepat dan stabil ' .
+        'untuk kebutuhan keluarga.',
 
-} elseif (
-    isset($customer['paket_id']) &&
-    (int) $customer['paket_id'] > 0
-) {
+    'status' => 'aktif'
 
+<<<<<<< HEAD
+];
+=======
     $packageId =
         (int) $customer['paket_id'];
 }
@@ -190,14 +229,30 @@ if ($packageId <= 0) {
     header("Location: packages.php");
     exit;
 }
+>>>>>>> 1c6c971974fd7d6bd5c1d19cfba47ce1c95b7cde
 
 
 /*
 |--------------------------------------------------------------------------
+<<<<<<< HEAD
+| AMBIL PAKET DARI URL
+=======
 | AMBIL DATA PAKET
+>>>>>>> 1c6c971974fd7d6bd5c1d19cfba47ce1c95b7cde
 |--------------------------------------------------------------------------
+|
+| Contoh:
+|
+| payment.php?paket_id=1
+|
 */
 
+<<<<<<< HEAD
+$packageId = (int)(
+    $_GET['paket_id']
+    ?? $_POST['paket_id']
+    ?? 1
+=======
 $stmt = $conn->prepare("
     SELECT
         id,
@@ -314,11 +369,19 @@ $initial = strtoupper(
         0,
         1
     )
+>>>>>>> 1c6c971974fd7d6bd5c1d19cfba47ce1c95b7cde
 );
 
 
 /*
 |--------------------------------------------------------------------------
+<<<<<<< HEAD
+| UNTUK TESTING
+|--------------------------------------------------------------------------
+|
+| Apapun paket_id yang dikirim, sementara kita
+| tetap menggunakan paket dummy.
+=======
 | PROSES PEMBAYARAN DUMMY
 |--------------------------------------------------------------------------
 |
@@ -331,38 +394,190 @@ $initial = strtoupper(
 | 3. Paket disimpan ke customers.
 | 4. Session diperbarui.
 | 5. Redirect dashboard.
+>>>>>>> 1c6c971974fd7d6bd5c1d19cfba47ce1c95b7cde
 |
 */
 
-if (
-    $_SERVER['REQUEST_METHOD'] === 'POST' &&
-    isset($_POST['confirm_payment'])
-) {
+$dummyPackage['id'] = $packageId;
 
+<<<<<<< HEAD
+
+/*
+|--------------------------------------------------------------------------
+| SIMPAN DATA DUMMY KE SESSION
+|--------------------------------------------------------------------------
+|
+| Dashboard dapat menggunakan session ini jika
+| membutuhkan data customer.
+|
+*/
+
+$_SESSION['dummy_customer'] = $dummyCustomer;
+
+$_SESSION['dummy_package'] = $dummyPackage;
+
+$_SESSION['pengajuan_paket_id'] =
+    $dummyPackage['id'];
+
+$_SESSION['payment_package_id'] =
+    $dummyPackage['id'];
+
+$_SESSION['payment_customer_id'] =
+    $dummyCustomer['id'];
+
+
+/*
+|--------------------------------------------------------------------------
+| SIMPAN KE DATABASE
+|--------------------------------------------------------------------------
+|
+| Bagian ini mencoba menyimpan paket dan status
+| ke customer yang sedang login.
+|
+| Kalau database/schema belum cocok, dashboard
+| tetap bisa dicoba menggunakan session dummy.
+|
+*/
+
+try {
+
+    /*
+    |--------------------------------------------------------------------------
+    | CEK APAKAH CUSTOMER ADA
+    |--------------------------------------------------------------------------
+    */
+
+    $stmt = $conn->prepare("
+        SELECT id
+        FROM customers
+        WHERE user_id = ?
+        LIMIT 1
+    ");
+
+    $stmt->bind_param(
+        "i",
+        $userId
+    );
+
+    $stmt->execute();
+
+    $result = $stmt->get_result();
+
+    $realCustomer = $result->fetch_assoc();
+
+    $stmt->close();
+=======
     $postedPackageId = (int) (
         $_POST['paket_id']
         ?? 0
     );
+>>>>>>> 1c6c971974fd7d6bd5c1d19cfba47ce1c95b7cde
 
 
     /*
     |--------------------------------------------------------------------------
+<<<<<<< HEAD
+    | JIKA CUSTOMER ADA
+    |--------------------------------------------------------------------------
+    */
+
+    if ($realCustomer) {
+
+        $realCustomerId =
+            (int)$realCustomer['id'];
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | SIMPAN PAKET + STATUS
+        |--------------------------------------------------------------------------
+        */
+=======
     | VALIDASI PAKET
     |--------------------------------------------------------------------------
     */
 
     if ($postedPackageId <= 0) {
+>>>>>>> 1c6c971974fd7d6bd5c1d19cfba47ce1c95b7cde
 
-        $error =
-            "Paket belum dipilih.";
+        $stmtUpdate = $conn->prepare("
+            UPDATE customers
+            SET
+                paket_id = ?,
+                status_langganan = 'pending'
+            WHERE id = ?
+            LIMIT 1
+        ");
 
-    } elseif (
-        $postedPackageId !== $packageId
-    ) {
+        $stmtUpdate->bind_param(
+            "ii",
+            $dummyPackage['id'],
+            $realCustomerId
+        );
 
-        $error =
-            "Paket pembayaran tidak valid.";
+        $stmtUpdate->execute();
 
+<<<<<<< HEAD
+        $stmtUpdate->close();
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | UPDATE SESSION CUSTOMER ID
+        |--------------------------------------------------------------------------
+        */
+
+        $_SESSION['payment_customer_id'] =
+            $realCustomerId;
+
+    }
+
+
+} catch (Throwable $e) {
+
+    /*
+    |--------------------------------------------------------------------------
+    | JANGAN HENTIKAN TESTING
+    |--------------------------------------------------------------------------
+    |
+    | Kalau database belum cocok, kita tetap
+    | lanjut ke dashboard menggunakan dummy session.
+    |
+    */
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| STATUS DUMMY
+|--------------------------------------------------------------------------
+*/
+
+$_SESSION['subscription_status'] = 'pending';
+
+
+/*
+|--------------------------------------------------------------------------
+| TANDA TESTING
+|--------------------------------------------------------------------------
+*/
+
+$_SESSION['dummy_mode'] = true;
+
+
+/*
+|--------------------------------------------------------------------------
+| LANGSUNG KE DASHBOARD
+|--------------------------------------------------------------------------
+*/
+
+header("Location: dashboard.php");
+
+exit;
+
+?>
+=======
     } else {
 
         try {
@@ -1250,3 +1465,4 @@ if (
 </body>
 
 </html>
+>>>>>>> 1c6c971974fd7d6bd5c1d19cfba47ce1c95b7cde

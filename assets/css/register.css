@@ -1127,3 +1127,175 @@ textarea.form-control {
         font-size: 12px;
     }
 }
+
+/* Match the login shell while keeping the longer registration form scrollable. */
+body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Segoe UI", Arial, sans-serif;
+    overflow: hidden;
+}
+
+.register-wrapper {
+    min-height: 100vh;
+    padding: 25px;
+}
+
+.register-container {
+    max-width: 1000px;
+    grid-template-columns: 1fr 1fr;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 28px;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+}
+
+.register-info {
+    min-height: 0;
+    padding: 60px 50px;
+    background: linear-gradient(145deg, rgba(37, 99, 235, 0.25), rgba(14, 165, 233, 0.08));
+}
+
+.wifi-icon {
+    width: 260px;
+    height: 100px;
+    margin-bottom: 30px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+.wifi-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: left center;
+}
+
+.register-info h1 {
+    margin-bottom: 18px;
+    font-size: 38px;
+    letter-spacing: 0;
+}
+
+.register-info > p {
+    margin-bottom: 0;
+    max-width: 400px;
+    line-height: 1.7;
+}
+
+.feature-list {
+    margin-top: 30px;
+    gap: 0;
+}
+
+.feature-item {
+    gap: 12px;
+    margin-bottom: 15px;
+    font-size: 14px;
+}
+
+.feature-icon {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    border-radius: 10px;
+    background: rgba(59, 130, 246, 0.2);
+    border: 0;
+}
+
+.register-card {
+    min-height: 0;
+    max-height: 90vh;
+    padding: 50px 45px;
+    background: rgba(255, 255, 255, 0.97);
+}
+
+.register-content {
+    max-width: none;
+}
+
+.register-header {
+    margin-bottom: 30px;
+}
+
+.register-header h2 {
+    margin-bottom: 8px;
+    font-size: 1.5rem;
+}
+
+.register-header p {
+    margin: 0;
+    font-size: 14px;
+}
+
+.form-label {
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.form-control {
+    height: 50px;
+    border-radius: 12px;
+    padding-left: 45px;
+    font-size: 14px;
+}
+
+textarea.form-control {
+    height: 92px;
+    min-height: 92px;
+}
+
+.section-title {
+    margin-top: 25px;
+}
+
+.register-btn {
+    height: 52px;
+    border-radius: 12px;
+    font-size: 15px;
+}
+
+.login-text {
+    margin-top: 25px;
+    font-size: 14px;
+}
+
+.security-text {
+    margin-top: 25px;
+    font-size: 12px;
+}
+
+@media (max-width: 800px) {
+    body {
+        overflow: auto;
+    }
+
+    .register-wrapper {
+        padding: 25px;
+    }
+
+    .register-container {
+        grid-template-columns: 1fr;
+        max-width: 480px;
+    }
+
+    .register-info {
+        display: none;
+    }
+
+    .register-card {
+        max-height: none;
+        padding: 40px 30px;
+    }
+}
+
+@media (max-width: 400px) {
+    .register-wrapper {
+        padding: 15px;
+    }
+
+    .register-card {
+        padding: 35px 22px;
+    }
+}
