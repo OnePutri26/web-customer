@@ -2,6 +2,7 @@
 
 session_start();
 
+<<<<<<< HEAD
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 /*
@@ -11,21 +12,47 @@ mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 */
 
 require_once __DIR__ . "/config/database.php";
+=======
+/*
+|--------------------------------------------------------------------------
+| DEBUG DATABASE
+|--------------------------------------------------------------------------
+*/
+
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
+require_once "config/database.php";
+>>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
 
 
 /*
 |--------------------------------------------------------------------------
+<<<<<<< HEAD
 | VALIDASI KONEKSI
 |--------------------------------------------------------------------------
 */
 
 if (!isset($conn) || !($conn instanceof mysqli)) {
     die("Koneksi database tidak tersedia.");
+=======
+| CEK DATABASE YANG AKTIF
+|--------------------------------------------------------------------------
+*/
+
+$currentDatabase = $conn->query("SELECT DATABASE()")->fetch_row()[0];
+
+if ($currentDatabase !== 'wifi_management') {
+    die(
+        "ERROR: Aplikasi belum menggunakan database wifi_management.<br>" .
+        "Database aktif: " . htmlspecialchars($currentDatabase ?? 'NULL')
+    );
+>>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
 }
 
 
 /*
 |--------------------------------------------------------------------------
+<<<<<<< HEAD
 | CEK DATABASE AKTIF
 |--------------------------------------------------------------------------
 */
@@ -53,6 +80,9 @@ try {
 /*
 |--------------------------------------------------------------------------
 | VARIABEL DEFAULT
+=======
+| VARIABEL
+>>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
 |--------------------------------------------------------------------------
 */
 
@@ -109,7 +139,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     /*
     |--------------------------------------------------------------------------
-    | VALIDASI DASAR
+    | VALIDASI
     |--------------------------------------------------------------------------
     */
 
@@ -163,6 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     }
 
+<<<<<<< HEAD
 
     /*
     |--------------------------------------------------------------------------
@@ -174,6 +205,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         try {
 
+=======
+        /*
+        |--------------------------------------------------------------------------
+        | CEK USERNAME
+        |--------------------------------------------------------------------------
+        */
+
+        try {
+
+>>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
             $checkUsername = $conn->prepare("
                 SELECT id
                 FROM users
@@ -196,6 +237,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $checkUsername->close();
+<<<<<<< HEAD
 
         } catch (Throwable $e) {
 
@@ -229,11 +271,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $checkEmail->execute();
 
             $resultEmail = $checkEmail->get_result();
+=======
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | CEK EMAIL
+            |--------------------------------------------------------------------------
+            */
+
+            if ($error === "") {
+
+                $checkEmail = $conn->prepare("
+                    SELECT id
+                    FROM users
+                    WHERE email = ?
+                    LIMIT 1
+                ");
+>>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
 
             if ($resultEmail->num_rows > 0) {
 
                 $error = "Email sudah terdaftar.";
             }
+<<<<<<< HEAD
 
             $checkEmail->close();
 
@@ -265,9 +326,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 "s",
                 $nik
             );
+=======
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | CEK NIK
+            |--------------------------------------------------------------------------
+            */
+
+            if ($error === "") {
+
+                $checkNik = $conn->prepare("
+                    SELECT id
+                    FROM customers
+                    WHERE nik = ?
+                    LIMIT 1
+                ");
+
+                $checkNik->bind_param(
+                    "s",
+                    $nik
+                );
+
+                $checkNik->execute();
+
+                $resultNik = $checkNik->get_result();
+
+                if ($resultNik->num_rows > 0) {
+
+                    $error = "NIK sudah terdaftar.";
+                }
+
+                $checkNik->close();
+            }
+>>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
 
             $checkNik->execute();
 
+<<<<<<< HEAD
             $resultNik = $checkNik->get_result();
 
             if ($resultNik->num_rows > 0) {
@@ -303,8 +400,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = "Gagal mengamankan password.";
 
         } else {
+=======
+            /*
+            |--------------------------------------------------------------------------
+            | SIMPAN DATA
+            |--------------------------------------------------------------------------
+            */
 
-            try {
+            if ($error === "") {
+
+                $passwordHash = password_hash(
+                    $password,
+                    PASSWORD_DEFAULT
+                );
+
+                $conn->begin_transaction();
+>>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
+
 
                 /*
                 |--------------------------------------------------------------------------
@@ -344,7 +456,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     )
                 ");
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
                 $userStmt->bind_param(
                     "sssss",
                     $username,
@@ -354,21 +469,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $passwordHash
                 );
 
-
-                if (!$userStmt->execute()) {
-
-                    throw new Exception(
-                        "Gagal membuat akun: " .
-                        $userStmt->error
-                    );
-                }
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | ID USER BARU
-                |--------------------------------------------------------------------------
-                */
+                $userStmt->execute();
 
                 $userId = (int) $userStmt->insert_id;
 
@@ -377,6 +478,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 /*
                 |--------------------------------------------------------------------------
+<<<<<<< HEAD
                 | CUSTOMER BELUM MEMILIKI PAKET
                 |--------------------------------------------------------------------------
                 |
@@ -390,9 +492,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 /*
                 |--------------------------------------------------------------------------
+=======
+>>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
                 | INSERT CUSTOMERS
                 |--------------------------------------------------------------------------
                 */
+
+                $paketId = null;
 
                 $customerStmt = $conn->prepare("
                     INSERT INTO customers
@@ -419,6 +525,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     )
                 ");
 
+<<<<<<< HEAD
 
                 /*
                 |--------------------------------------------------------------------------
@@ -433,6 +540,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 |
                 */
 
+=======
+>>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
                 $customerStmt->bind_param(
                     "iisssss",
                     $userId,
@@ -444,6 +553,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $alamat
                 );
 
+<<<<<<< HEAD
 
                 /*
                 |--------------------------------------------------------------------------
@@ -468,6 +578,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     );
                 }
 
+=======
+                $customerStmt->execute();
+>>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
 
                 $customerStmt->close();
 
@@ -483,7 +596,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 /*
                 |--------------------------------------------------------------------------
-                | BUAT SESSION
+                | SESSION
                 |--------------------------------------------------------------------------
                 */
 
@@ -504,11 +617,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 |--------------------------------------------------------------------------
                 */
 
-                header(
-                    "Location: customer/langganan.php"
-                );
-
+                header("Location: customer/langganan.php");
                 exit;
+<<<<<<< HEAD
 
 
             } catch (Throwable $e) {
@@ -533,12 +644,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 */
 
                 $error = $e->getMessage();
+=======
+>>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
             }
+
+        } catch (Throwable $e) {
+
+            /*
+            |--------------------------------------------------------------------------
+            | ROLLBACK
+            |--------------------------------------------------------------------------
+            */
+
+            if ($conn->connect_errno === 0) {
+                try {
+                    $conn->rollback();
+                } catch (Throwable $rollbackError) {
+                    // Abaikan error rollback
+                }
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | TAMPILKAN ERROR SEBENARNYA
+            |--------------------------------------------------------------------------
+            */
+
+            $error =
+                "REGISTRASI GAGAL:<br><br>" .
+                htmlspecialchars($e->getMessage()) .
+                "<br><br>" .
+                "File: " .
+                htmlspecialchars($e->getFile()) .
+                "<br>" .
+                "Line: " .
+                (int) $e->getLine();
         }
     }
 }
 
 ?>
+<<<<<<< HEAD
 
 <!DOCTYPE html>
 <html lang="id">
@@ -1189,3 +1335,5 @@ function togglePassword() {
 </body>
 
 </html>
+=======
+>>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
