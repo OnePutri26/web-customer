@@ -2,7 +2,7 @@
 
 session_start();
 
-<<<<<<< HEAD
+
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 /*
@@ -12,7 +12,7 @@ mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 */
 
 require_once __DIR__ . "/config/database.php";
-=======
+
 /*
 |--------------------------------------------------------------------------
 | DEBUG DATABASE
@@ -22,19 +22,19 @@ require_once __DIR__ . "/config/database.php";
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 require_once "config/database.php";
->>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
+
 
 
 /*
 |--------------------------------------------------------------------------
-<<<<<<< HEAD
+
 | VALIDASI KONEKSI
 |--------------------------------------------------------------------------
 */
 
 if (!isset($conn) || !($conn instanceof mysqli)) {
     die("Koneksi database tidak tersedia.");
-=======
+
 | CEK DATABASE YANG AKTIF
 |--------------------------------------------------------------------------
 */
@@ -46,13 +46,13 @@ if ($currentDatabase !== 'wifi_management') {
         "ERROR: Aplikasi belum menggunakan database wifi_management.<br>" .
         "Database aktif: " . htmlspecialchars($currentDatabase ?? 'NULL')
     );
->>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
+
 }
 
 
 /*
 |--------------------------------------------------------------------------
-<<<<<<< HEAD
+
 | CEK DATABASE AKTIF
 |--------------------------------------------------------------------------
 */
@@ -80,9 +80,9 @@ try {
 /*
 |--------------------------------------------------------------------------
 | VARIABEL DEFAULT
-=======
+
 | VARIABEL
->>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
+
 |--------------------------------------------------------------------------
 */
 
@@ -193,7 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     }
 
-<<<<<<< HEAD
+
 
     /*
     |--------------------------------------------------------------------------
@@ -205,7 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         try {
 
-=======
+
         /*
         |--------------------------------------------------------------------------
         | CEK USERNAME
@@ -214,7 +214,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         try {
 
->>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
+
             $checkUsername = $conn->prepare("
                 SELECT id
                 FROM users
@@ -237,7 +237,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $checkUsername->close();
-<<<<<<< HEAD
+
 
         } catch (Throwable $e) {
 
@@ -271,7 +271,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $checkEmail->execute();
 
             $resultEmail = $checkEmail->get_result();
-=======
+
 
 
             /*
@@ -288,13 +288,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     WHERE email = ?
                     LIMIT 1
                 ");
->>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
+
 
             if ($resultEmail->num_rows > 0) {
 
                 $error = "Email sudah terdaftar.";
             }
-<<<<<<< HEAD
+
 
             $checkEmail->close();
 
@@ -326,7 +326,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 "s",
                 $nik
             );
-=======
+
 
 
             /*
@@ -360,11 +360,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $checkNik->close();
             }
->>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
+
 
             $checkNik->execute();
 
-<<<<<<< HEAD
+
             $resultNik = $checkNik->get_result();
 
             if ($resultNik->num_rows > 0) {
@@ -400,7 +400,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = "Gagal mengamankan password.";
 
         } else {
-=======
+
             /*
             |--------------------------------------------------------------------------
             | SIMPAN DATA
@@ -415,7 +415,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
 
                 $conn->begin_transaction();
->>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
+
 
 
                 /*
@@ -456,10 +456,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     )
                 ");
 
-<<<<<<< HEAD
 
-=======
->>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
+
+
+
                 $userStmt->bind_param(
                     "sssss",
                     $username,
@@ -478,7 +478,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 /*
                 |--------------------------------------------------------------------------
-<<<<<<< HEAD
+
                 | CUSTOMER BELUM MEMILIKI PAKET
                 |--------------------------------------------------------------------------
                 |
@@ -492,8 +492,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 /*
                 |--------------------------------------------------------------------------
-=======
->>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
+
+
                 | INSERT CUSTOMERS
                 |--------------------------------------------------------------------------
                 */
@@ -525,7 +525,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     )
                 ");
 
-<<<<<<< HEAD
+
 
                 /*
                 |--------------------------------------------------------------------------
@@ -540,8 +540,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 |
                 */
 
-=======
->>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
+
+
                 $customerStmt->bind_param(
                     "iisssss",
                     $userId,
@@ -553,7 +553,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $alamat
                 );
 
-<<<<<<< HEAD
+
 
                 /*
                 |--------------------------------------------------------------------------
@@ -578,9 +578,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     );
                 }
 
-=======
+
                 $customerStmt->execute();
->>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
+
 
                 $customerStmt->close();
 
@@ -619,7 +619,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 header("Location: customer/langganan.php");
                 exit;
-<<<<<<< HEAD
+
 
 
             } catch (Throwable $e) {
@@ -644,8 +644,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 */
 
                 $error = $e->getMessage();
-=======
->>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
+
+
             }
 
         } catch (Throwable $e) {
@@ -684,7 +684,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 ?>
-<<<<<<< HEAD
+
 
 <!DOCTYPE html>
 <html lang="id">
@@ -730,9 +730,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
 
 
-<!-- =========================================================
+<!-- =
      BACKGROUND
-========================================================= -->
+= -->
 
 <div class="background-circle circle-1"></div>
 <div class="background-circle circle-2"></div>
@@ -744,9 +744,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="register-container">
 
 
-        <!-- =================================================
+        <!-- 
              LEFT INFORMATION
-        ================================================== -->
+        = -->
 
         <div class="register-info">
 
@@ -857,9 +857,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
 
-        <!-- =================================================
+        <!-- 
              REGISTER CARD
-        ================================================== -->
+        = -->
 
         <div class="register-card">
 
@@ -880,9 +880,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
 
-            <!-- =================================================
+            <!-- 
                  ERROR
-            ================================================== -->
+            = -->
 
             <?php if ($error !== ''): ?>
 
@@ -900,9 +900,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php endif; ?>
 
 
-            <!-- =================================================
+            <!-- 
                  FORM
-            ================================================== -->
+            = -->
 
             <form
                 method="POST"
@@ -911,9 +911,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             >
 
 
-                <!-- =================================================
+                <!-- 
                      DATA PRIBADI
-                ================================================== -->
+                = -->
 
                 <div class="section-title">
 
@@ -1115,9 +1115,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
 
-                <!-- =================================================
+                <!-- 
                      DATA AKUN
-                ================================================== -->
+                = -->
 
                 <div class="section-title">
 
@@ -1237,9 +1237,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
 
-                <!-- =================================================
+                <!-- 
                      SUBMIT
-                ================================================== -->
+                = -->
 
                 <button
                     type="submit"
@@ -1258,9 +1258,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </form>
 
 
-            <!-- =================================================
+            <!-- 
                  LOGIN
-            ================================================== -->
+            = -->
 
             <div class="login-text">
 
@@ -1273,9 +1273,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
 
-            <!-- =================================================
+            <!-- 
                  SECURITY
-            ================================================== -->
+            = -->
 
             <div class="security-text">
 
@@ -1295,9 +1295,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </div>
 
 
-<!-- =========================================================
+<!-- =
      JAVASCRIPT
-========================================================= -->
+= -->
 
 <script>
 
@@ -1335,5 +1335,5 @@ function togglePassword() {
 </body>
 
 </html>
-=======
->>>>>>> 656412371d35063a27f422fddf24a7157b5e3863
+
+
