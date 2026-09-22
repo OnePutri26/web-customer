@@ -5,9 +5,11 @@ require_once "../config/auth.php";
 
 requireRole('customer');
 
-/* =====================================================
-   SESSION USER
-===================================================== */
+date_default_timezone_set('Asia/Jakarta');
+
+/* =========================================================
+   SESSION
+========================================================= */
 
 $userId = (int) ($_SESSION['user_id'] ?? 0);
 
@@ -15,9 +17,10 @@ if ($userId <= 0) {
     die("Session user tidak valid.");
 }
 
-/* =====================================================
+
+/* =========================================================
    HELPER
-===================================================== */
+========================================================= */
 
 function e($value): string
 {
@@ -28,12 +31,12 @@ function e($value): string
     );
 }
 
-/**
- * Menentukan class CSS berdasarkan status complaint
- */
+
 function statusClass($status): string
 {
-    $status = strtolower(trim((string) ($status ?? '')));
+    $status = strtolower(
+        trim((string) ($status ?? ''))
+    );
 
     return match ($status) {
 
@@ -58,12 +61,12 @@ function statusClass($status): string
     };
 }
 
-/**
- * Menentukan class CSS berdasarkan prioritas complaint
- */
+
 function priorityClass($priority): string
 {
-    $priority = strtolower(trim((string) ($priority ?? '')));
+    $priority = strtolower(
+        trim((string) ($priority ?? ''))
+    );
 
     return match ($priority) {
 
@@ -85,9 +88,19 @@ function priorityClass($priority): string
     };
 }
 
-/* =====================================================
-   DATA CUSTOMER
-===================================================== */
+
+/* =========================================================
+   DATABASE CHECK
+========================================================= */
+
+if (!isset($conn)) {
+    die("Koneksi database tidak tersedia.");
+}
+
+
+/* =========================================================
+   GET CUSTOMER
+========================================================= */
 
 $stmtCustomer = $conn->prepare("
     SELECT *
@@ -97,13 +110,22 @@ $stmtCustomer = $conn->prepare("
 ");
 
 if (!$stmtCustomer) {
-    die("Query customer gagal: " . $conn->error);
+    die(
+        "Query customer gagal: "
+        . $conn->error
+    );
 }
 
-$stmtCustomer->bind_param("i", $userId);
+$stmtCustomer->bind_param(
+    "i",
+    $userId
+);
 
 if (!$stmtCustomer->execute()) {
-    die("Execute query customer gagal: " . $stmtCustomer->error);
+    die(
+        "Execute query customer gagal: "
+        . $stmtCustomer->error
+    );
 }
 
 $resultCustomer = $stmtCustomer->get_result();
@@ -112,77 +134,117 @@ $customer = $resultCustomer->fetch_assoc();
 
 $stmtCustomer->close();
 
-/* =====================================================
-   VALIDASI CUSTOMER
-===================================================== */
+
+/* =========================================================
+   VALIDATE CUSTOMER
+========================================================= */
 
 if (!$customer) {
     die("Data customer tidak ditemukan.");
 }
 
-$customerId = (int) ($customer['id'] ?? 0);
+
+$customerId = (int) (
+    $customer['id'] ?? 0
+);
+
 
 if ($customerId <= 0) {
     die("ID customer tidak valid.");
 }
 
-/* =====================================================
-   DATA CUSTOMER DISPLAY
-===================================================== */
+
+/* =========================================================
+   CUSTOMER DISPLAY
+========================================================= */
 
 $nama = trim(
-    (string) ($customer['nama'] ?? '')
+    (string) (
+        $customer['nama'] ?? ''
+    )
 );
+
 
 if ($nama === '') {
     $nama = 'Customer';
 }
 
-/*
- * Ambil huruf pertama nama.
- * mb_substr digunakan agar karakter non-ASCII aman.
- */
+
 $initial = strtoupper(
-    mb_substr($nama, 0, 1, 'UTF-8')
+    mb_substr(
+        $nama,
+        0,
+        1,
+        'UTF-8'
+    )
 );
 
-/* =====================================================
-   DATA COMPLAINT
-===================================================== */
+
+/* =========================================================
+   GET COMPLAINT
+========================================================= */
+
+/*
+    PENTING:
+
+    Relasi complaint -> customers
+    menggunakan:
+
+        complaint.id_customer
+
+    BUKAN:
+
+        complaint.customer_id
+*/
 
 $stmtComplaint = $conn->prepare("
     SELECT *
     FROM complaint
-    WHERE customer_id = ?
+    WHERE id_customer = ?
     ORDER BY id DESC
 ");
 
+
 if (!$stmtComplaint) {
-    die("Query complaint gagal: " . $conn->error);
+    die(
+        "Query complaint gagal: "
+        . $conn->error
+    );
 }
 
-$stmtComplaint->bind_param("i", $customerId);
+
+$stmtComplaint->bind_param(
+    "i",
+    $customerId
+);
+
 
 if (!$stmtComplaint->execute()) {
-    die("Execute query complaint gagal: " . $stmtComplaint->error);
+    die(
+        "Execute query complaint gagal: "
+        . $stmtComplaint->error
+    );
 }
+
 
 $resultComplaint = $stmtComplaint->get_result();
 
-/* =====================================================
-   STATUS COUNTER
-===================================================== */
+
+/* =========================================================
+   INITIAL DATA
+========================================================= */
+
+$complaints = [];
 
 $totalComplaint   = 0;
 $openComplaint    = 0;
 $processComplaint = 0;
 $closedComplaint  = 0;
 
-$complaints = [];
 
-/* =====================================================
+/* =========================================================
    LOOP COMPLAINT
-===================================================== */
+========================================================= */
 
 while ($row = $resultComplaint->fetch_assoc()) {
 
@@ -190,15 +252,15 @@ while ($row = $resultComplaint->fetch_assoc()) {
 
     $totalComplaint++;
 
+
     $status = strtolower(
         trim(
-            (string) ($row['status'] ?? '')
+            (string) (
+                $row['status'] ?? ''
+            )
         )
     );
 
-    /* -------------------------------------------------
-       COMPLAINT BARU
-    ------------------------------------------------- */
 
     if (
         in_array(
@@ -213,13 +275,8 @@ while ($row = $resultComplaint->fetch_assoc()) {
     ) {
 
         $openComplaint++;
-    }
 
-    /* -------------------------------------------------
-       SEDANG DIPROSES
-    ------------------------------------------------- */
-
-    elseif (
+    } elseif (
         in_array(
             $status,
             [
@@ -233,13 +290,8 @@ while ($row = $resultComplaint->fetch_assoc()) {
     ) {
 
         $processComplaint++;
-    }
 
-    /* -------------------------------------------------
-       SELESAI
-    ------------------------------------------------- */
-
-    elseif (
+    } elseif (
         in_array(
             $status,
             [
@@ -255,12 +307,17 @@ while ($row = $resultComplaint->fetch_assoc()) {
     }
 }
 
+
 $stmtComplaint->close();
 
 ?>
+
 <!DOCTYPE html>
+
 <html lang="id">
+
 <head>
+
     <meta charset="UTF-8">
 
     <meta
@@ -268,79 +325,90 @@ $stmtComplaint->close();
         content="width=device-width, initial-scale=1.0"
     >
 
-    <title>Complaint Saya</title>
+    <title>
+        Complaint Saya - WiFi Management
+    </title>
 
-    <!-- =================================================
+
+    <!-- =====================================================
          BOOTSTRAP
-    ================================================== -->
+    ====================================================== -->
 
     <link
         href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
         rel="stylesheet"
     >
 
-    <!-- =================================================
+
+    <!-- =====================================================
          BOOTSTRAP ICONS
-    ================================================== -->
+    ====================================================== -->
 
     <link
         rel="stylesheet"
         href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
     >
 
-    <!-- =================================================
-         CUSTOMER DASHBOARD CSS
-    ================================================== -->
 
-    <link
-        rel="stylesheet"
-        href="assets/css/customer-dashboard.css"
-    >
-
-    <!-- =================================================
+    <!-- =====================================================
          COMPLAINT CSS
-    ================================================== -->
+    ====================================================== -->
 
     <link
         rel="stylesheet"
-        href="assets/css/complaint.css"
+        href="/dashboard/web-customer/assets/css/complaint.css?v=10"
     >
 
 </head>
 
+
 <body>
+
+
+<!-- =========================================================
+     DASHBOARD WRAPPER
+========================================================= -->
 
 <div class="dashboard-wrapper">
 
-    <!-- =================================================
+
+    <!-- =====================================================
          SIDEBAR
-    ================================================== -->
+    ====================================================== -->
 
     <aside class="sidebar">
+
 
         <!-- BRAND -->
 
         <div class="sidebar-brand">
 
             <div class="brand-icon">
+
                 <i class="bi bi-wifi"></i>
+
             </div>
 
-            <div>
-                <h5>WiFi Management</h5>
+
+            <div class="brand-text">
+
+                <h5>
+                    WiFi Management
+                </h5>
 
                 <span>
                     Customer Portal
                 </span>
+
             </div>
 
         </div>
 
-        <!-- =================================================
-             SIDEBAR MENU
-        ================================================== -->
+
+        <!-- MENU -->
 
         <nav class="sidebar-menu">
+
 
             <a href="dashboard.php">
 
@@ -352,6 +420,7 @@ $stmtComplaint->close();
 
             </a>
 
+
             <a href="billing.php">
 
                 <i class="bi bi-receipt"></i>
@@ -361,6 +430,7 @@ $stmtComplaint->close();
                 </span>
 
             </a>
+
 
             <a href="usage.php">
 
@@ -372,6 +442,7 @@ $stmtComplaint->close();
 
             </a>
 
+
             <a href="speedtest.php">
 
                 <i class="bi bi-speedometer2"></i>
@@ -381,6 +452,7 @@ $stmtComplaint->close();
                 </span>
 
             </a>
+
 
             <a
                 href="complaint.php"
@@ -395,6 +467,7 @@ $stmtComplaint->close();
 
             </a>
 
+
             <a href="network_status.php">
 
                 <i class="bi bi-broadcast-pin"></i>
@@ -404,6 +477,7 @@ $stmtComplaint->close();
                 </span>
 
             </a>
+
 
             <a href="chat.php">
 
@@ -415,6 +489,7 @@ $stmtComplaint->close();
 
             </a>
 
+
             <a href="upgrade.php">
 
                 <i class="bi bi-arrow-up-circle-fill"></i>
@@ -424,6 +499,7 @@ $stmtComplaint->close();
                 </span>
 
             </a>
+
 
             <a href="service_request.php">
 
@@ -435,6 +511,7 @@ $stmtComplaint->close();
 
             </a>
 
+
             <a href="profile.php">
 
                 <i class="bi bi-person-fill"></i>
@@ -445,21 +522,25 @@ $stmtComplaint->close();
 
             </a>
 
+
         </nav>
 
-        <!-- =================================================
-             SIDEBAR FOOTER
-        ================================================== -->
+
+        <!-- SIDEBAR FOOTER -->
 
         <div class="sidebar-footer">
 
             <div class="sidebar-user">
 
+
                 <div class="sidebar-avatar">
+
                     <?= e($initial) ?>
+
                 </div>
 
-                <div>
+
+                <div class="sidebar-user-info">
 
                     <strong>
                         <?= e($nama) ?>
@@ -471,17 +552,21 @@ $stmtComplaint->close();
 
                 </div>
 
+
             </div>
 
         </div>
 
+
     </aside>
 
-    <!-- =================================================
-         MAIN CONTENT
-    ================================================== -->
+
+    <!-- =====================================================
+         MAIN
+    ====================================================== -->
 
     <main class="main-content">
+
 
         <!-- =================================================
              TOPBAR
@@ -489,7 +574,8 @@ $stmtComplaint->close();
 
         <header class="topbar">
 
-            <div>
+
+            <div class="topbar-title">
 
                 <h4>
                     Complaint
@@ -501,13 +587,15 @@ $stmtComplaint->close();
 
             </div>
 
-            <!-- PROFILE -->
 
             <div class="topbar-profile">
 
                 <div class="topbar-avatar">
+
                     <?= e($initial) ?>
+
                 </div>
+
 
                 <div>
 
@@ -523,13 +611,16 @@ $stmtComplaint->close();
 
             </div>
 
+
         </header>
 
+
         <!-- =================================================
-             PAGE CONTENT
+             CONTENT
         ================================================== -->
 
-        <div class="complaint-page">
+        <section class="complaint-page">
+
 
             <!-- =================================================
                  PAGE HEADER
@@ -537,7 +628,9 @@ $stmtComplaint->close();
 
             <div class="complaint-header">
 
-                <div>
+
+                <div class="complaint-title-area">
+
 
                     <div class="page-label">
 
@@ -547,18 +640,20 @@ $stmtComplaint->close();
 
                     </div>
 
+
                     <h1>
                         Complaint Saya
                     </h1>
+
 
                     <p>
                         Laporkan masalah dan pantau proses
                         penanganan gangguan internet kamu.
                     </p>
 
+
                 </div>
 
-                <!-- CREATE BUTTON -->
 
                 <a
                     href="complaint_create.php"
@@ -571,13 +666,16 @@ $stmtComplaint->close();
 
                 </a>
 
+
             </div>
+
 
             <!-- =================================================
                  STATISTICS
             ================================================== -->
 
             <div class="complaint-stats">
+
 
                 <!-- TOTAL -->
 
@@ -589,7 +687,7 @@ $stmtComplaint->close();
 
                     </div>
 
-                    <div>
+                    <div class="stat-content">
 
                         <span>
                             Total Complaint
@@ -603,6 +701,7 @@ $stmtComplaint->close();
 
                 </div>
 
+
                 <!-- OPEN -->
 
                 <div class="stat-card">
@@ -613,7 +712,7 @@ $stmtComplaint->close();
 
                     </div>
 
-                    <div>
+                    <div class="stat-content">
 
                         <span>
                             Complaint Baru
@@ -627,6 +726,7 @@ $stmtComplaint->close();
 
                 </div>
 
+
                 <!-- PROCESS -->
 
                 <div class="stat-card">
@@ -637,7 +737,7 @@ $stmtComplaint->close();
 
                     </div>
 
-                    <div>
+                    <div class="stat-content">
 
                         <span>
                             Sedang Diproses
@@ -651,6 +751,7 @@ $stmtComplaint->close();
 
                 </div>
 
+
                 <!-- CLOSED -->
 
                 <div class="stat-card">
@@ -661,7 +762,7 @@ $stmtComplaint->close();
 
                     </div>
 
-                    <div>
+                    <div class="stat-content">
 
                         <span>
                             Selesai
@@ -675,7 +776,9 @@ $stmtComplaint->close();
 
                 </div>
 
+
             </div>
+
 
             <!-- =================================================
                  COMPLAINT CARD
@@ -683,9 +786,11 @@ $stmtComplaint->close();
 
             <div class="complaint-card">
 
+
                 <!-- CARD HEADER -->
 
                 <div class="card-heading">
+
 
                     <div>
 
@@ -699,6 +804,7 @@ $stmtComplaint->close();
 
                     </div>
 
+
                     <div class="total-badge">
 
                         <?= $totalComplaint ?>
@@ -707,46 +813,41 @@ $stmtComplaint->close();
 
                     </div>
 
+
                 </div>
 
+
                 <!-- =================================================
-                     COMPLAINT LIST
+                     LIST
                 ================================================== -->
 
                 <?php if (!empty($complaints)): ?>
 
+
                     <div class="complaint-list">
+
 
                         <?php foreach ($complaints as $row): ?>
 
-                            <?php
 
-                            /* =========================================
-                               ID COMPLAINT
-                            ========================================= */
+                            <?php
 
                             $complaintId = (int) (
                                 $row['id'] ?? 0
                             );
 
-                            /* =========================================
-                               STATUS
-                            ========================================= */
 
                             $status = trim(
                                 (string) (
-                                    $row['status']
-                                    ?? 'unknown'
+                                    $row['status'] ?? ''
                                 )
                             );
+
 
                             if ($status === '') {
                                 $status = 'unknown';
                             }
 
-                            /* =========================================
-                               PRIORITY
-                            ========================================= */
 
                             $priority = trim(
                                 (string) (
@@ -755,25 +856,11 @@ $stmtComplaint->close();
                                 )
                             );
 
+
                             if ($priority === '') {
                                 $priority = 'normal';
                             }
 
-                            /* =========================================
-                               CSS CLASS
-                            ========================================= */
-
-                            $statusCss = statusClass(
-                                $status
-                            );
-
-                            $priorityCss = priorityClass(
-                                $priority
-                            );
-
-                            /* =========================================
-                               SUBJECT
-                            ========================================= */
 
                             $subject = trim(
                                 (string) (
@@ -782,13 +869,11 @@ $stmtComplaint->close();
                                 )
                             );
 
+
                             if ($subject === '') {
                                 $subject = 'Tanpa Subject';
                             }
 
-                            /* =========================================
-                               CUSTOMER CODE
-                            ========================================= */
 
                             $kodePelanggan = trim(
                                 (string) (
@@ -797,21 +882,26 @@ $stmtComplaint->close();
                                 )
                             );
 
+
                             if ($kodePelanggan === '') {
                                 $kodePelanggan = '-';
                             }
 
-                            /* =========================================
-                               CREATED DATE
-                            ========================================= */
 
                             $createdAt = '-';
 
-                            if (!empty($row['created_at'])) {
+
+                            if (
+                                !empty(
+                                    $row['created_at']
+                                    ?? ''
+                                )
+                            ) {
 
                                 $timestamp = strtotime(
                                     $row['created_at']
                                 );
+
 
                                 if ($timestamp !== false) {
 
@@ -819,16 +909,26 @@ $stmtComplaint->close();
                                         'd M Y, H:i',
                                         $timestamp
                                     );
+
                                 }
+
                             }
+
+
+                            $statusCss =
+                                statusClass($status);
+
+
+                            $priorityCss =
+                                priorityClass($priority);
 
                             ?>
 
-                            <!-- =================================================
-                                 COMPLAINT ITEM
-                            ================================================== -->
+
+                            <!-- COMPLAINT ITEM -->
 
                             <div class="complaint-item">
+
 
                                 <!-- ICON -->
 
@@ -838,41 +938,49 @@ $stmtComplaint->close();
 
                                 </div>
 
-                                <!-- CONTENT -->
+
+                                <!-- MAIN -->
 
                                 <div class="complaint-main">
 
-                                    <!-- TOP -->
 
                                     <div class="complaint-top">
 
+
                                         <span class="complaint-code">
 
-                                            <?= e($kodePelanggan) ?>
+                                            <?= e(
+                                                $kodePelanggan
+                                            ) ?>
 
                                         </span>
+
 
                                         <span class="complaint-date">
 
                                             <i class="bi bi-clock"></i>
 
-                                            <?= e($createdAt) ?>
+                                            <?= e(
+                                                $createdAt
+                                            ) ?>
 
                                         </span>
 
+
                                     </div>
 
-                                    <!-- SUBJECT -->
 
                                     <h6>
-                                        <?= e($subject) ?>
+
+                                        <?= e(
+                                            $subject
+                                        ) ?>
+
                                     </h6>
 
-                                    <!-- META -->
 
                                     <div class="complaint-meta">
 
-                                        <!-- PRIORITY -->
 
                                         <span
                                             class="complaint-badge <?= e($priorityCss) ?>"
@@ -881,12 +989,13 @@ $stmtComplaint->close();
                                             <i class="bi bi-flag-fill"></i>
 
                                             <?= e(
-                                                strtoupper($priority)
+                                                strtoupper(
+                                                    $priority
+                                                )
                                             ) ?>
 
                                         </span>
 
-                                        <!-- STATUS -->
 
                                         <span
                                             class="complaint-badge <?= e($statusCss) ?>"
@@ -895,43 +1004,53 @@ $stmtComplaint->close();
                                             <i class="bi bi-circle-fill"></i>
 
                                             <?= e(
-                                                strtoupper($status)
+                                                strtoupper(
+                                                    $status
+                                                )
                                             ) ?>
 
                                         </span>
 
+
                                     </div>
+
 
                                 </div>
 
+
                                 <!-- ACTION -->
 
-                                <div class="complaint-action">
+                                <?php if ($complaintId > 0): ?>
 
-                                    <?php if ($complaintId > 0): ?>
+                                    <div class="complaint-action">
 
                                         <a
                                             href="complaint_detail.php?id=<?= $complaintId ?>"
                                             class="btn-detail"
-                                            title="Detail complaint"
-                                            aria-label="Detail complaint"
+                                            title="Lihat detail complaint"
+                                            aria-label="Lihat detail complaint"
                                         >
 
                                             <i class="bi bi-chevron-right"></i>
 
                                         </a>
 
-                                    <?php endif; ?>
+                                    </div>
 
-                                </div>
+                                <?php endif; ?>
+
 
                             </div>
 
+
                         <?php endforeach; ?>
+
 
                     </div>
 
+
                 <?php else: ?>
+
 
                     <!-- =================================================
                          EMPTY STATE
@@ -939,21 +1058,25 @@ $stmtComplaint->close();
 
                     <div class="empty-state">
 
+
                         <div class="empty-icon">
 
                             <i class="bi bi-ticket-detailed"></i>
 
                         </div>
 
+
                         <h4>
                             Belum Ada Complaint
                         </h4>
+
 
                         <p>
                             Kamu belum memiliki laporan complaint.
                             Jika mengalami masalah internet, kamu bisa
                             membuat laporan baru.
                         </p>
+
 
                         <a
                             href="complaint_create.php"
@@ -966,25 +1089,34 @@ $stmtComplaint->close();
 
                         </a>
 
+
                     </div>
+
 
                 <?php endif; ?>
 
+
             </div>
 
-        </div>
+
+        </section>
+
 
     </main>
 
+
 </div>
 
-<!-- =================================================
+
+<!-- =========================================================
      BOOTSTRAP JS
-================================================== -->
+========================================================= -->
 
 <script
     src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
 ></script>
 
+
 </body>
+
 </html>

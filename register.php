@@ -2,8 +2,59 @@
 
 session_start();
 
-require_once "config/database.php";
-echo "Database aktif: " . $conn->query("SELECT DATABASE()")->fetch_row()[0];
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
+/*
+|--------------------------------------------------------------------------
+| KONEKSI DATABASE
+|--------------------------------------------------------------------------
+*/
+
+require_once __DIR__ . "/config/database.php";
+
+
+/*
+|--------------------------------------------------------------------------
+| VALIDASI KONEKSI
+|--------------------------------------------------------------------------
+*/
+
+if (!isset($conn) || !($conn instanceof mysqli)) {
+    die("Koneksi database tidak tersedia.");
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| CEK DATABASE AKTIF
+|--------------------------------------------------------------------------
+*/
+
+try {
+
+    $resultDatabase = $conn->query("SELECT DATABASE()");
+    $databaseAktif = $resultDatabase->fetch_row()[0] ?? '';
+
+    if ($databaseAktif !== 'wifi_management') {
+
+        die(
+            "Konfigurasi database salah. " .
+            "Database aktif: " .
+            htmlspecialchars($databaseAktif, ENT_QUOTES, 'UTF-8')
+        );
+    }
+
+} catch (Throwable $e) {
+
+    die("Gagal memeriksa database: " . $e->getMessage());
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| VARIABEL DEFAULT
+|--------------------------------------------------------------------------
+*/
 
 $error = "";
 
@@ -11,8 +62,25 @@ $nama      = "";
 $username  = "";
 $email     = "";
 $telephone = "";
+$password  = "";
 $nik       = "";
 $alamat    = "";
+
+
+/*
+|--------------------------------------------------------------------------
+| FUNGSI ESCAPE HTML
+|--------------------------------------------------------------------------
+*/
+
+function e($value)
+{
+    return htmlspecialchars(
+        (string) $value,
+        ENT_QUOTES,
+        'UTF-8'
+    );
+}
 
 
 /*
@@ -22,6 +90,7 @@ $alamat    = "";
 */
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
 
     /*
     |--------------------------------------------------------------------------
@@ -76,6 +145,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $error = "Format email tidak valid.";
 
+    } elseif (strlen($telephone) < 8) {
+
+        $error = "Nomor telepon tidak valid.";
+
     } elseif (strlen($password) < 6) {
 
         $error = "Password minimal 6 karakter.";
@@ -88,27 +161,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $error = "NIK tidak valid.";
 
-    } else {
+    }
 
 
-        /*
-        |--------------------------------------------------------------------------
-        | CEK USERNAME
-        |--------------------------------------------------------------------------
-        */
+    /*
+    |--------------------------------------------------------------------------
+    | CEK USERNAME
+    |--------------------------------------------------------------------------
+    */
 
-        $checkUsername = $conn->prepare("
-            SELECT id
-            FROM users
-            WHERE username = ?
-            LIMIT 1
-        ");
+    if ($error === '') {
 
-        if (!$checkUsername) {
+        try {
 
-            $error = "Gagal memeriksa username: " . $conn->error;
-
-        } else {
+            $checkUsername = $conn->prepare("
+                SELECT id
+                FROM users
+                WHERE username = ?
+                LIMIT 1
+            ");
 
             $checkUsername->bind_param(
                 "s",
@@ -125,16 +196,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $checkUsername->close();
+
+        } catch (Throwable $e) {
+
+            $error = "Gagal memeriksa username: " . $e->getMessage();
         }
+    }
 
 
-        /*
-        |--------------------------------------------------------------------------
-        | CEK EMAIL
-        |--------------------------------------------------------------------------
-        */
+    /*
+    |--------------------------------------------------------------------------
+    | CEK EMAIL
+    |--------------------------------------------------------------------------
+    */
 
-        if ($error === "") {
+    if ($error === '') {
+
+        try {
 
             $checkEmail = $conn->prepare("
                 SELECT id
@@ -143,38 +221,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 LIMIT 1
             ");
 
-            if (!$checkEmail) {
+            $checkEmail->bind_param(
+                "s",
+                $email
+            );
 
-                $error = "Gagal memeriksa email: " . $conn->error;
+            $checkEmail->execute();
 
-            } else {
+            $resultEmail = $checkEmail->get_result();
 
-                $checkEmail->bind_param(
-                    "s",
-                    $email
-                );
+            if ($resultEmail->num_rows > 0) {
 
-                $checkEmail->execute();
-
-                $resultEmail = $checkEmail->get_result();
-
-                if ($resultEmail->num_rows > 0) {
-
-                    $error = "Email sudah terdaftar.";
-                }
-
-                $checkEmail->close();
+                $error = "Email sudah terdaftar.";
             }
+
+            $checkEmail->close();
+
+        } catch (Throwable $e) {
+
+            $error = "Gagal memeriksa email: " . $e->getMessage();
         }
+    }
 
 
-        /*
-        |--------------------------------------------------------------------------
-        | CEK NIK
-        |--------------------------------------------------------------------------
-        */
+    /*
+    |--------------------------------------------------------------------------
+    | CEK NIK
+    |--------------------------------------------------------------------------
+    */
 
-        if ($error === "") {
+    if ($error === '') {
+
+        try {
 
             $checkNik = $conn->prepare("
                 SELECT id
@@ -183,54 +261,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 LIMIT 1
             ");
 
-            if (!$checkNik) {
-
-                $error = "Gagal memeriksa NIK: " . $conn->error;
-
-            } else {
-
-                $checkNik->bind_param(
-                    "s",
-                    $nik
-                );
-
-                $checkNik->execute();
-
-                $resultNik = $checkNik->get_result();
-
-                if ($resultNik->num_rows > 0) {
-
-                    $error = "NIK sudah terdaftar.";
-                }
-
-                $checkNik->close();
-            }
-        }
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | SIMPAN DATA
-        |--------------------------------------------------------------------------
-        */
-
-        if ($error === "") {
-
-            $passwordHash = password_hash(
-                $password,
-                PASSWORD_DEFAULT
+            $checkNik->bind_param(
+                "s",
+                $nik
             );
 
+            $checkNik->execute();
 
-            /*
-            |--------------------------------------------------------------------------
-            | MULAI TRANSACTION
-            |--------------------------------------------------------------------------
-            */
+            $resultNik = $checkNik->get_result();
 
-            $conn->begin_transaction();
+            if ($resultNik->num_rows > 0) {
+
+                $error = "NIK sudah terdaftar.";
+            }
+
+            $checkNik->close();
+
+        } catch (Throwable $e) {
+
+            $error = "Gagal memeriksa NIK: " . $e->getMessage();
+        }
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | SIMPAN DATA
+    |--------------------------------------------------------------------------
+    */
+
+    if ($error === '') {
+
+        $passwordHash = password_hash(
+            $password,
+            PASSWORD_DEFAULT
+        );
+
+
+        if ($passwordHash === false) {
+
+            $error = "Gagal mengamankan password.";
+
+        } else {
 
             try {
+
+                /*
+                |--------------------------------------------------------------------------
+                | MULAI TRANSACTION
+                |--------------------------------------------------------------------------
+                */
+
+                $conn->begin_transaction();
+
 
                 /*
                 |--------------------------------------------------------------------------
@@ -261,14 +344,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     )
                 ");
 
-                if (!$userStmt) {
-
-                    throw new Exception(
-                        "Gagal menyiapkan data user: " .
-                        $conn->error
-                    );
-                }
-
 
                 $userStmt->bind_param(
                     "sssss",
@@ -295,7 +370,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 |--------------------------------------------------------------------------
                 */
 
-                $userId = $userStmt->insert_id;
+                $userId = (int) $userStmt->insert_id;
 
                 $userStmt->close();
 
@@ -305,7 +380,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 | CUSTOMER BELUM MEMILIKI PAKET
                 |--------------------------------------------------------------------------
                 |
-                | NULL berarti customer belum memilih paket.
+                | Kita gunakan NULL karena customer baru belum
+                | memilih paket internet.
                 |
                 */
 
@@ -343,14 +419,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     )
                 ");
 
-                if (!$customerStmt) {
 
-                    throw new Exception(
-                        "Gagal menyiapkan data customer: " .
-                        $conn->error
-                    );
-                }
-
+                /*
+                |--------------------------------------------------------------------------
+                | IMPORTANT
+                |--------------------------------------------------------------------------
+                |
+                | bind_param() tidak selalu aman jika langsung diberi
+                | NULL pada parameter integer.
+                |
+                | Karena paket_id boleh NULL, kita bind variabel integer
+                | lalu set menjadi NULL.
+                |
+                */
 
                 $customerStmt->bind_param(
                     "iisssss",
@@ -363,6 +444,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $alamat
                 );
 
+
+                /*
+                |--------------------------------------------------------------------------
+                | PAKET ID = NULL
+                |--------------------------------------------------------------------------
+                */
+
+                $customerStmt->send_long_data(1, '');
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | EXECUTE CUSTOMER
+                |--------------------------------------------------------------------------
+                */
 
                 if (!$customerStmt->execute()) {
 
@@ -393,17 +489,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 session_regenerate_id(true);
 
-                $_SESSION['user_id']     = (int) $userId;
+                $_SESSION['user_id']     = $userId;
                 $_SESSION['username']    = $username;
                 $_SESSION['nama']        = $nama;
                 $_SESSION['email']       = $email;
+                $_SESSION['telephone']   = $telephone;
                 $_SESSION['role']        = 'customer';
                 $_SESSION['user_status'] = 1;
 
 
                 /*
                 |--------------------------------------------------------------------------
-                | REDIRECT KE PILIH PAKET
+                | REDIRECT
                 |--------------------------------------------------------------------------
                 */
 
@@ -414,7 +511,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
 
 
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
 
                 /*
                 |--------------------------------------------------------------------------
@@ -422,7 +519,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 |--------------------------------------------------------------------------
                 */
 
-                $conn->rollback();
+                try {
+                    $conn->rollback();
+                } catch (Throwable $rollbackError) {
+                    // Abaikan jika transaction belum sempat dimulai.
+                }
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | PESAN ERROR
+                |--------------------------------------------------------------------------
+                */
 
                 $error = $e->getMessage();
             }
@@ -476,7 +584,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
 
 
-<!-- BACKGROUND -->
+<!-- =========================================================
+     BACKGROUND
+========================================================= -->
 
 <div class="background-circle circle-1"></div>
 <div class="background-circle circle-2"></div>
@@ -488,9 +598,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="register-container">
 
 
-        <!-- =====================================================
+        <!-- =================================================
              LEFT INFORMATION
-        ====================================================== -->
+        ================================================== -->
 
         <div class="register-info">
 
@@ -506,25 +616,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 
             <h1>
+
                 Selamat Datang di
-                <span>WiFi Management</span>
+
+                <span>
+                    WiFi Management
+                </span>
+
             </h1>
 
 
             <p>
+
                 Buat akun pelanggan untuk mengelola
                 layanan internet dengan lebih mudah,
                 cepat, dan praktis.
+
             </p>
 
 
             <div class="feature-list">
 
 
+                <!-- FEATURE 1 -->
+
                 <div class="feature-item">
 
                     <div class="feature-icon">
+
                         <i class="bi bi-wifi"></i>
+
                     </div>
 
                     <span>
@@ -534,10 +655,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
 
+                <!-- FEATURE 2 -->
+
                 <div class="feature-item">
 
                     <div class="feature-icon">
+
                         <i class="bi bi-receipt"></i>
+
                     </div>
 
                     <span>
@@ -547,10 +672,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
 
+                <!-- FEATURE 3 -->
+
                 <div class="feature-item">
 
                     <div class="feature-icon">
+
                         <i class="bi bi-headset"></i>
+
                     </div>
 
                     <span>
@@ -560,10 +689,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
 
+                <!-- FEATURE 4 -->
+
                 <div class="feature-item">
 
                     <div class="feature-icon">
+
                         <i class="bi bi-lightning-charge"></i>
+
                     </div>
 
                     <span>
@@ -578,9 +711,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
 
-        <!-- =====================================================
+        <!-- =================================================
              REGISTER CARD
-        ====================================================== -->
+        ================================================== -->
 
         <div class="register-card">
 
@@ -592,16 +725,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </h2>
 
                 <p>
+
                     Daftarkan diri Anda untuk mulai menggunakan
                     layanan WiFi Management.
+
                 </p>
 
             </div>
 
 
-            <!-- ERROR -->
+            <!-- =================================================
+                 ERROR
+            ================================================== -->
 
-            <?php if ($error !== ""): ?>
+            <?php if ($error !== ''): ?>
 
                 <div
                     class="alert alert-danger"
@@ -610,7 +747,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <i class="bi bi-exclamation-circle me-2"></i>
 
-                    <?= htmlspecialchars($error) ?>
+                    <?= e($error) ?>
 
                 </div>
 
@@ -624,12 +761,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <form
                 method="POST"
                 action=""
+                autocomplete="off"
             >
 
 
-                <!-- =============================================
+                <!-- =================================================
                      DATA PRIBADI
-                ============================================== -->
+                ================================================== -->
 
                 <div class="section-title">
 
@@ -666,7 +804,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="input-wrapper">
 
-                        <i class="bi bi-person input-icon"></i>
+                        <i
+                            class="bi bi-person input-icon"
+                        ></i>
+
 
                         <input
                             type="text"
@@ -674,8 +815,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             name="nama"
                             class="form-control"
                             placeholder="Masukkan nama lengkap"
-                            value="<?= htmlspecialchars($nama) ?>"
+                            value="<?= e($nama) ?>"
                             maxlength="100"
+                            autocomplete="name"
                             required
                         >
 
@@ -698,7 +840,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="input-wrapper">
 
-                        <i class="bi bi-envelope input-icon"></i>
+                        <i
+                            class="bi bi-envelope input-icon"
+                        ></i>
+
 
                         <input
                             type="email"
@@ -706,8 +851,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             name="email"
                             class="form-control"
                             placeholder="nama@email.com"
-                            value="<?= htmlspecialchars($email) ?>"
+                            value="<?= e($email) ?>"
                             maxlength="100"
+                            autocomplete="email"
                             required
                         >
 
@@ -730,7 +876,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="input-wrapper">
 
-                        <i class="bi bi-telephone input-icon"></i>
+                        <i
+                            class="bi bi-telephone input-icon"
+                        ></i>
+
 
                         <input
                             type="text"
@@ -738,8 +887,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             name="telephone"
                             class="form-control"
                             placeholder="08xxxxxxxxxx"
-                            value="<?= htmlspecialchars($telephone) ?>"
+                            value="<?= e($telephone) ?>"
                             maxlength="20"
+                            inputmode="tel"
+                            autocomplete="tel"
                             required
                         >
 
@@ -762,7 +913,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="input-wrapper">
 
-                        <i class="bi bi-card-text input-icon"></i>
+                        <i
+                            class="bi bi-card-text input-icon"
+                        ></i>
+
 
                         <input
                             type="text"
@@ -770,9 +924,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             name="nik"
                             class="form-control"
                             placeholder="Masukkan NIK"
-                            value="<?= htmlspecialchars($nik) ?>"
+                            value="<?= e($nik) ?>"
                             maxlength="20"
                             inputmode="numeric"
+                            autocomplete="off"
                             required
                         >
 
@@ -795,24 +950,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="input-wrapper textarea-wrapper">
 
-                        <i class="bi bi-geo-alt input-icon"></i>
+                        <i
+                            class="bi bi-geo-alt input-icon"
+                        ></i>
+
 
                         <textarea
                             id="alamat"
                             name="alamat"
                             class="form-control"
                             placeholder="Masukkan alamat lengkap"
+                            rows="4"
                             required
-                        ><?= htmlspecialchars($alamat) ?></textarea>
+                        ><?= e($alamat) ?></textarea>
 
                     </div>
 
                 </div>
 
 
-                <!-- =============================================
+                <!-- =================================================
                      DATA AKUN
-                ============================================== -->
+                ================================================== -->
 
                 <div class="section-title">
 
@@ -849,7 +1008,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="input-wrapper">
 
-                        <i class="bi bi-person-badge input-icon"></i>
+                        <i
+                            class="bi bi-person-badge input-icon"
+                        ></i>
+
 
                         <input
                             type="text"
@@ -857,8 +1019,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             name="username"
                             class="form-control"
                             placeholder="Masukkan username"
-                            value="<?= htmlspecialchars($username) ?>"
+                            value="<?= e($username) ?>"
                             maxlength="50"
+                            autocomplete="username"
                             required
                         >
 
@@ -881,7 +1044,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="input-wrapper">
 
-                        <i class="bi bi-lock input-icon"></i>
+                        <i
+                            class="bi bi-lock input-icon"
+                        ></i>
+
 
                         <input
                             type="password"
@@ -890,6 +1056,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             class="form-control"
                             placeholder="Masukkan password"
                             minlength="6"
+                            autocomplete="new-password"
                             required
                         >
 
@@ -924,7 +1091,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
 
-                <!-- SUBMIT -->
+                <!-- =================================================
+                     SUBMIT
+                ================================================== -->
 
                 <button
                     type="submit"
@@ -943,7 +1112,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </form>
 
 
-            <!-- LOGIN -->
+            <!-- =================================================
+                 LOGIN
+            ================================================== -->
 
             <div class="login-text">
 
@@ -956,7 +1127,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
 
-            <!-- SECURITY -->
+            <!-- =================================================
+                 SECURITY
+            ================================================== -->
 
             <div class="security-text">
 
@@ -976,12 +1149,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </div>
 
 
+<!-- =========================================================
+     JAVASCRIPT
+========================================================= -->
+
 <script>
 
 function togglePassword() {
 
     const password = document.getElementById('password');
     const icon = document.getElementById('passwordIcon');
+
+    if (!password || !icon) {
+        return;
+    }
+
 
     if (password.type === 'password') {
 
