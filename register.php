@@ -486,7 +486,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         </h1>
 
         <p>
-            Buat akun untuk berlangganan layanan internet YESNET.
+            Buat akun untuk berlangganan layanan internet YESNET. CUSTOMER
         </p>
 
     </div>
