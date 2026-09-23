@@ -2,8 +2,10 @@
 
 session_start();
 
-require_once "../config/database.php";
-require_once "../config/auth.php";
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
+require_once __DIR__ . "/../config/database.php";
+require_once __DIR__ . "/../config/auth.php";
 
 requireRole('customer');
 
@@ -69,15 +71,8 @@ $stmtCustomer = $conn->prepare("
     LIMIT 1
 ");
 
-if (!$stmtCustomer) {
-    die("Query customer gagal: " . e($conn->error));
-}
-
 $stmtCustomer->bind_param("i", $userId);
-
-if (!$stmtCustomer->execute()) {
-    die("Gagal mengambil data customer: " . e($stmtCustomer->error));
-}
+$stmtCustomer->execute();
 
 $resultCustomer = $stmtCustomer->get_result();
 
@@ -341,10 +336,8 @@ if (!$stmtPackages) {
         $resultPackages =
             $stmtPackages->get_result();
 
-        while (
-            $row =
-            $resultPackages->fetch_assoc()
-        ) {
+        while ($row = $resultPackages->fetch_assoc()) {
+
             $packages[] = $row;
         }
 
@@ -356,6 +349,17 @@ if (!$stmtPackages) {
 
 
 $totalPackages = count($packages);
+
+
+/*
+|--------------------------------------------------------------------------
+| FLASH MESSAGE
+|--------------------------------------------------------------------------
+*/
+
+$flashError = $_SESSION['flash_error'] ?? '';
+
+unset($_SESSION['flash_error']);
 
 ?>
 
@@ -381,19 +385,20 @@ $totalPackages = count($packages);
     </title>
 
 
-    <!-- Bootstrap Icons -->
-
     <link
         rel="stylesheet"
         href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
     >
 
 
-    <!-- CSS -->
+    <!--
+        packages.php berada di folder customer/
+        sehingga harus naik satu folder ke assets/
+    -->
 
     <link
         rel="stylesheet"
-        href="assets/css/packages.css?v=1.0"
+        href="../assets/css/packages.css?v=1.1"
     >
 
 </head>
@@ -405,14 +410,11 @@ $totalPackages = count($packages);
 <div class="page-wrapper">
 
 
-    <!-- =========================================================
-         HEADER
-    ========================================================== -->
+    <!-- HEADER -->
 
     <header class="top-header">
 
         <div class="header-container">
-
 
             <a
                 href="dashboard.php"
@@ -420,11 +422,8 @@ $totalPackages = count($packages);
             >
 
                 <div class="brand-icon">
-
                     <i class="bi bi-wifi"></i>
-
                 </div>
-
 
                 <div class="brand-text">
 
@@ -443,15 +442,11 @@ $totalPackages = count($packages);
 
             <div class="header-right">
 
-
                 <div class="user-box">
 
                     <div class="user-avatar">
-
                         <?= e($initial) ?>
-
                     </div>
-
 
                     <div class="user-info">
 
@@ -489,10 +484,7 @@ $totalPackages = count($packages);
     </header>
 
 
-
-    <!-- =========================================================
-         MAIN
-    ========================================================== -->
+    <!-- MAIN -->
 
     <main class="main-container">
 
@@ -501,9 +493,7 @@ $totalPackages = count($packages);
 
         <section class="hero-section">
 
-
             <div class="hero-content">
-
 
                 <div class="hero-badge">
 
@@ -517,7 +507,10 @@ $totalPackages = count($packages);
                 <h1>
 
                     Pilih Paket WiFi
-                    <span>Yang Sesuai Untukmu</span>
+
+                    <span>
+                        Yang Sesuai Untukmu
+                    </span>
 
                 </h1>
 
@@ -566,9 +559,7 @@ $totalPackages = count($packages);
 
             <div class="hero-visual">
 
-
                 <div class="glow-circle"></div>
-
 
                 <div class="router-card">
 
@@ -598,7 +589,6 @@ $totalPackages = count($packages);
                         Internet Stabil
                     </strong>
 
-
                     <span>
                         Siap digunakan untuk seluruh kebutuhanmu
                     </span>
@@ -620,20 +610,14 @@ $totalPackages = count($packages);
         </section>
 
 
-
-        <!-- =========================================================
-             PROGRESS
-        ========================================================== -->
+        <!-- PROGRESS -->
 
         <section class="progress-wrapper">
-
 
             <div class="step completed">
 
                 <div class="step-number">
-
                     <i class="bi bi-check-lg"></i>
-
                 </div>
 
                 <div class="step-content">
@@ -687,7 +671,7 @@ $totalPackages = count($packages);
                 <div class="step-content">
 
                     <strong>
-                        Pengajuan
+                        Validasi CS
                     </strong>
 
                     <span>
@@ -725,10 +709,7 @@ $totalPackages = count($packages);
         </section>
 
 
-
-        <!-- =========================================================
-             ERROR
-        ========================================================== -->
+        <!-- ERROR -->
 
         <?php if ($packageError !== ''): ?>
 
@@ -739,7 +720,6 @@ $totalPackages = count($packages);
                     <i class="bi bi-exclamation-triangle-fill"></i>
 
                 </div>
-
 
                 <div>
 
@@ -758,13 +738,36 @@ $totalPackages = count($packages);
         <?php endif; ?>
 
 
+        <?php if ($flashError !== ''): ?>
 
-        <!-- =========================================================
-             PACKAGE TITLE
-        ========================================================== -->
+            <div class="alert-error">
+
+                <div class="alert-icon">
+
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+
+                </div>
+
+                <div>
+
+                    <strong>
+                        Pengajuan gagal
+                    </strong>
+
+                    <span>
+                        <?= e($flashError) ?>
+                    </span>
+
+                </div>
+
+            </div>
+
+        <?php endif; ?>
+
+
+        <!-- TITLE -->
 
         <section class="section-title">
-
 
             <div>
 
@@ -772,11 +775,9 @@ $totalPackages = count($packages);
                     PAKET INTERNET
                 </span>
 
-
                 <h2>
                     Temukan Paket yang Tepat
                 </h2>
-
 
                 <p>
                     Pilih paket berdasarkan kecepatan
@@ -797,7 +798,7 @@ $totalPackages = count($packages);
                     </strong>
 
                     <span>
-                        Pembayaran aman
+                        Data customer terlindungi
                     </span>
 
                 </div>
@@ -807,60 +808,41 @@ $totalPackages = count($packages);
         </section>
 
 
-
-        <!-- =========================================================
-             PACKAGES
-        ========================================================== -->
+        <!-- PACKAGES -->
 
         <?php if ($totalPackages > 0): ?>
-
 
             <section class="package-grid">
 
 
                 <?php foreach ($packages as $index => $package): ?>
 
-
                     <?php
 
-                    $packageId =
-                        (int) (
-                            $package['id']
-                            ?? 0
-                        );
+                    $packageId = (int) (
+                        $package['id'] ?? 0
+                    );
 
+                    $packageName = trim(
+                        (string) (
+                            $package['nama_paket']
+                            ?? 'Paket WiFi'
+                        )
+                    );
 
-                    $packageName =
-                        trim(
-                            (string) (
-                                $package['nama_paket']
-                                ?? 'Paket WiFi'
-                            )
-                        );
+                    $speed = (int) (
+                        $package['speed_mbps'] ?? 0
+                    );
 
+                    $harga = (float) (
+                        $package['harga'] ?? 0
+                    );
 
-                    $speed =
-                        (int) (
-                            $package['speed_mbps']
-                            ?? 0
-                        );
-
-
-                    $harga =
-                        (float) (
-                            $package['harga']
-                            ?? 0
-                        );
-
-
-                    $deskripsi =
-                        trim(
-                            (string) (
-                                $package['deskripsi']
-                                ?? ''
-                            )
-                        );
-
+                    $deskripsi = trim(
+                        (string) (
+                            $package['deskripsi'] ?? ''
+                        )
+                    );
 
                     if ($deskripsi === '') {
 
@@ -869,8 +851,9 @@ $totalPackages = count($packages);
                     }
 
 
-                    $isPopular =
-                        ($speed >= 100);
+                    $isPopular = (
+                        $speed >= 100
+                    );
 
 
                     if ($speed >= 200) {
@@ -912,7 +895,6 @@ $totalPackages = count($packages);
 
                         <div class="card-header">
 
-
                             <div class="package-icon">
 
                                 <i class="bi <?= e($icon) ?>"></i>
@@ -931,7 +913,6 @@ $totalPackages = count($packages);
                         </div>
 
 
-
                         <div class="package-name">
 
                             <span>
@@ -945,19 +926,19 @@ $totalPackages = count($packages);
                         </div>
 
 
-
                         <div class="speed-box">
-
 
                             <div class="speed-number">
 
                                 <strong>
+
                                     <?= number_format(
                                         $speed,
                                         0,
                                         ',',
                                         '.'
                                     ) ?>
+
                                 </strong>
 
                                 <span>
@@ -978,13 +959,11 @@ $totalPackages = count($packages);
                         </div>
 
 
-
                         <p class="description">
 
                             <?= e($deskripsi) ?>
 
                         </p>
-
 
 
                         <div class="price-box">
@@ -1010,9 +989,7 @@ $totalPackages = count($packages);
                         </div>
 
 
-
                         <div class="features">
-
 
                             <div>
 
@@ -1052,26 +1029,27 @@ $totalPackages = count($packages);
                         </div>
 
 
-
-                        <!-- =================================================
-                             FORM
-                             packages.php
-                                  ↓
-                             pengajuan_pemasangan.php
-                        ================================================== -->
+                        <!--
+                        --------------------------------------------------
+                        PILIH PAKET
+                        --------------------------------------------------
+                        -->
 
                         <form
                             action="pengajuan_pemasangan.php"
                             method="POST"
                             class="package-form"
-                            onsubmit="return choosePackage(this, <?= htmlspecialchars(
-                                json_encode(
-                                    $packageName,
-                                    JSON_UNESCAPED_UNICODE
-                                ),
-                                ENT_QUOTES,
-                                'UTF-8'
-                            ) ?>);"
+                            onsubmit="return choosePackage(
+                                this,
+                                <?= htmlspecialchars(
+                                    json_encode(
+                                        $packageName,
+                                        JSON_UNESCAPED_UNICODE
+                                    ),
+                                    ENT_QUOTES,
+                                    'UTF-8'
+                                ) ?>
+                            );"
                         >
 
                             <input
@@ -1097,7 +1075,6 @@ $totalPackages = count($packages);
                                     Pilih Paket Ini
                                 </span>
 
-
                                 <i class="bi bi-arrow-right"></i>
 
                             </button>
@@ -1107,9 +1084,7 @@ $totalPackages = count($packages);
 
                     </article>
 
-
                 <?php endforeach; ?>
-
 
             </section>
 
@@ -1117,10 +1092,7 @@ $totalPackages = count($packages);
         <?php else: ?>
 
 
-            <!-- EMPTY -->
-
             <section class="empty-state">
-
 
                 <div class="empty-icon">
 
@@ -1153,13 +1125,9 @@ $totalPackages = count($packages);
         <?php endif; ?>
 
 
-
-        <!-- =========================================================
-             INFO BOTTOM
-        ========================================================== -->
+        <!-- INFO -->
 
         <section class="bottom-info">
-
 
             <div class="info-item">
 
@@ -1168,7 +1136,6 @@ $totalPackages = count($packages);
                     <i class="bi bi-lightning-charge"></i>
 
                 </div>
-
 
                 <div>
 
@@ -1185,7 +1152,6 @@ $totalPackages = count($packages);
             </div>
 
 
-
             <div class="info-item">
 
                 <div class="info-item-icon">
@@ -1193,7 +1159,6 @@ $totalPackages = count($packages);
                     <i class="bi bi-shield-check"></i>
 
                 </div>
-
 
                 <div>
 
@@ -1210,7 +1175,6 @@ $totalPackages = count($packages);
             </div>
 
 
-
             <div class="info-item">
 
                 <div class="info-item-icon">
@@ -1219,7 +1183,6 @@ $totalPackages = count($packages);
 
                 </div>
 
-
                 <div>
 
                     <strong>
@@ -1227,7 +1190,7 @@ $totalPackages = count($packages);
                     </strong>
 
                     <span>
-                        Bantuan tersedia saat dibutuhkan
+                        Validasi dilakukan oleh CS
                     </span>
 
                 </div>
@@ -1235,7 +1198,6 @@ $totalPackages = count($packages);
             </div>
 
         </section>
-
 
 
         <!-- FOOTER -->
@@ -1265,7 +1227,6 @@ $totalPackages = count($packages);
 </div>
 
 
-
 <script>
 
 function choosePackage(form, packageName)
@@ -1274,11 +1235,13 @@ function choosePackage(form, packageName)
         "Pilih paket " +
         packageName +
         "?\n\n" +
-        "Setelah ini kamu akan masuk ke " +
-        "Pengajuan Pemasangan."
+        "Setelah ini pengajuan akan dikirim " +
+        "untuk validasi Customer Service."
     );
 
+
     if (!confirmed) {
+
         return false;
     }
 
@@ -1297,7 +1260,7 @@ function choosePackage(form, packageName)
 
         button.innerHTML =
             '<i class="bi bi-arrow-repeat spin"></i>' +
-            '<span>Membuka Pengajuan...</span>';
+            '<span>Mengirim Pengajuan...</span>';
     }
 
 
@@ -1308,4 +1271,5 @@ function choosePackage(form, packageName)
 
 
 </body>
+
 </html>

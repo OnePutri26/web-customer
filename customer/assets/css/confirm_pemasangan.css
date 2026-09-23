@@ -1,0 +1,318 @@
+/* =========================================================
+   GENERAL
+========================================================= */
+
+body {
+    background: #f5f7fb;
+    min-height: 100vh;
+}
+
+
+/* =========================================================
+   NAVBAR
+========================================================= */
+
+.navbar-brand img {
+    height: 40px;
+    width: auto;
+}
+
+.page-label {
+    color: #6c757d;
+}
+
+
+/* =========================================================
+   PAGE WRAPPER
+========================================================= */
+
+.page-wrapper {
+    padding: 40px 15px;
+}
+
+
+/* =========================================================
+   MAIN CARD
+========================================================= */
+
+.main-card {
+    max-width: 850px;
+    margin: 0 auto;
+    background: #ffffff;
+    border-radius: 18px;
+    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+}
+
+
+/* =========================================================
+   CARD HEADER
+========================================================= */
+
+.card-header-custom {
+    padding: 30px;
+    background: linear-gradient(
+        135deg,
+        #0d6efd,
+        #0b5ed7
+    );
+    color: #ffffff;
+}
+
+.card-header-custom h3 {
+    margin: 0;
+    font-weight: 700;
+}
+
+.card-header-custom p {
+    margin: 8px 0 0;
+    opacity: 0.9;
+}
+
+
+/* =========================================================
+   CONTENT
+========================================================= */
+
+.content {
+    padding: 30px;
+}
+
+
+/* =========================================================
+   SECTION TITLE
+========================================================= */
+
+.section-title {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 15px;
+    color: #212529;
+}
+
+
+/* =========================================================
+   INFO BOX
+========================================================= */
+
+.info-box {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 20px;
+}
+
+
+/* =========================================================
+   INFO ROW
+========================================================= */
+
+.info-row {
+    display: flex;
+    gap: 15px;
+    padding: 10px 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+
+/* =========================================================
+   INFO LABEL
+========================================================= */
+
+.info-label {
+    width: 180px;
+    flex-shrink: 0;
+    color: #6c757d;
+    font-size: 14px;
+}
+
+
+/* =========================================================
+   INFO VALUE
+========================================================= */
+
+.info-value {
+    font-weight: 600;
+    color: #212529;
+    word-break: break-word;
+}
+
+
+/* =========================================================
+   COVERAGE SUCCESS
+========================================================= */
+
+.coverage-success {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+
+    background: #d1e7dd;
+    border: 1px solid #a3cfbb;
+
+    color: #0f5132;
+
+    border-radius: 12px;
+
+    padding: 18px;
+
+    margin-bottom: 25px;
+}
+
+.coverage-success h5 {
+    margin: 0 0 4px;
+    font-weight: 700;
+}
+
+.coverage-success p {
+    margin: 0;
+}
+
+.coverage-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 48px;
+    height: 48px;
+
+    flex-shrink: 0;
+
+    border-radius: 50%;
+
+    background: rgba(15, 81, 50, 0.1);
+
+    font-size: 24px;
+}
+
+
+/* =========================================================
+   CONFIRMATION BOX
+========================================================= */
+
+.confirmation-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 15px;
+
+    background: #fff8e1;
+    border: 1px solid #ffe69c;
+
+    border-radius: 12px;
+
+    padding: 18px;
+
+    margin-top: 20px;
+}
+
+.confirmation-box strong {
+    color: #664d03;
+}
+
+.confirmation-box p {
+    color: #664d03;
+}
+
+.confirmation-icon {
+    flex-shrink: 0;
+
+    color: #ffc107;
+
+    font-size: 22px;
+}
+
+
+/* =========================================================
+   ACTION BUTTONS
+========================================================= */
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 25px;
+}
+
+.btn-back,
+.btn-confirm {
+    padding: 13px 25px;
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+.confirm-form {
+    flex: 1;
+}
+
+.full-button {
+    width: 100%;
+}
+
+
+/* =========================================================
+   PROCESSING BUTTON
+========================================================= */
+
+.btn-confirm.is-processing {
+    cursor: wait;
+    opacity: 0.75;
+}
+
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 576px) {
+
+    .page-wrapper {
+        padding: 20px 10px;
+    }
+
+    .content {
+        padding: 20px;
+    }
+
+    .card-header-custom {
+        padding: 22px;
+    }
+
+    .card-header-custom h3 {
+        font-size: 21px;
+    }
+
+    .page-label {
+        font-size: 14px;
+    }
+
+    .info-row {
+        display: block;
+    }
+
+    .info-label {
+        width: auto;
+        margin-bottom: 4px;
+    }
+
+    .coverage-success {
+        align-items: flex-start;
+    }
+
+    .confirmation-box {
+        gap: 10px;
+    }
+
+    .action-buttons {
+        flex-direction: column;
+    }
+
+    .btn-back,
+    .btn-confirm {
+        width: 100%;
+    }
+
+}

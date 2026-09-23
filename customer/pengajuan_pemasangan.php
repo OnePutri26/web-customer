@@ -2,8 +2,10 @@
 
 session_start();
 
-require_once "../config/database.php";
-require_once "../config/auth.php";
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
+require_once __DIR__ . "/../config/database.php";
+require_once __DIR__ . "/../config/auth.php";
 
 requireRole('customer');
 
@@ -17,6 +19,7 @@ requireRole('customer');
 $userId = (int) ($_SESSION['user_id'] ?? 0);
 
 if ($userId <= 0) {
+
     header("Location: ../login.php");
     exit;
 }
@@ -38,24 +41,14 @@ function e($value): string
 }
 
 
-function rupiah($value): string
-{
-    return 'Rp ' . number_format(
-        (float) $value,
-        0,
-        ',',
-        '.'
-    );
-}
-
-
 /*
 |--------------------------------------------------------------------------
-| HANYA BOLEH POST
+| HANYA POST
 |--------------------------------------------------------------------------
 */
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+
     header("Location: packages.php");
     exit;
 }
@@ -63,16 +56,38 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 /*
 |--------------------------------------------------------------------------
-| AMBIL PAKET ID
+| ACTION
 |--------------------------------------------------------------------------
 */
 
-$paketId = (int) ($_POST['paket_id'] ?? 0);
+$action = trim(
+    (string) ($_POST['action'] ?? '')
+);
+
+if ($action !== 'select_package') {
+
+    $_SESSION['flash_error'] =
+        'Permintaan tidak valid.';
+
+    header("Location: packages.php");
+    exit;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| PAKET ID
+|--------------------------------------------------------------------------
+*/
+
+$paketId = (int) (
+    $_POST['paket_id'] ?? 0
+);
 
 if ($paketId <= 0) {
 
-    $_SESSION['error_paket'] =
-        "Paket WiFi belum dipilih.";
+    $_SESSION['flash_error'] =
+        'Paket WiFi tidak valid.';
 
     header("Location: packages.php");
     exit;
@@ -81,48 +96,29 @@ if ($paketId <= 0) {
 
 /*
 |--------------------------------------------------------------------------
-| AMBIL DATA CUSTOMER
+| AMBIL CUSTOMER
 |--------------------------------------------------------------------------
 */
 
-$sqlCustomer = "
+$stmtCustomer = $conn->prepare("
     SELECT
         id,
-        user_id,
         nama,
         telephone,
         email,
-        nik,
-        alamat,
         paket_id,
         status_langganan
     FROM customers
     WHERE user_id = ?
     LIMIT 1
-";
-
-$stmtCustomer = $conn->prepare($sqlCustomer);
-
-if (!$stmtCustomer) {
-
-    die(
-        "Query customer gagal: " .
-        e($conn->error)
-    );
-}
+");
 
 $stmtCustomer->bind_param(
     "i",
     $userId
 );
 
-if (!$stmtCustomer->execute()) {
-
-    die(
-        "Gagal mengambil data customer: " .
-        e($stmtCustomer->error)
-    );
-}
+$stmtCustomer->execute();
 
 $resultCustomer =
     $stmtCustomer->get_result();
@@ -133,200 +129,39 @@ $customer =
 $stmtCustomer->close();
 
 
-/*
-|--------------------------------------------------------------------------
-| CUSTOMER TIDAK DITEMUKAN
-|--------------------------------------------------------------------------
-*/
-
 if (!$customer) {
 
-    die("
-        <!DOCTYPE html>
+    $_SESSION['flash_error'] =
+        'Data customer tidak ditemukan.';
 
-        <html lang='id'>
-
-        <head>
-
-            <meta charset='UTF-8'>
-
-            <meta
-                name='viewport'
-                content='width=device-width, initial-scale=1.0'
-            >
-
-            <title>
-                Customer Tidak Ditemukan
-            </title>
-
-            <style>
-
-                * {
-                    box-sizing: border-box;
-                }
-
-                body {
-                    margin: 0;
-                    min-height: 100vh;
-
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-
-                    padding: 20px;
-
-                    font-family:
-                        Arial,
-                        sans-serif;
-
-                    background: #f5f7fb;
-
-                    color: #111827;
-                }
-
-                .box {
-                    width: 100%;
-                    max-width: 520px;
-
-                    padding: 40px;
-
-                    text-align: center;
-
-                    background: #ffffff;
-
-                    border-radius: 24px;
-
-                    box-shadow:
-                        0 20px 50px
-                        rgba(0,0,0,.08);
-                }
-
-                .icon {
-                    width: 70px;
-                    height: 70px;
-
-                    margin:
-                        0 auto 20px;
-
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-
-                    border-radius: 20px;
-
-                    background: #fee2e2;
-
-                    color: #dc2626;
-
-                    font-size: 28px;
-
-                    font-weight: 800;
-                }
-
-                h2 {
-                    margin: 0 0 10px;
-                }
-
-                p {
-                    margin: 0;
-
-                    color: #6b7280;
-
-                    line-height: 1.7;
-                }
-
-                a {
-                    display: inline-flex;
-
-                    align-items: center;
-                    justify-content: center;
-
-                    margin-top: 25px;
-
-                    padding: 12px 20px;
-
-                    border-radius: 12px;
-
-                    background: #2563eb;
-
-                    color: #ffffff;
-
-                    text-decoration: none;
-
-                    font-weight: 700;
-                }
-
-            </style>
-
-        </head>
-
-        <body>
-
-            <div class='box'>
-
-                <div class='icon'>
-                    !
-                </div>
-
-                <h2>
-                    Data Customer Tidak Ditemukan
-                </h2>
-
-                <p>
-                    Akun login ditemukan,
-                    tetapi data customer belum tersedia.
-                </p>
-
-                <a href='../login.php'>
-                    Kembali ke Login
-                </a>
-
-            </div>
-
-        </body>
-
-        </html>
-    ");
-
+    header("Location: packages.php");
     exit;
 }
 
 
+$customerId = (int) $customer['id'];
+
+
 /*
 |--------------------------------------------------------------------------
-| DATA CUSTOMER
+| CEK STATUS LANGGANAN
 |--------------------------------------------------------------------------
 */
 
-$customerId =
-    (int) ($customer['id'] ?? 0);
-
-
-$statusLangganan =
-    strtolower(
-        trim(
-            (string) (
-                $customer['status_langganan']
-                ?? ''
-            )
+$statusLangganan = strtolower(
+    trim(
+        (string) (
+            $customer['status_langganan']
+            ?? ''
         )
-    );
+    )
+);
 
-
-/*
-|--------------------------------------------------------------------------
-| JIKA SUDAH AKTIF
-|--------------------------------------------------------------------------
-*/
 
 if (
     in_array(
         $statusLangganan,
-        [
-            'aktif',
-            'active',
-            '1'
-        ],
+        ['aktif', 'active', '1'],
         true
     )
 ) {
@@ -338,41 +173,11 @@ if (
 
 /*
 |--------------------------------------------------------------------------
-| JIKA SUDAH MENUNGGU PEMBAYARAN
-|--------------------------------------------------------------------------
-|
-| PENTING:
-| Gunakan payment.php, bukan pembayaran.php
-|
+| CEK PAKET
 |--------------------------------------------------------------------------
 */
 
-if (
-    in_array(
-        $statusLangganan,
-        [
-            'menunggu_pembayaran',
-            'pending_pembayaran',
-            'pending',
-            'unpaid'
-        ],
-        true
-    )
-) {
-
-    header("Location: payment.php");
-    exit;
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| AMBIL PAKET WIFI
-|--------------------------------------------------------------------------
-*/
-
-$sqlPackage = "
-
+$stmtPackage = $conn->prepare("
     SELECT
         id,
         nama_paket,
@@ -380,78 +185,31 @@ $sqlPackage = "
         harga,
         deskripsi,
         status
-
     FROM paket_wifi
-
-    WHERE
-        id = ?
-
-        AND
-        (
-            status IS NULL
-            OR TRIM(status) = ''
-            OR LOWER(TRIM(status)) IN (
-                'aktif',
-                'active',
-                'tersedia',
-                'available',
-                '1'
-            )
-        )
-
+    WHERE id = ?
     LIMIT 1
-";
-
-
-$stmtPackage =
-    $conn->prepare($sqlPackage);
-
-
-if (!$stmtPackage) {
-
-    die(
-        "Query paket gagal: " .
-        e($conn->error)
-    );
-}
-
+");
 
 $stmtPackage->bind_param(
     "i",
     $paketId
 );
 
-
-if (!$stmtPackage->execute()) {
-
-    die(
-        "Gagal mengambil paket: " .
-        e($stmtPackage->error)
-    );
-}
-
+$stmtPackage->execute();
 
 $resultPackage =
     $stmtPackage->get_result();
 
-
 $package =
     $resultPackage->fetch_assoc();
-
 
 $stmtPackage->close();
 
 
-/*
-|--------------------------------------------------------------------------
-| PAKET TIDAK DITEMUKAN
-|--------------------------------------------------------------------------
-*/
-
 if (!$package) {
 
-    $_SESSION['error_paket'] =
-        "Paket WiFi yang dipilih tidak tersedia atau sudah tidak aktif.";
+    $_SESSION['flash_error'] =
+        'Paket WiFi tidak ditemukan.';
 
     header("Location: packages.php");
     exit;
@@ -460,347 +218,265 @@ if (!$package) {
 
 /*
 |--------------------------------------------------------------------------
-| DATA PAKET
+| CEK STATUS PAKET
 |--------------------------------------------------------------------------
 */
 
-$packageId =
-    (int) ($package['id'] ?? 0);
-
-
-$packageName =
+$packageStatus = strtolower(
     trim(
         (string) (
-            $package['nama_paket']
-            ?? 'Paket WiFi'
+            $package['status'] ?? ''
         )
+    )
+);
+
+
+$packageAvailable =
+    $packageStatus === ''
+    ||
+    in_array(
+        $packageStatus,
+        [
+            'aktif',
+            'active',
+            '1',
+            'tersedia',
+            'available'
+        ],
+        true
     );
 
 
-$speed =
-    (int) (
-        $package['speed_mbps']
-        ?? 0
-    );
+if (!$packageAvailable) {
 
+    $_SESSION['flash_error'] =
+        'Paket yang dipilih sudah tidak tersedia.';
 
-$harga =
-    (float) (
-        $package['harga']
-        ?? 0
-    );
-
-
-$deskripsi =
-    trim(
-        (string) (
-            $package['deskripsi']
-            ?? ''
-        )
-    );
-
-
-/*
-|--------------------------------------------------------------------------
-| DATA CUSTOMER UNTUK FORM
-|--------------------------------------------------------------------------
-*/
-
-$nama =
-    trim(
-        (string) (
-            $customer['nama']
-            ?? ''
-        )
-    );
-
-
-if ($nama === '') {
-
-    $nama =
-        trim(
-            (string) (
-                $_SESSION['nama']
-                ?? 'Customer'
-            )
-        );
+    header("Location: packages.php");
+    exit;
 }
 
 
-$telephone =
-    trim(
-        (string) (
-            $customer['telephone']
-            ?? ''
-        )
-    );
+/*
+|--------------------------------------------------------------------------
+| CEK PENGAJUAN TERAKHIR
+|--------------------------------------------------------------------------
+*/
 
+$stmtRequest = $conn->prepare("
+    SELECT
+        id,
+        status,
+        coverage_status,
+        paket_id
+    FROM installation_requests
+    WHERE customer_id = ?
+    ORDER BY id DESC
+    LIMIT 1
+");
 
-$email =
-    trim(
-        (string) (
-            $customer['email']
-            ?? ''
-        )
-    );
+$stmtRequest->bind_param(
+    "i",
+    $customerId
+);
 
+$stmtRequest->execute();
 
-$nik =
-    trim(
-        (string) (
-            $customer['nik']
-            ?? ''
-        )
-    );
+$resultRequest =
+    $stmtRequest->get_result();
 
+$latestRequest =
+    $resultRequest->fetch_assoc();
 
-$alamat =
-    trim(
-        (string) (
-            $customer['alamat']
-            ?? ''
-        )
-    );
+$stmtRequest->close();
 
 
 /*
 |--------------------------------------------------------------------------
-| PROSES KONFIRMASI
+| CEK APAKAH SUDAH MENUNGGU VALIDASI CS
 |--------------------------------------------------------------------------
 */
 
-$error = '';
+if ($latestRequest) {
 
-
-$action =
-    $_POST['action']
-    ?? '';
-
-
-if ($action === 'confirm') {
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | INPUT
-    |--------------------------------------------------------------------------
-    */
-
-    $namaForm =
+    $latestStatus = strtolower(
         trim(
             (string) (
-                $_POST['nama']
+                $latestRequest['status']
                 ?? ''
             )
-        );
+        )
+    );
 
 
-    $telephoneForm =
-        trim(
-            (string) (
-                $_POST['telephone']
-                ?? ''
-            )
-        );
+    if (
+        in_array(
+            $latestStatus,
+            [
+                'menunggu_validasi_cs',
+                'pending_cs',
+                'validasi_cs',
+                'menunggu_cs'
+            ],
+            true
+        )
+        &&
+        (int) $latestRequest['paket_id'] === $paketId
+    ) {
 
+        $_SESSION['installation_request_id'] =
+            (int) $latestRequest['id'];
 
-    $emailForm =
-        trim(
-            (string) (
-                $_POST['email']
-                ?? ''
-            )
-        );
-
-
-    $nikForm =
-        trim(
-            (string) (
-                $_POST['nik']
-                ?? ''
-            )
-        );
-
-
-    $alamatForm =
-        trim(
-            (string) (
-                $_POST['alamat']
-                ?? ''
-            )
-        );
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | VALIDASI
-    |--------------------------------------------------------------------------
-    */
-
-    if ($namaForm === '') {
-
-        $error =
-            "Nama wajib diisi.";
-
-    } elseif ($telephoneForm === '') {
-
-        $error =
-            "Nomor telepon wajib diisi.";
-
-    } elseif ($alamatForm === '') {
-
-        $error =
-            "Alamat pemasangan wajib diisi.";
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | UPDATE CUSTOMER
-    |--------------------------------------------------------------------------
-    */
-
-    if ($error === '') {
-
-        $sqlUpdate = "
-
-            UPDATE customers
-
-            SET
-                nama = ?,
-                telephone = ?,
-                email = ?,
-                nik = ?,
-                alamat = ?,
-                paket_id = ?,
-                status_langganan = 'menunggu_pembayaran'
-
-            WHERE
-                id = ?
-
-                AND user_id = ?
-
-            LIMIT 1
-        ";
-
-
-        $stmtUpdate =
-            $conn->prepare($sqlUpdate);
-
-
-        if (!$stmtUpdate) {
-
-            $error =
-                "Query update customer gagal: " .
-                $conn->error;
-
-        } else {
-
-
-            $stmtUpdate->bind_param(
-                "sssssiii",
-                $namaForm,
-                $telephoneForm,
-                $emailForm,
-                $nikForm,
-                $alamatForm,
-                $packageId,
-                $customerId,
-                $userId
-            );
-
-
-            if (!$stmtUpdate->execute()) {
-
-                $error =
-                    "Gagal menyimpan pengajuan: " .
-                    $stmtUpdate->error;
-
-            }
-
-
-            $stmtUpdate->close();
-        }
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | BERHASIL
-    |--------------------------------------------------------------------------
-    */
-
-    if ($error === '') {
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | UPDATE SESSION
-        |--------------------------------------------------------------------------
-        */
-
-        $_SESSION['nama'] =
-            $namaForm;
-
-
-        $_SESSION['pengajuan_paket_id'] =
-            $packageId;
-
-
-        $_SESSION['pengajuan_paket_nama'] =
-            $packageName;
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | SIMPAN HARGA PAKET KE SESSION
-        |--------------------------------------------------------------------------
-        |
-        | Payment.php bisa mengambil data paket
-        | berdasarkan ID ini.
-        |
-        |--------------------------------------------------------------------------
-        */
-
-        $_SESSION['pengajuan_paket_harga'] =
-            $harga;
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | LANGSUNG KE PAYMENT.PHP
-        |--------------------------------------------------------------------------
-        */
-
-        header("Location: payment.php");
+        header("Location: validasi_cs.php");
         exit;
     }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| TRANSACTION
+|--------------------------------------------------------------------------
+*/
+
+$conn->begin_transaction();
+
+
+try {
+
+    /*
+    |--------------------------------------------------------------------------
+    | SIMPAN PAKET CUSTOMER
+    |--------------------------------------------------------------------------
+    */
+
+    $stmtUpdateCustomer = $conn->prepare("
+        UPDATE customers
+        SET paket_id = ?
+        WHERE id = ?
+        LIMIT 1
+    ");
+
+    $stmtUpdateCustomer->bind_param(
+        "ii",
+        $paketId,
+        $customerId
+    );
+
+    $stmtUpdateCustomer->execute();
+
+    $stmtUpdateCustomer->close();
 
 
     /*
     |--------------------------------------------------------------------------
-    | TAMPILKAN INPUT TERAKHIR JIKA ERROR
+    | UPDATE / INSERT INSTALLATION REQUEST
     |--------------------------------------------------------------------------
     */
 
-    $nama =
-        $namaForm;
+    if ($latestRequest) {
 
-    $telephone =
-        $telephoneForm;
+        $requestId =
+            (int) $latestRequest['id'];
 
-    $email =
-        $emailForm;
+        $stmtUpdateRequest = $conn->prepare("
+            UPDATE installation_requests
+            SET
+                paket_id = ?,
+                status = 'menunggu_validasi_cs',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE
+                id = ?
+                AND customer_id = ?
+            LIMIT 1
+        ");
 
-    $nik =
-        $nikForm;
+        /*
+        NOTE:
+        Query ini membutuhkan kolom paket_id
+        pada installation_requests.
+        */
 
-    $alamat =
-        $alamatForm;
+        $stmtUpdateRequest->bind_param(
+            "iii",
+            $paketId,
+            $requestId,
+            $customerId
+        );
+
+        $stmtUpdateRequest->execute();
+
+        $stmtUpdateRequest->close();
+
+
+    } else {
+
+        /*
+        Jika belum ada request sama sekali,
+        buat request baru.
+
+        Karena alamat + koordinat seharusnya
+        sudah diperoleh pada proses coverage,
+        kita ambil data request coverage terakhir.
+        */
+
+        throw new Exception(
+            "Data pengajuan pemasangan belum ditemukan. Silakan lakukan pengecekan coverage terlebih dahulu."
+        );
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | COMMIT
+    |--------------------------------------------------------------------------
+    */
+
+    $conn->commit();
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | SESSION
+    |--------------------------------------------------------------------------
+    */
+
+    $_SESSION['installation_request_id'] =
+        $requestId;
+
+    $_SESSION['installation_status'] =
+        'menunggu_validasi_cs';
+
+    $_SESSION['selected_package_id'] =
+        $paketId;
+
+    $_SESSION['selected_package_name'] =
+        $package['nama_paket'];
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | REDIRECT
+    |--------------------------------------------------------------------------
+    */
+
+    header("Location: validasi_cs.php");
+    exit;
+
+
+} catch (Throwable $e) {
+
+    $conn->rollback();
+
+    $_SESSION['flash_error'] =
+        $e->getMessage();
+
+    header("Location: packages.php");
+    exit;
 }
 
-?>
 
+?>
 
 <!DOCTYPE html>
 

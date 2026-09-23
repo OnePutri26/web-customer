@@ -1,6 +1,11 @@
 <?php
+
 session_start();
-require_once '../config/database.php';
+
+require_once "../config/database.php";
+require_once "../config/auth.php";
+
+requireActiveCustomer($conn);
 
 // Cek login
 if (!isset($_SESSION['user_id'])) { 

@@ -2,7 +2,11 @@
 
 session_start();
 
-require_once "config/database.php";
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
+require_once __DIR__ . "/config/database.php";
+
+date_default_timezone_set("Asia/Jakarta");
 
 
 /*
@@ -12,7 +16,6 @@ require_once "config/database.php";
 */
 
 $error = "";
-
 $usernameInput = "";
 
 
@@ -45,7 +48,8 @@ function clearLoginSession(): void
         $_SESSION['nama'],
         $_SESSION['username'],
         $_SESSION['role'],
-        $_SESSION['user_status']
+        $_SESSION['user_status'],
+        $_SESSION['subscription_status']
     );
 }
 
@@ -54,16 +58,13 @@ function clearLoginSession(): void
 |--------------------------------------------------------------------------
 | REDIRECT CUSTOMER
 |--------------------------------------------------------------------------
+|
+| Menentukan halaman berdasarkan status langganan.
+|
 */
 
 function redirectCustomer(mysqli $conn, int $userId): void
 {
-    /*
-    |--------------------------------------------------------------------------
-    | CEK DATA CUSTOMER
-    |--------------------------------------------------------------------------
-    */
-
     $stmt = $conn->prepare("
         SELECT
             id,
@@ -80,80 +81,48 @@ function redirectCustomer(mysqli $conn, int $userId): void
         LIMIT 1
     ");
 
-    if (!$stmt) {
+    $stmt->bind_param("i", $userId);
 
-        $_SESSION['login_error'] =
-            "Data customer tidak dapat diperiksa.";
-
-        clearLoginSession();
-
-        header("Location: login.php");
-        exit;
-    }
-
-
-    $stmt->bind_param(
-        "i",
-        $userId
-    );
-
-
-    if (!$stmt->execute()) {
-
-        $stmt->close();
-
-        $_SESSION['login_error'] =
-            "Gagal memeriksa data customer.";
-
-        clearLoginSession();
-
-        header("Location: login.php");
-        exit;
-    }
-
+    $stmt->execute();
 
     $result = $stmt->get_result();
 
-    $customer = $result
-        ? $result->fetch_assoc()
-        : null;
-
+    $customer = $result->fetch_assoc();
 
     $stmt->close();
 
 
     /*
     |--------------------------------------------------------------------------
-    | CUSTOMER TIDAK ADA
+    | DATA CUSTOMER TIDAK ADA
     |--------------------------------------------------------------------------
     */
 
     if (!$customer) {
 
         /*
-        | Kalau user customer belum mempunyai
-        | data customers, arahkan ke halaman langganan.
+        | Customer belum mempunyai record customers.
+        | Hanya boleh menuju halaman langganan.
         */
 
-        header(
-            "Location: customer/langganan.php"
-        );
+        $_SESSION['subscription_status'] =
+            'belum_berlangganan';
 
+        header("Location: customer/langganan.php");
         exit;
     }
 
 
     /*
     |--------------------------------------------------------------------------
-    | STATUS LANGGANAN
+    | AMBIL STATUS LANGGANAN
     |--------------------------------------------------------------------------
     */
 
     $status = strtolower(
         trim(
             (string) (
-                $customer['status_langganan']
-                ?? ''
+                $customer['status_langganan'] ?? ''
             )
         )
     );
@@ -166,7 +135,6 @@ function redirectCustomer(mysqli $conn, int $userId): void
     */
 
     if ($status === '') {
-
         $status = 'belum_berlangganan';
     }
 
@@ -177,9 +145,59 @@ function redirectCustomer(mysqli $conn, int $userId): void
     |--------------------------------------------------------------------------
     */
 
-    if ($status === 'active') {
-        $status = 'aktif';
+    switch ($status) {
+
+        case 'active':
+        case 'aktif':
+
+            $status = 'aktif';
+
+            break;
+
+
+        case 'belum berlangganan':
+        case 'belum_langganan':
+        case 'belum_berlangganan':
+
+            $status = 'belum_berlangganan';
+
+            break;
+
+
+        case 'pending':
+        case 'proses':
+        case 'menunggu pemasangan':
+        case 'menunggu_pemasangan':
+
+            $status = 'pending';
+
+            break;
+
+
+        case 'suspended':
+        case 'ditangguhkan':
+
+            $status = 'suspended';
+
+            break;
+
+
+        case 'terminated':
+        case 'dihentikan':
+
+            $status = 'terminated';
+
+            break;
     }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | SIMPAN STATUS KE SESSION
+    |--------------------------------------------------------------------------
+    */
+
+    $_SESSION['subscription_status'] = $status;
 
 
     /*
@@ -188,10 +206,7 @@ function redirectCustomer(mysqli $conn, int $userId): void
     |--------------------------------------------------------------------------
     */
 
-    if (
-        $status === 'belum_berlangganan' ||
-        $status === 'belum berlangganan'
-    ) {
+    if ($status === 'belum_berlangganan') {
 
         header(
             "Location: customer/langganan.php"
@@ -203,15 +218,11 @@ function redirectCustomer(mysqli $conn, int $userId): void
 
     /*
     |--------------------------------------------------------------------------
-    | PENDING
+    | MENUNGGU / PROSES PEMASANGAN
     |--------------------------------------------------------------------------
     */
 
-    if (
-        $status === 'pending' ||
-        $status === 'proses' ||
-        $status === 'menunggu_pemasangan'
-    ) {
+    if ($status === 'pending') {
 
         header(
             "Location: customer/installation.php"
@@ -239,19 +250,11 @@ function redirectCustomer(mysqli $conn, int $userId): void
 
     /*
     |--------------------------------------------------------------------------
-    | CUSTOMER SUSPENDED
+    | SUSPENDED
     |--------------------------------------------------------------------------
     */
 
-    if (
-        $status === 'suspended' ||
-        $status === 'ditangguhkan'
-    ) {
-
-        /*
-        | Tetap masuk dashboard.
-        | Dashboard dapat menampilkan status suspended.
-        */
+    if ($status === 'suspended') {
 
         header(
             "Location: customer/dashboard.php"
@@ -263,19 +266,16 @@ function redirectCustomer(mysqli $conn, int $userId): void
 
     /*
     |--------------------------------------------------------------------------
-    | CUSTOMER TERMINATED
+    | TERMINATED
     |--------------------------------------------------------------------------
     */
 
-    if (
-        $status === 'terminated' ||
-        $status === 'dihentikan'
-    ) {
+    if ($status === 'terminated') {
+
+        clearLoginSession();
 
         $_SESSION['login_error'] =
             "Layanan WiFi Anda telah dihentikan.";
-
-        clearLoginSession();
 
         header("Location: login.php");
         exit;
@@ -288,10 +288,10 @@ function redirectCustomer(mysqli $conn, int $userId): void
     |--------------------------------------------------------------------------
     */
 
-    $_SESSION['login_error'] =
-        "Status langganan tidak dikenali: " . $status;
-
     clearLoginSession();
+
+    $_SESSION['login_error'] =
+        "Status langganan akun tidak dikenali.";
 
     header("Location: login.php");
     exit;
@@ -306,18 +306,15 @@ function redirectCustomer(mysqli $conn, int $userId): void
 
 if (isset($_SESSION['login_error'])) {
 
-    $error =
-        $_SESSION['login_error'];
+    $error = $_SESSION['login_error'];
 
-    unset(
-        $_SESSION['login_error']
-    );
+    unset($_SESSION['login_error']);
 }
 
 
 /*
 |--------------------------------------------------------------------------
-| CEK JIKA SUDAH LOGIN
+| CEK SUDAH LOGIN
 |--------------------------------------------------------------------------
 */
 
@@ -328,7 +325,6 @@ if (
 
     $existingUserId =
         (int) $_SESSION['user_id'];
-
 
     $existingRole =
         strtolower(
@@ -408,18 +404,10 @@ if (
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | AMBIL INPUT
-    |--------------------------------------------------------------------------
-    */
-
     $usernameInput =
         trim(
             $_POST['username'] ?? ''
         );
-
 
     $password =
         $_POST['password'] ?? '';
@@ -443,17 +431,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     } else {
 
-
         /*
         |--------------------------------------------------------------------------
         | CARI USER
-        |--------------------------------------------------------------------------
-        |
-        | LOGIN BISA MENGGUNAKAN:
-        |
-        | 1. username
-        | 2. nama
-        |
         |--------------------------------------------------------------------------
         */
 
@@ -462,6 +442,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 id,
                 username,
                 nama,
+                email,
+                telephone,
                 password,
                 role,
                 status
@@ -472,291 +454,210 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             LIMIT 1
         ");
 
+        $stmt->bind_param(
+            "ss",
+            $usernameInput,
+            $usernameInput
+        );
+
+        $stmt->execute();
+
+        $result = $stmt->get_result();
+
 
         /*
         |--------------------------------------------------------------------------
-        | QUERY GAGAL
+        | USER TIDAK DITEMUKAN
         |--------------------------------------------------------------------------
         */
 
-        if (!$stmt) {
+        if (
+            !$result ||
+            $result->num_rows === 0
+        ) {
 
             $error =
-                "Query login gagal: " .
-                $conn->error;
+                "Username/nama atau password salah.";
+
+            $stmt->close();
 
         } else {
 
-
-            /*
-            |--------------------------------------------------------------------------
-            | BIND
-            |--------------------------------------------------------------------------
-            */
-
-            $stmt->bind_param(
-                "ss",
-                $usernameInput,
-                $usernameInput
-            );
+            $user =
+                $result->fetch_assoc();
 
 
             /*
             |--------------------------------------------------------------------------
-            | EXECUTE
+            | CEK PASSWORD
             |--------------------------------------------------------------------------
             */
 
-            if (!$stmt->execute()) {
+            if (
+                !password_verify(
+                    $password,
+                    $user['password']
+                )
+            ) {
 
                 $error =
-                    "Proses login gagal: " .
-                    $stmt->error;
+                    "Username/nama atau password salah.";
+
+                $stmt->close();
 
             } else {
 
-
                 /*
                 |--------------------------------------------------------------------------
-                | RESULT
+                | STATUS USER
                 |--------------------------------------------------------------------------
                 */
 
-                $result =
-                    $stmt->get_result();
+                $userStatus =
+                    strtolower(
+                        trim(
+                            (string) (
+                                $user['status'] ?? ''
+                            )
+                        )
+                    );
+
+
+                $activeStatuses = [
+                    'active',
+                    'aktif',
+                    '1'
+                ];
 
 
                 /*
                 |--------------------------------------------------------------------------
-                | USER TIDAK DITEMUKAN
+                | AKUN TIDAK AKTIF
                 |--------------------------------------------------------------------------
                 */
 
                 if (
-                    !$result ||
-                    $result->num_rows === 0
+                    !in_array(
+                        $userStatus,
+                        $activeStatuses,
+                        true
+                    )
                 ) {
 
                     $error =
-                        "Username/nama atau password salah.";
+                        "Akun Anda sedang tidak aktif.";
+
+                    $stmt->close();
 
                 } else {
 
-
                     /*
                     |--------------------------------------------------------------------------
-                    | AMBIL USER
+                    | LOGIN BERHASIL
                     |--------------------------------------------------------------------------
                     */
 
-                    $user =
-                        $result->fetch_assoc();
+                    session_regenerate_id(true);
+
+
+                    $_SESSION['user_id'] =
+                        (int) $user['id'];
+
+                    $_SESSION['nama'] =
+                        $user['nama'];
+
+                    $_SESSION['username'] =
+                        $user['username'];
+
+                    $_SESSION['role'] =
+                        strtolower(
+                            trim(
+                                (string) (
+                                    $user['role'] ?? ''
+                                )
+                            )
+                        );
+
+                    $_SESSION['user_status'] =
+                        $user['status'];
+
+
+                    $role =
+                        $_SESSION['role'];
 
 
                     /*
                     |--------------------------------------------------------------------------
-                    | CEK PASSWORD
+                    | ADMIN
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if ($role === 'admin') {
+
+                        $stmt->close();
+
+                        header(
+                            "Location: admin/dashboard.php"
+                        );
+
+                        exit;
+                    }
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | TEKNISI
                     |--------------------------------------------------------------------------
                     */
 
                     if (
-                        !password_verify(
-                            $password,
-                            $user['password']
-                        )
+                        $role === 'teknisi' ||
+                        $role === 'technician'
                     ) {
 
-                        $error =
-                            "Username/nama atau password salah.";
+                        $stmt->close();
 
-                    } else {
+                        header(
+                            "Location: teknisi/dashboard.php"
+                        );
 
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | STATUS USER
-                        |--------------------------------------------------------------------------
-                        */
-
-                        $userStatus =
-                            strtolower(
-                                trim(
-                                    (string) (
-                                        $user['status']
-                                        ?? ''
-                                    )
-                                )
-                            );
-
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | STATUS USER AKTIF
-                        |--------------------------------------------------------------------------
-                        |
-                        | Mendukung:
-                        |
-                        | active
-                        | aktif
-                        | 1
-                        |
-                        |--------------------------------------------------------------------------
-                        */
-
-                        $activeStatuses = [
-                            'active',
-                            'aktif',
-                            '1'
-                        ];
-
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | USER TIDAK AKTIF
-                        |--------------------------------------------------------------------------
-                        */
-
-                        if (
-                            !in_array(
-                                $userStatus,
-                                $activeStatuses,
-                                true
-                            )
-                        ) {
-
-                            $error =
-                                "Akun Anda sedang tidak aktif.";
-
-                        } else {
-
-
-                            /*
-                            |--------------------------------------------------------------------------
-                            | LOGIN BERHASIL
-                            |--------------------------------------------------------------------------
-                            */
-
-                            session_regenerate_id(true);
-
-
-                            /*
-                            |--------------------------------------------------------------------------
-                            | SIMPAN SESSION
-                            |--------------------------------------------------------------------------
-                            */
-
-                            $_SESSION['user_id'] =
-                                (int) $user['id'];
-
-
-                            $_SESSION['nama'] =
-                                $user['nama'];
-
-
-                            $_SESSION['username'] =
-                                $user['username'];
-
-
-                            $_SESSION['role'] =
-                                strtolower(
-                                    trim(
-                                        (string) (
-                                            $user['role']
-                                            ?? ''
-                                        )
-                                    )
-                                );
-
-
-                            $_SESSION['user_status'] =
-                                $user['status'];
-
-
-                            /*
-                            |--------------------------------------------------------------------------
-                            | ROLE
-                            |--------------------------------------------------------------------------
-                            */
-
-                            $role =
-                                $_SESSION['role'];
-
-
-                            /*
-                            |--------------------------------------------------------------------------
-                            | ADMIN
-                            |--------------------------------------------------------------------------
-                            */
-
-                            if ($role === 'admin') {
-
-                                $stmt->close();
-
-                                header(
-                                    "Location: admin/dashboard.php"
-                                );
-
-                                exit;
-                            }
-
-
-                            /*
-                            |--------------------------------------------------------------------------
-                            | TEKNISI
-                            |--------------------------------------------------------------------------
-                            */
-
-                            if (
-                                $role === 'teknisi' ||
-                                $role === 'technician'
-                            ) {
-
-                                $stmt->close();
-
-                                header(
-                                    "Location: teknisi/dashboard.php"
-                                );
-
-                                exit;
-                            }
-
-
-                            /*
-                            |--------------------------------------------------------------------------
-                            | CUSTOMER
-                            |--------------------------------------------------------------------------
-                            */
-
-                            if ($role === 'customer') {
-
-                                $stmt->close();
-
-                                redirectCustomer(
-                                    $conn,
-                                    (int) $user['id']
-                                );
-
-                                exit;
-                            }
-
-
-                            /*
-                            |--------------------------------------------------------------------------
-                            | ROLE TIDAK DIKENALI
-                            |--------------------------------------------------------------------------
-                            */
-
-                            $error =
-                                "Role akun tidak dikenali.";
-
-                            clearLoginSession();
-                        }
+                        exit;
                     }
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | CUSTOMER
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if ($role === 'customer') {
+
+                        $stmt->close();
+
+                        redirectCustomer(
+                            $conn,
+                            (int) $user['id']
+                        );
+
+                        exit;
+                    }
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | ROLE TIDAK DIKENALI
+                    |--------------------------------------------------------------------------
+                    */
+
+                    clearLoginSession();
+
+                    $error =
+                        "Role akun tidak dikenali.";
+
+                    $stmt->close();
                 }
             }
-
-
-            $stmt->close();
         }
     }
 }
@@ -785,27 +686,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </title>
 
 
-    <!-- Bootstrap -->
-
     <link
         href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
         rel="stylesheet"
     >
-
-
-    <!-- Bootstrap Icons -->
 
     <link
         rel="stylesheet"
         href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
     >
 
-
-    <!-- Custom CSS -->
-
     <link
         rel="stylesheet"
-        href="assets/css/login.css?v=10"
+        href="assets/css/login.css?v=11"
     >
 
 </head>
@@ -814,32 +707,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
 
 
-<!-- ==========================================================
-     BACKGROUND
-========================================================== -->
-
 <div class="background-circle circle-1"></div>
 
 <div class="background-circle circle-2"></div>
 
 
-
-<!-- ==========================================================
-     LOGIN WRAPPER
-========================================================== -->
-
 <div class="login-wrapper">
-
 
     <div class="login-container">
 
 
-        <!-- ==================================================
-             LEFT
-        =================================================== -->
+        <!-- LEFT -->
 
         <div class="login-info">
-
 
             <div class="wifi-icon">
 
@@ -914,14 +794,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             </div>
 
-
         </div>
 
 
-
-        <!-- ==================================================
-             RIGHT
-        =================================================== -->
+        <!-- RIGHT -->
 
         <div class="login-card">
 
@@ -939,9 +815,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
 
-
-            <!-- ERROR -->
-
             <?php if ($error !== ''): ?>
 
                 <div
@@ -958,9 +831,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php endif; ?>
 
 
-
-            <!-- LOGIN FORM -->
-
             <form
                 method="POST"
                 action=""
@@ -968,26 +838,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             >
 
 
-                <!-- USERNAME / NAMA -->
-
                 <div class="mb-3">
 
                     <label
                         for="username"
                         class="form-label"
                     >
-
                         Username / Nama
-
                     </label>
 
 
                     <div class="input-wrapper">
 
                         <span class="input-icon">
-
                             <i class="bi bi-person"></i>
-
                         </span>
 
 
@@ -1008,27 +872,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
 
-
-                <!-- PASSWORD -->
-
                 <div class="mb-4">
 
                     <label
                         for="password"
                         class="form-label"
                     >
-
                         Password
-
                     </label>
 
 
                     <div class="input-wrapper">
 
                         <span class="input-icon">
-
                             <i class="bi bi-lock"></i>
-
                         </span>
 
 
@@ -1047,9 +904,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
 
-
-                <!-- LOGIN -->
-
                 <button
                     type="submit"
                     class="btn login-btn w-100"
@@ -1065,9 +919,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </form>
 
 
-
-            <!-- REGISTER -->
-
             <div class="register-text">
 
                 Belum punya akun?
@@ -1079,9 +930,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
 
-
-            <!-- SECURITY -->
-
             <div class="security-text">
 
                 <i class="bi bi-shield-lock-fill"></i>
@@ -1092,7 +940,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 
         </div>
-
 
     </div>
 
