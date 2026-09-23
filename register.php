@@ -482,7 +482,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <div class="register-header">
 
         <h1>
-            Selamat Datang di WiFi Management
+            Selamat Datang di WiFi Management CUSTOMER
         </h1>
 
         <p>
