@@ -482,11 +482,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <div class="register-header">
 
         <h1>
-            Selamat Datang di WiFi Management CUSTOMER
+            Selamat Datang di WiFi Management
         </h1>
 
         <p>
-            Buat akun untuk berlangganan layanan internet YESNET. CUSTOMER
+            Buat akun untuk berlangganan layanan internet YESNET.
         </p>
 
     </div>
