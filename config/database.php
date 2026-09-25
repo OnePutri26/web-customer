@@ -2,7 +2,7 @@
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-$host = "103.209.250.42";
+$host = "103.209.250.78";
 $user = "wifi_app";
 $pass = "PasswordKuat123!";
 $db   = "wifi_management";
