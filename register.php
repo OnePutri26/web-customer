@@ -124,7 +124,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $username
     )) {
 
-        $error = "Username hanya boleh menggunakan huruf, angka, titik, underscore, dan tanda minus.";
+        $error =
+            "Username hanya boleh menggunakan huruf, angka, titik, underscore, dan tanda minus.";
 
     } elseif (!filter_var(
         $email,
@@ -154,6 +155,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     )) {
 
         $error = "NIK harus berupa 10-20 digit angka.";
+
+    } elseif (mb_strlen($alamat) < 10) {
+
+        $error =
+            "Alamat harus diisi lebih lengkap.";
+
     }
 
     /*
@@ -249,13 +256,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         } catch (Throwable $exception) {
 
-            $error = "Gagal memeriksa data pendaftaran.";
+            $error =
+                "Gagal memeriksa data pendaftaran.";
         }
     }
 
     /*
     |--------------------------------------------------------------------------
-    | INSERT
+    | INSERT USER + CUSTOMER
     |--------------------------------------------------------------------------
     */
 
@@ -275,11 +283,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             );
 
             if ($passwordHash === false) {
-                throw new Exception("Password gagal diproses.");
+                throw new Exception(
+                    "Password gagal diproses."
+                );
             }
 
             /*
-            | USERS
+            | USER
             */
 
             $role = "customer";
@@ -317,15 +327,24 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $stmt->close();
 
             if ($userId <= 0) {
-                throw new Exception("User ID tidak valid.");
+                throw new Exception(
+                    "User ID tidak valid."
+                );
             }
 
             /*
-            | CUSTOMERS
+            |--------------------------------------------------------------------------
+            | CUSTOMER
+            |--------------------------------------------------------------------------
+            |
+            | Customer BARU belum memilih paket.
+            |
             */
 
             $paketId = null;
-            $statusLangganan = "belum_berlangganan";
+
+            $statusLangganan =
+                "belum_berlangganan";
 
             $stmt = $conn->prepare("
                 INSERT INTO customers
@@ -341,17 +360,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ");
-
-            /*
-             * i  = user_id
-             * i  = paket_id
-             * s  = nama
-             * s  = telephone
-             * s  = email
-             * s  = nik
-             * s  = alamat
-             * s  = status_langganan
-             */
 
             $stmt->bind_param(
                 "iissssss",
@@ -372,11 +380,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $stmt->close();
 
             if ($customerId <= 0) {
-                throw new Exception("Customer ID tidak valid.");
+                throw new Exception(
+                    "Customer ID tidak valid."
+                );
             }
 
             /*
+            |--------------------------------------------------------------------------
             | COMMIT
+            |--------------------------------------------------------------------------
             */
 
             $conn->commit();
@@ -389,15 +401,32 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             session_regenerate_id(true);
 
-            $_SESSION["user_id"] = $userId;
-            $_SESSION["customer_id"] = $customerId;
-            $_SESSION["username"] = $username;
-            $_SESSION["nama"] = $nama;
-            $_SESSION["email"] = $email;
-            $_SESSION["telephone"] = $telephone;
-            $_SESSION["role"] = $role;
-            $_SESSION["user_status"] = $status;
-            $_SESSION["status_langganan"] = $statusLangganan;
+            $_SESSION["user_id"] =
+                $userId;
+
+            $_SESSION["customer_id"] =
+                $customerId;
+
+            $_SESSION["username"] =
+                $username;
+
+            $_SESSION["nama"] =
+                $nama;
+
+            $_SESSION["email"] =
+                $email;
+
+            $_SESSION["telephone"] =
+                $telephone;
+
+            $_SESSION["role"] =
+                $role;
+
+            $_SESSION["user_status"] =
+                $status;
+
+            $_SESSION["status_langganan"] =
+                $statusLangganan;
 
             /*
             |--------------------------------------------------------------------------
@@ -416,7 +445,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             try {
                 $conn->rollback();
             } catch (Throwable $rollbackException) {
-                // Abaikan error rollback
+                // Abaikan rollback error
             }
 
             $error =
@@ -428,38 +457,35 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 ?>
 
 <!DOCTYPE html>
-
 <html lang="id">
 
 <head>
 
+    <meta charset="UTF-8">
 
-<meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
-<meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
->
+    <title>
+        Daftar Akun - WiFi Management
+    </title>
 
-<title>
-    Daftar Akun - WiFi Management
-</title>
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
 
-<link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-    rel="stylesheet"
->
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+        rel="stylesheet"
+    >
 
-<link
-    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
-    rel="stylesheet"
->
-
-<link
-    rel="stylesheet"
-    href="assets/css/register.css"
->
-
+    <link
+        rel="stylesheet"
+        href="assets/css/register.css"
+    >
 
 </head>
 
@@ -467,298 +493,312 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
 <div class="register-wrapper">
 
+    <div class="register-card">
 
-<div class="register-card">
+        <div class="register-logo">
 
-    <div class="register-logo">
+            <img
+                src="logo-yesnet.png"
+                alt="YESNET"
+            >
 
-        <img
-            src="logo-yesnet.png"
-            alt="YESNET"
+        </div>
+
+        <div class="register-header">
+
+            <h1>
+                Selamat Datang di WiFi Management
+            </h1>
+
+            <p>
+                Buat akun untuk berlangganan layanan internet YESNET.
+            </p>
+
+        </div>
+
+        <?php if ($error !== ""): ?>
+
+            <div class="alert alert-danger">
+
+                <i class="bi bi-exclamation-circle-fill"></i>
+
+                <?= e($error) ?>
+
+            </div>
+
+        <?php endif; ?>
+
+        <form
+            method="POST"
+            action=""
+            autocomplete="off"
         >
 
+            <div class="row">
+
+                <!-- NAMA -->
+
+                <div class="col-md-6 mb-3">
+
+                    <label class="form-label">
+                        Nama Lengkap
+                    </label>
+
+                    <div class="input-group">
+
+                        <span class="input-group-text">
+                            <i class="bi bi-person"></i>
+                        </span>
+
+                        <input
+                            type="text"
+                            name="nama"
+                            class="form-control"
+                            placeholder="Masukkan nama lengkap"
+                            value="<?= e($nama) ?>"
+                            required
+                        >
+
+                    </div>
+
+                </div>
+
+                <!-- USERNAME -->
+
+                <div class="col-md-6 mb-3">
+
+                    <label class="form-label">
+                        Username
+                    </label>
+
+                    <div class="input-group">
+
+                        <span class="input-group-text">
+                            <i class="bi bi-person-badge"></i>
+                        </span>
+
+                        <input
+                            type="text"
+                            name="username"
+                            class="form-control"
+                            placeholder="Masukkan username"
+                            value="<?= e($username) ?>"
+                            required
+                        >
+
+                    </div>
+
+                </div>
+
+                <!-- EMAIL -->
+
+                <div class="col-md-6 mb-3">
+
+                    <label class="form-label">
+                        Email
+                    </label>
+
+                    <div class="input-group">
+
+                        <span class="input-group-text">
+                            <i class="bi bi-envelope"></i>
+                        </span>
+
+                        <input
+                            type="email"
+                            name="email"
+                            class="form-control"
+                            placeholder="contoh@email.com"
+                            value="<?= e($email) ?>"
+                            required
+                        >
+
+                    </div>
+
+                </div>
+
+                <!-- TELEPHONE -->
+
+                <div class="col-md-6 mb-3">
+
+                    <label class="form-label">
+                        Nomor Telepon
+                    </label>
+
+                    <div class="input-group">
+
+                        <span class="input-group-text">
+                            <i class="bi bi-telephone"></i>
+                        </span>
+
+                        <input
+                            type="text"
+                            name="telephone"
+                            id="telephone"
+                            class="form-control"
+                            placeholder="08xxxxxxxxxx"
+                            value="<?= e($telephone) ?>"
+                            inputmode="numeric"
+                            required
+                        >
+
+                    </div>
+
+                </div>
+
+                <!-- PASSWORD -->
+
+                <div class="col-md-6 mb-3">
+
+                    <label class="form-label">
+                        Password
+                    </label>
+
+                    <div class="input-group">
+
+                        <span class="input-group-text">
+                            <i class="bi bi-lock"></i>
+                        </span>
+
+                        <input
+                            type="password"
+                            name="password"
+                            id="password"
+                            class="form-control"
+                            placeholder="Minimal 6 karakter"
+                            required
+                        >
+
+                        <button
+                            type="button"
+                            class="btn btn-outline-secondary"
+                            id="togglePassword"
+                        >
+                            <i class="bi bi-eye"></i>
+                        </button>
+
+                    </div>
+
+                </div>
+
+                <!-- PASSWORD CONFIRM -->
+
+                <div class="col-md-6 mb-3">
+
+                    <label class="form-label">
+                        Konfirmasi Password
+                    </label>
+
+                    <div class="input-group">
+
+                        <span class="input-group-text">
+                            <i class="bi bi-lock-fill"></i>
+                        </span>
+
+                        <input
+                            type="password"
+                            name="password_confirm"
+                            id="passwordConfirm"
+                            class="form-control"
+                            placeholder="Ulangi password"
+                            required
+                        >
+
+                        <button
+                            type="button"
+                            class="btn btn-outline-secondary"
+                            id="togglePasswordConfirm"
+                        >
+                            <i class="bi bi-eye"></i>
+                        </button>
+
+                    </div>
+
+                </div>
+
+                <!-- NIK -->
+
+                <div class="col-md-6 mb-3">
+
+                    <label class="form-label">
+                        NIK
+                    </label>
+
+                    <div class="input-group">
+
+                        <span class="input-group-text">
+                            <i class="bi bi-card-text"></i>
+                        </span>
+
+                        <input
+                            type="text"
+                            name="nik"
+                            id="nik"
+                            class="form-control"
+                            placeholder="Masukkan NIK"
+                            value="<?= e($nik) ?>"
+                            inputmode="numeric"
+                            required
+                        >
+
+                    </div>
+
+                </div>
+
+                <!-- ALAMAT -->
+
+                <div class="col-md-6 mb-3">
+
+                    <label class="form-label">
+                        Alamat
+                    </label>
+
+                    <div class="input-group">
+
+                        <span class="input-group-text">
+                            <i class="bi bi-geo-alt"></i>
+                        </span>
+
+                        <textarea
+                            name="alamat"
+                            class="form-control"
+                            rows="1"
+                            placeholder="Masukkan alamat lengkap"
+                            required
+                        ><?= e($alamat) ?></textarea>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <button
+                type="submit"
+                class="btn-register"
+            >
+
+                <i class="bi bi-person-plus-fill"></i>
+
+                Daftar Sekarang
+
+            </button>
+
+            <div class="register-footer">
+
+                <span>
+                    Sudah punya akun?
+                </span>
+
+                <a href="login.php">
+                    Login di sini
+                </a>
+
+            </div>
+
+        </form>
+
     </div>
-
-    <div class="register-header">
-
-        <h1>
-            Selamat Datang di WiFi Management
-        </h1>
-
-        <p>
-            Buat akun untuk berlangganan layanan internet YESNET.
-        </p>
-
-    </div>
-
-    <?php if ($error !== ""): ?>
-
-        <div class="alert alert-danger">
-
-            <i class="bi bi-exclamation-circle-fill"></i>
-
-            <?= e($error) ?>
-
-        </div>
-
-    <?php endif; ?>
-
-    <form
-        method="POST"
-        action=""
-        autocomplete="off"
-    >
-
-        <div class="row">
-
-            <div class="col-md-6 mb-3">
-
-                <label class="form-label">
-                    Nama Lengkap
-                </label>
-
-                <div class="input-group">
-
-                    <span class="input-group-text">
-                        <i class="bi bi-person"></i>
-                    </span>
-
-                    <input
-                        type="text"
-                        name="nama"
-                        class="form-control"
-                        placeholder="Masukkan nama lengkap"
-                        value="<?= e($nama) ?>"
-                        required
-                    >
-
-                </div>
-
-            </div>
-
-            <div class="col-md-6 mb-3">
-
-                <label class="form-label">
-                    Username
-                </label>
-
-                <div class="input-group">
-
-                    <span class="input-group-text">
-                        <i class="bi bi-person-badge"></i>
-                    </span>
-
-                    <input
-                        type="text"
-                        name="username"
-                        class="form-control"
-                        placeholder="Masukkan username"
-                        value="<?= e($username) ?>"
-                        required
-                    >
-
-                </div>
-
-            </div>
-
-            <div class="col-md-6 mb-3">
-
-                <label class="form-label">
-                    Email
-                </label>
-
-                <div class="input-group">
-
-                    <span class="input-group-text">
-                        <i class="bi bi-envelope"></i>
-                    </span>
-
-                    <input
-                        type="email"
-                        name="email"
-                        class="form-control"
-                        placeholder="contoh@email.com"
-                        value="<?= e($email) ?>"
-                        required
-                    >
-
-                </div>
-
-            </div>
-
-            <div class="col-md-6 mb-3">
-
-                <label class="form-label">
-                    Nomor Telepon
-                </label>
-
-                <div class="input-group">
-
-                    <span class="input-group-text">
-                        <i class="bi bi-telephone"></i>
-                    </span>
-
-                    <input
-                        type="text"
-                        name="telephone"
-                        id="telephone"
-                        class="form-control"
-                        placeholder="08xxxxxxxxxx"
-                        value="<?= e($telephone) ?>"
-                        inputmode="numeric"
-                        required
-                    >
-
-                </div>
-
-            </div>
-
-            <div class="col-md-6 mb-3">
-
-                <label class="form-label">
-                    Password
-                </label>
-
-                <div class="input-group">
-
-                    <span class="input-group-text">
-                        <i class="bi bi-lock"></i>
-                    </span>
-
-                    <input
-                        type="password"
-                        name="password"
-                        id="password"
-                        class="form-control"
-                        placeholder="Minimal 6 karakter"
-                        required
-                    >
-
-                    <button
-                        type="button"
-                        class="btn btn-outline-secondary"
-                        id="togglePassword"
-                    >
-                        <i class="bi bi-eye"></i>
-                    </button>
-
-                </div>
-
-            </div>
-
-            <div class="col-md-6 mb-3">
-
-                <label class="form-label">
-                    Konfirmasi Password
-                </label>
-
-                <div class="input-group">
-
-                    <span class="input-group-text">
-                        <i class="bi bi-lock-fill"></i>
-                    </span>
-
-                    <input
-                        type="password"
-                        name="password_confirm"
-                        id="passwordConfirm"
-                        class="form-control"
-                        placeholder="Ulangi password"
-                        required
-                    >
-
-                    <button
-                        type="button"
-                        class="btn btn-outline-secondary"
-                        id="togglePasswordConfirm"
-                    >
-                        <i class="bi bi-eye"></i>
-                    </button>
-
-                </div>
-
-            </div>
-
-            <div class="col-md-6 mb-3">
-
-                <label class="form-label">
-                    NIK
-                </label>
-
-                <div class="input-group">
-
-                    <span class="input-group-text">
-                        <i class="bi bi-card-text"></i>
-                    </span>
-
-                    <input
-                        type="text"
-                        name="nik"
-                        id="nik"
-                        class="form-control"
-                        placeholder="Masukkan NIK"
-                        value="<?= e($nik) ?>"
-                        inputmode="numeric"
-                        required
-                    >
-
-                </div>
-
-            </div>
-
-            <div class="col-md-6 mb-3">
-
-                <label class="form-label">
-                    Alamat
-                </label>
-
-                <div class="input-group">
-
-                    <span class="input-group-text">
-                        <i class="bi bi-geo-alt"></i>
-                    </span>
-
-                    <textarea
-                        name="alamat"
-                        class="form-control"
-                        rows="1"
-                        placeholder="Masukkan alamat lengkap"
-                        required
-                    ><?= e($alamat) ?></textarea>
-
-                </div>
-
-            </div>
-
-        </div>
-
-        <button
-            type="submit"
-            class="btn-register"
-        >
-
-            <i class="bi bi-person-plus-fill"></i>
-
-            Daftar Sekarang
-
-        </button>
-
-        <div class="register-footer">
-
-            <span>
-                Sudah punya akun?
-            </span>
-
-            <a href="login.php">
-                Login di sini
-            </a>
-
-        </div>
-
-    </form>
-
-</div>
-
 
 </div>
 
@@ -861,5 +901,4 @@ if (telephoneInput) {
 </script>
 
 </body>
-
 </html>
