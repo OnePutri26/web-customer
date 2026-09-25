@@ -42,6 +42,11 @@ $conn->set_charset("utf8mb4");
 |--------------------------------------------------------------------------
 | CEK LOGIN CUSTOMER
 |--------------------------------------------------------------------------
+|
+| Redirect ke login HANYA jika user belum login sebagai customer.
+| Hasil coverage tidak pernah melakukan redirect ke login.
+|
+|--------------------------------------------------------------------------
 */
 
 $userId = (int) ($_SESSION["user_id"] ?? 0);
@@ -88,6 +93,7 @@ $paketId = null;
 $namaPaket = "";
 $hargaPaket = null;
 
+
 /*
 |--------------------------------------------------------------------------
 | AMBIL DATA CUSTOMER
@@ -122,18 +128,29 @@ try {
 
     $stmt->execute();
 
+<<<<<<< HEAD
     $result =
         $stmt->get_result();
 
     $customer =
         $result->fetch_assoc();
+=======
+    $result = $stmt->get_result();
+
+    $customer = $result->fetch_assoc();
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
 
     $stmt->close();
 
+
     if (!$customer) {
 
+<<<<<<< HEAD
         $error =
             "Data customer tidak ditemukan.";
+=======
+        $error = "Data customer tidak ditemukan.";
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
 
     } else {
 
@@ -144,6 +161,7 @@ try {
         | Paket memang boleh NULL.
         */
 
+<<<<<<< HEAD
         $paketId =
             !empty($customer["paket_id"])
                 ? (int) $customer["paket_id"]
@@ -168,6 +186,29 @@ try {
             $customer["harga"] !== null
                 ? (float) $customer["harga"]
                 : null;
+=======
+        $nama = (string) ($customer["nama"] ?? "");
+
+        $telephone = (string) (
+            $customer["telephone"] ?? ""
+        );
+
+        $email = (string) (
+            $customer["email"] ?? ""
+        );
+
+        $alamat = (string) (
+            $customer["alamat"] ?? ""
+        );
+
+        $namaPaket = (string) (
+            $customer["nama_paket"] ?? ""
+        );
+
+        $hargaPaket = $customer["harga"] !== null
+            ? (float) $customer["harga"]
+            : null;
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
     }
 
 } catch (Throwable $exception) {
@@ -175,6 +216,7 @@ try {
     $error =
         "Terjadi kesalahan saat mengambil data customer.";
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -209,51 +251,118 @@ if ($customerId > 0) {
 
         $stmt->execute();
 
+<<<<<<< HEAD
         $result =
             $stmt->get_result();
 
         $request =
             $result->fetch_assoc();
+=======
+        $result = $stmt->get_result();
+
+        $request = $result->fetch_assoc();
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
 
         $stmt->close();
+
 
         if ($request) {
 
             $requestId =
                 (int) $request["id"];
 
+
+            /*
+            |------------------------------------------------------------------
+            | Alamat
+            |------------------------------------------------------------------
+            */
+
             if (!empty($request["alamat_pemasangan"])) {
 
+<<<<<<< HEAD
                 $alamat =
                     (string) $request["alamat_pemasangan"];
+=======
+                $alamat = (string) (
+                    $request["alamat_pemasangan"]
+                );
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
             }
+
+
+            /*
+            |------------------------------------------------------------------
+            | Latitude
+            |------------------------------------------------------------------
+            */
 
             if (
                 $request["latitude"] !== null &&
                 $request["latitude"] !== ""
             ) {
 
+<<<<<<< HEAD
                 $latitude =
                     (string) $request["latitude"];
+=======
+                $latitude = (string) (
+                    $request["latitude"]
+                );
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
             }
+
+
+            /*
+            |------------------------------------------------------------------
+            | Longitude
+            |------------------------------------------------------------------
+            */
 
             if (
                 $request["longitude"] !== null &&
                 $request["longitude"] !== ""
             ) {
 
+<<<<<<< HEAD
                 $longitude =
                     (string) $request["longitude"];
+=======
+                $longitude = (string) (
+                    $request["longitude"]
+                );
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
             }
+
+
+            /*
+            |------------------------------------------------------------------
+            | ODP
+            |------------------------------------------------------------------
+            */
 
             if (!empty($request["odp_id"])) {
 
+<<<<<<< HEAD
                 $odpId =
                     (int) $request["odp_id"];
+=======
+                $odpId = (int) (
+                    $request["odp_id"]
+                );
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
             }
+
+
+            /*
+            |------------------------------------------------------------------
+            | Jarak ODP
+            |------------------------------------------------------------------
+            */
 
             if ($request["jarak_odp"] !== null) {
 
+<<<<<<< HEAD
                 $jarakOdp =
                     (float) $request["jarak_odp"];
             }
@@ -267,13 +376,50 @@ if ($customerId > 0) {
                 (string) (
                     $request["status"] ?? ""
                 );
+=======
+                $jarakOdp = (float) (
+                    $request["jarak_odp"]
+                );
+            }
+
+
+            /*
+            |------------------------------------------------------------------
+            | Status Coverage
+            |------------------------------------------------------------------
+            */
+
+            $coverageStatus = (string) (
+                $request["coverage_status"] ?? ""
+            );
+
+
+            /*
+            |------------------------------------------------------------------
+            | Status Request
+            |------------------------------------------------------------------
+            */
+
+            $requestStatus = (string) (
+                $request["status"] ?? ""
+            );
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
         }
 
     } catch (Throwable $exception) {
 
+<<<<<<< HEAD
         // Request belum tersedia.
+=======
+        /*
+        |----------------------------------------------------------------------
+        | Tidak menghentikan halaman.
+        |----------------------------------------------------------------------
+        */
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
     }
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -304,16 +450,24 @@ if ($odpId !== null) {
 
         $stmt->execute();
 
+<<<<<<< HEAD
         $result =
             $stmt->get_result();
 
         $odp =
             $result->fetch_assoc();
+=======
+        $result = $stmt->get_result();
+
+        $odp = $result->fetch_assoc();
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
 
         $stmt->close();
 
+
         if ($odp) {
 
+<<<<<<< HEAD
             $namaOdp =
                 (string) ($odp["nama_odp"] ?? "");
 
@@ -321,14 +475,31 @@ if ($odpId !== null) {
 
                 $radiusOdp =
                     (float) $odp["radius"];
+=======
+            $namaOdp = (string) (
+                $odp["nama_odp"] ?? ""
+            );
+
+
+            if ($odp["radius"] !== null) {
+
+                $radiusOdp = (float) (
+                    $odp["radius"]
+                );
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
             }
         }
 
     } catch (Throwable $exception) {
 
-        // Abaikan jika ODP belum tersedia.
+        /*
+        |----------------------------------------------------------------------
+        | Abaikan jika ODP belum tersedia.
+        |----------------------------------------------------------------------
+        */
     }
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -338,13 +509,27 @@ if ($odpId !== null) {
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
+<<<<<<< HEAD
     $action =
         trim((string) ($_POST["action"] ?? ""));
+=======
+    $action = trim(
+        (string) ($_POST["action"] ?? "")
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | ACTION: CHECK COVERAGE
+    |--------------------------------------------------------------------------
+    */
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
 
     if ($action === "check_coverage") {
 
         /*
         |----------------------------------------------------------------------
+<<<<<<< HEAD
         | AMBIL INPUT
         |----------------------------------------------------------------------
         */
@@ -366,6 +551,58 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         $longitude =
             $lngPost;
+=======
+        | RESET HASIL SEBELUMNYA
+        |----------------------------------------------------------------------
+        */
+
+        $error = "";
+        $success = "";
+
+        $coverageStatus = "";
+
+        $requestId = null;
+        $requestStatus = "";
+
+        $odpId = null;
+        $namaOdp = "";
+
+        $jarakOdp = null;
+        $radiusOdp = null;
+
+
+        /*
+        |----------------------------------------------------------------------
+        | AMBIL INPUT
+        |----------------------------------------------------------------------
+        */
+
+        $alamatPost = trim(
+            (string) ($_POST["alamat"] ?? "")
+        );
+
+        $latPost = trim(
+            (string) ($_POST["latitude"] ?? "")
+        );
+
+        $lngPost = trim(
+            (string) ($_POST["longitude"] ?? "")
+        );
+
+
+        /*
+        |----------------------------------------------------------------------
+        | SIMPAN KE VARIABLE AGAR FORM TIDAK KOSONG
+        |----------------------------------------------------------------------
+        */
+
+        $alamat = $alamatPost;
+
+        $latitude = $latPost;
+
+        $longitude = $lngPost;
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
+
 
         /*
         |----------------------------------------------------------------------
@@ -401,15 +638,33 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         } elseif (mb_strlen($alamatPost) < 10) {
 
             $error =
+<<<<<<< HEAD
                 "Alamat pemasangan terlalu pendek. Masukkan alamat yang lebih lengkap.";
+=======
+                "Alamat pemasangan terlalu pendek. "
+                . "Masukkan alamat yang lebih lengkap.";
+        }
 
-        } elseif (
+
+        /*
+        |--------------------------------------------------------------------------
+        | VALIDASI LATITUDE
+        |--------------------------------------------------------------------------
+        */
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
+
+        elseif (
             $latPost === "" ||
             !is_numeric($latPost)
         ) {
 
             $error =
+<<<<<<< HEAD
                 "Lokasi belum dipilih. Silakan gunakan GPS atau klik lokasi pada peta.";
+=======
+                "Lokasi belum dipilih. "
+                . "Silakan gunakan GPS atau klik lokasi pada peta.";
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
 
         } elseif (
             (float) $latPost < -90 ||
@@ -418,8 +673,19 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             $error =
                 "Latitude tidak valid.";
+<<<<<<< HEAD
+=======
+        }
 
-        } elseif (
+
+        /*
+        |--------------------------------------------------------------------------
+        | VALIDASI LONGITUDE
+        |--------------------------------------------------------------------------
+        */
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
+
+        elseif (
             $lngPost === "" ||
             !is_numeric($lngPost)
         ) {
@@ -436,6 +702,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 "Longitude tidak valid.";
         }
 
+
         /*
         |----------------------------------------------------------------------
         | PROSES COVERAGE
@@ -444,15 +711,20 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         if ($error === "") {
 
+<<<<<<< HEAD
             $lat =
                 (float) $latPost;
 
             $lng =
                 (float) $lngPost;
+=======
+            $lat = (float) $latPost;
+
+            $lng = (float) $lngPost;
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
+
 
             try {
-
-                $conn->begin_transaction();
 
                 /*
                 |--------------------------------------------------------------------------
@@ -476,19 +748,39 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                                     GREATEST(
                                         -1,
 
+<<<<<<< HEAD
                                         COS(RADIANS(?))
+=======
+                                        COS(
+                                            RADIANS(?)
+                                        )
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
                                         *
-                                        COS(RADIANS(latitude))
+
+                                        COS(
+                                            RADIANS(latitude)
+                                        )
+
                                         *
+
                                         COS(
                                             RADIANS(longitude)
                                             -
                                             RADIANS(?)
                                         )
+
                                         +
-                                        SIN(RADIANS(?))
+
+                                        SIN(
+                                            RADIANS(?)
+                                        )
+
                                         *
-                                        SIN(RADIANS(latitude))
+
+                                        SIN(
+                                            RADIANS(latitude)
+                                        )
                                     )
                                 )
                             )
@@ -506,8 +798,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     LIMIT 1
                 ";
 
+<<<<<<< HEAD
                 $stmt =
                     $conn->prepare($sql);
+=======
+
+                $stmt = $conn->prepare(
+                    $sql
+                );
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
 
                 $stmt->bind_param(
                     "ddd",
@@ -516,15 +816,27 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     $lat
                 );
 
+
                 $stmt->execute();
 
+<<<<<<< HEAD
                 $result =
                     $stmt->get_result();
 
                 $nearestOdp =
                     $result->fetch_assoc();
+=======
+
+                $result = $stmt->get_result();
+
+
+                $nearestOdp =
+                    $result->fetch_assoc();
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
 
                 $stmt->close();
+
 
                 /*
                 |--------------------------------------------------------------------------
@@ -538,17 +850,50 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         "tidak_tersedia";
 
                     $error =
+<<<<<<< HEAD
                         "Belum ada ODP aktif yang tersedia di database untuk lokasi tersebut.";
 
                     $conn->commit();
+=======
+                        "Coverage belum tersedia. "
+                        . "Belum ada ODP aktif yang "
+                        . "dapat melayani lokasi Anda.";
 
-                } else {
+                    $success = "";
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
 
+                    $requestId = null;
+
+<<<<<<< HEAD
                     $odpId =
                         (int) $nearestOdp["id"];
 
                     $namaOdp =
                         (string) $nearestOdp["nama_odp"];
+=======
+                    $requestStatus = "";
+
+                }
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | ADA ODP
+                |--------------------------------------------------------------------------
+                */
+
+                else {
+
+                    $odpId = (int) (
+                        $nearestOdp["id"]
+                    );
+
+
+                    $namaOdp = (string) (
+                        $nearestOdp["nama_odp"]
+                    );
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
 
                     $jarakOdp =
                         round(
@@ -556,17 +901,33 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                             3
                         );
 
+<<<<<<< HEAD
                     $radiusOdp =
                         (float) $nearestOdp["radius"];
+=======
+
+                    $radiusOdp = (float) (
+                        $nearestOdp["radius"]
+                    );
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
 
                     /*
                     |--------------------------------------------------------------------------
-                    | CEK RADIUS
+                    | COVERAGE TERSEDIA
                     |--------------------------------------------------------------------------
                     */
 
-                    if ($jarakOdp <= $radiusOdp) {
+                    if (
+                        $jarakOdp <= $radiusOdp
+                    ) {
 
+                        $coverageStatus =
+                            "tersedia";
+
+                        $error = "";
+
+<<<<<<< HEAD
                         /*
                         | COVERAGE TERSEDIA
                         */
@@ -580,11 +941,19 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                             "Lokasi Anda berjarak sekitar "
                             .
                             number_format(
+=======
+
+                        $success =
+                            "Coverage tersedia. "
+                            . "Lokasi Anda berjarak sekitar "
+                            . number_format(
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
                                 $jarakOdp,
                                 3,
                                 ",",
                                 "."
                             )
+<<<<<<< HEAD
                             .
                             " km dari "
                             .
@@ -776,11 +1145,285 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                             "Lokasi Anda berjarak sekitar "
                             .
                             number_format(
+=======
+                            . " km dari "
+                            . $namaOdp
+                            . ".";
+
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | SIMPAN DATA
+                        |--------------------------------------------------------------------------
+                        */
+
+                        $conn->begin_transaction();
+
+
+                        try {
+
+                            /*
+                            |------------------------------------------------------------------
+                            | UPDATE ALAMAT CUSTOMER
+                            |------------------------------------------------------------------
+                            */
+
+                            $stmtCustomer =
+                                $conn->prepare("
+                                    UPDATE customers
+                                    SET alamat = ?
+                                    WHERE id = ?
+                                    AND user_id = ?
+                                ");
+
+
+                            $stmtCustomer->bind_param(
+                                "sii",
+                                $alamatPost,
+                                $customerId,
+                                $userId
+                            );
+
+
+                            $stmtCustomer->execute();
+
+
+                            $stmtCustomer->close();
+
+
+                            /*
+                            |------------------------------------------------------------------
+                            | CEK REQUEST TERAKHIR
+                            |------------------------------------------------------------------
+                            */
+
+                            $stmtRequest =
+                                $conn->prepare("
+                                    SELECT id
+                                    FROM installation_requests
+                                    WHERE customer_id = ?
+                                    ORDER BY id DESC
+                                    LIMIT 1
+                                ");
+
+
+                            $stmtRequest->bind_param(
+                                "i",
+                                $customerId
+                            );
+
+
+                            $stmtRequest->execute();
+
+
+                            $requestResult =
+                                $stmtRequest->get_result();
+
+
+                            $existingRequest =
+                                $requestResult->fetch_assoc();
+
+
+                            $stmtRequest->close();
+
+
+                            /*
+                            |------------------------------------------------------------------
+                            | UPDATE REQUEST LAMA
+                            |------------------------------------------------------------------
+                            */
+
+                            if ($existingRequest) {
+
+                                $requestId =
+                                    (int) $existingRequest["id"];
+
+
+                                $stmtUpdate =
+                                    $conn->prepare("
+                                        UPDATE installation_requests
+
+                                        SET
+                                            alamat_pemasangan = ?,
+                                            latitude = ?,
+                                            longitude = ?,
+                                            odp_id = ?,
+                                            jarak_odp = ?,
+                                            coverage_status = ?,
+                                            status = 'menunggu'
+
+                                        WHERE
+                                            id = ?
+
+                                            AND
+
+                                            customer_id = ?
+                                    ");
+
+
+                                $stmtUpdate->bind_param(
+                                    "sddidsii",
+                                    $alamatPost,
+                                    $lat,
+                                    $lng,
+                                    $odpId,
+                                    $jarakOdp,
+                                    $coverageStatus,
+                                    $requestId,
+                                    $customerId
+                                );
+
+
+                                $stmtUpdate->execute();
+
+
+                                $stmtUpdate->close();
+
+
+                            }
+
+
+                            /*
+                            |------------------------------------------------------------------
+                            | INSERT REQUEST BARU
+                            |------------------------------------------------------------------
+                            */
+
+                            else {
+
+                                $stmtInsert =
+                                    $conn->prepare("
+                                        INSERT INTO installation_requests
+                                        (
+                                            customer_id,
+                                            alamat_pemasangan,
+                                            latitude,
+                                            longitude,
+                                            odp_id,
+                                            jarak_odp,
+                                            coverage_status,
+                                            status,
+                                            created_at
+                                        )
+
+                                        VALUES
+                                        (
+                                            ?,
+                                            ?,
+                                            ?,
+                                            ?,
+                                            ?,
+                                            ?,
+                                            ?,
+                                            'menunggu',
+                                            NOW()
+                                        )
+                                    ");
+
+
+                                /*
+                                |--------------------------------------------------------------
+                                | i = customer_id
+                                | s = alamat
+                                | d = latitude
+                                | d = longitude
+                                | i = odp_id
+                                | d = jarak
+                                | s = coverage_status
+                                |--------------------------------------------------------------
+                                */
+
+                                $stmtInsert->bind_param(
+                                    "isddids",
+                                    $customerId,
+                                    $alamatPost,
+                                    $lat,
+                                    $lng,
+                                    $odpId,
+                                    $jarakOdp,
+                                    $coverageStatus
+                                );
+
+
+                                $stmtInsert->execute();
+
+
+                                $requestId =
+                                    $stmtInsert->insert_id;
+
+
+                                $stmtInsert->close();
+                            }
+
+
+                            $requestStatus =
+                                "menunggu";
+
+
+                            $conn->commit();
+
+                        } catch (Throwable $dbError) {
+
+                            try {
+
+                                $conn->rollback();
+
+                            } catch (Throwable $rollbackError) {
+
+                                /*
+                                |--------------------------------------------------------------
+                                | Abaikan rollback error.
+                                |--------------------------------------------------------------
+                                */
+                            }
+
+
+                            $error =
+                                "Coverage tersedia, "
+                                . "tetapi data lokasi gagal disimpan. "
+                                . "Silakan coba lagi.";
+
+                            $success = "";
+
+                            $coverageStatus = "";
+
+                            $requestId = null;
+
+                            $requestStatus = "";
+                        }
+
+                    }
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | COVERAGE TIDAK TERSEDIA
+                    |--------------------------------------------------------------------------
+                    */
+
+                    else {
+
+                        $coverageStatus =
+                            "tidak_tersedia";
+
+                        $success = "";
+
+                        $requestId = null;
+
+                        $requestStatus = "";
+
+
+                        $error =
+                            "Coverage belum tersedia. "
+                            . "Lokasi Anda berjarak sekitar "
+                            . number_format(
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
                                 $jarakOdp,
                                 3,
                                 ",",
                                 "."
                             )
+<<<<<<< HEAD
                             .
                             " km dari "
                             .
@@ -789,11 +1432,18 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                             ", sedangkan radius coverage hanya "
                             .
                             number_format(
+=======
+                            . " km dari "
+                            . $namaOdp
+                            . ", sedangkan radius coverage hanya "
+                            . number_format(
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
                                 $radiusOdp,
                                 3,
                                 ",",
                                 "."
                             )
+<<<<<<< HEAD
                             .
                             " km.";
 
@@ -812,17 +1462,44 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 } catch (Throwable $rollbackException) {
                     // Abaikan rollback error.
                 }
+=======
+                            . " km.";
+
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | PENTING
+                        |--------------------------------------------------------------------------
+                        |
+                        | Tidak ada INSERT / UPDATE
+                        | installation_requests di sini.
+                        |
+                        */
+                    }
+                }
+
+            } catch (Throwable $e) {
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
 
                 $error =
-                    "Terjadi kesalahan saat memproses pengecekan coverage.";
+                    "Terjadi kesalahan saat "
+                    . "memproses pengecekan coverage.";
 
                 $success = "";
 
                 $coverageStatus = "";
+<<<<<<< HEAD
+=======
+
+                $requestId = null;
+
+                $requestStatus = "";
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
             }
         }
     }
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -831,6 +1508,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 */
 
 $googleMapsUrl = "#";
+
 
 if (
     $latitude !== "" &&
@@ -850,6 +1528,7 @@ if (
 ?>
 
 <!DOCTYPE html>
+
 <html lang="id">
 
 <head>
@@ -864,17 +1543,31 @@ if (
     <title>
         Cek Coverage | WiFi Management
     </title>
+<<<<<<< HEAD
 
+=======
+
+
+    <!-- Bootstrap -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
     <link
         href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
         rel="stylesheet"
     >
 
+<<<<<<< HEAD
+=======
+
+    <!-- Bootstrap Icons -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
     <link
         rel="stylesheet"
         href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
     >
 
+<<<<<<< HEAD
     <link
         rel="stylesheet"
         href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -882,6 +1575,21 @@ if (
         crossorigin=""
     >
 
+=======
+
+    <!-- Leaflet -->
+
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIINfQH3ym7f3Xk9f5Ff8j5F5p5F5F5F5F5="
+        crossorigin=""
+    >
+
+
+    <!-- Custom CSS -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
     <link
         rel="stylesheet"
         href="../assets/css/coverage.css?v=<?= file_exists(__DIR__ . '/../assets/css/coverage.css') ? filemtime(__DIR__ . '/../assets/css/coverage.css') : time() ?>"
@@ -889,8 +1597,17 @@ if (
 
 </head>
 
+
 <body>
 
+<<<<<<< HEAD
+=======
+
+<!-- =========================================================
+     NAVBAR
+========================================================= -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
 <nav class="navbar navbar-expand-lg coverage-navbar">
 
     <div class="container">
@@ -901,8 +1618,11 @@ if (
         >
 
             <div class="brand-icon">
+
                 <i class="bi bi-wifi"></i>
+
             </div>
+
 
             <div class="brand-text">
 
@@ -917,6 +1637,7 @@ if (
             </div>
 
         </a>
+
 
         <div class="navbar-user">
 
@@ -934,6 +1655,7 @@ if (
 
             </div>
 
+
             <div class="user-info">
 
                 <span class="user-label">
@@ -945,6 +1667,7 @@ if (
                 </strong>
 
             </div>
+
 
             <a
                 href="../logout.php"
@@ -963,10 +1686,26 @@ if (
 </nav>
 
 
+<<<<<<< HEAD
+=======
+
+<!-- =========================================================
+     MAIN
+========================================================= -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
 <main class="coverage-page">
 
     <div class="container">
 
+<<<<<<< HEAD
+=======
+
+        <!-- =================================================
+             HEADER
+        ================================================== -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
         <section class="page-header">
 
             <div class="header-icon">
@@ -975,19 +1714,22 @@ if (
 
             </div>
 
+
             <div>
 
                 <span class="eyebrow">
                     PENDAFTARAN INTERNET
                 </span>
 
+
                 <h1>
                     Cek Coverage Area
                 </h1>
 
+
                 <p>
-                    Tentukan lokasi pemasangan dan cek apakah jaringan
-                    YESNET tersedia di area Anda.
+                    Tentukan lokasi pemasangan dan cek apakah
+                    jaringan YESNET tersedia di area Anda.
                 </p>
 
             </div>
@@ -995,6 +1737,14 @@ if (
         </section>
 
 
+<<<<<<< HEAD
+=======
+
+        <!-- =================================================
+             ALERT ERROR
+        ================================================== -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
         <?php if ($error !== ""): ?>
 
             <div class="alert-custom alert-error">
@@ -1005,14 +1755,24 @@ if (
 
                 </div>
 
+
                 <div>
 
                     <strong>
-                        Coverage belum tersedia
+
+                        <?=
+                            $coverageStatus === "tidak_tersedia"
+                            ? "Coverage Belum Tersedia"
+                            : "Pengecekan Coverage"
+                        ?>
+
                     </strong>
 
+
                     <p>
+
                         <?= e($error) ?>
+
                     </p>
 
                 </div>
@@ -1022,9 +1782,19 @@ if (
         <?php endif; ?>
 
 
+<<<<<<< HEAD
+=======
+
+        <!-- =================================================
+             ALERT SUCCESS
+        ================================================== -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
         <?php if ($success !== ""): ?>
 
-            <div class="alert-custom alert-success-custom">
+            <div
+                class="alert-custom alert-success-custom"
+            >
 
                 <div class="alert-icon">
 
@@ -1032,14 +1802,18 @@ if (
 
                 </div>
 
+
                 <div>
 
                     <strong>
-                        Coverage tersedia
+                        Coverage Tersedia
                     </strong>
 
+
                     <p>
+
                         <?= e($success) ?>
+
                     </p>
 
                 </div>
@@ -1049,9 +1823,19 @@ if (
         <?php endif; ?>
 
 
+
         <div class="coverage-grid">
 
+<<<<<<< HEAD
+=======
+
+            <!-- =================================================
+                 LEFT
+            ================================================== -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
             <div class="coverage-main-card">
+
 
                 <div class="card-heading">
 
@@ -1061,11 +1845,13 @@ if (
                             01
                         </span>
 
+
                         <div>
 
                             <h2>
                                 Lokasi Pemasangan
                             </h2>
+
 
                             <p>
                                 Masukkan alamat dan tentukan titik
@@ -1079,9 +1865,18 @@ if (
                 </div>
 
 
+<<<<<<< HEAD
+=======
+
+                <!-- =================================================
+                     PACKAGE
+                ================================================== -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
                 <?php if ($namaPaket !== ""): ?>
 
                     <div class="package-summary">
+
 
                         <div class="package-icon">
 
@@ -1089,17 +1884,22 @@ if (
 
                         </div>
 
+
                         <div class="package-info">
 
                             <span>
                                 Paket yang dipilih
                             </span>
 
+
                             <strong>
+
                                 <?= e($namaPaket) ?>
+
                             </strong>
 
                         </div>
+
 
                         <?php if ($hargaPaket !== null): ?>
 
@@ -1112,6 +1912,7 @@ if (
                                     ",",
                                     "."
                                 ) ?>
+
 
                                 <small>
                                     / bulan
@@ -1126,6 +1927,14 @@ if (
                 <?php endif; ?>
 
 
+<<<<<<< HEAD
+=======
+
+                <!-- =================================================
+                     FORM
+                ================================================== -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
                 <form
                     method="POST"
                     id="coverageForm"
@@ -1138,6 +1947,14 @@ if (
                         value="check_coverage"
                     >
 
+<<<<<<< HEAD
+=======
+
+
+                    <!-- =================================================
+                         ALAMAT
+                    ================================================== -->
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
 
                     <div class="form-group">
 
@@ -1152,6 +1969,7 @@ if (
 
                         </label>
 
+
                         <textarea
                             name="alamat"
                             id="alamat"
@@ -1160,6 +1978,7 @@ if (
                             placeholder="Contoh: Jl. Ahmad Yani No. 123, RT 02/RW 04, Kecamatan..."
                             required
                         ><?= e($alamat) ?></textarea>
+
 
                         <div class="form-help">
 
@@ -1171,9 +1990,18 @@ if (
                     </div>
 
 
+<<<<<<< HEAD
+=======
+
+                    <!-- =================================================
+                         GPS
+                    ================================================== -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
                     <div class="location-action">
 
                         <div class="location-action-text">
+
 
                             <div class="location-action-icon">
 
@@ -1181,11 +2009,13 @@ if (
 
                             </div>
 
+
                             <div>
 
                                 <strong>
                                     Gunakan lokasi saya
                                 </strong>
+
 
                                 <span>
                                     Ambil koordinat GPS perangkat Anda
@@ -1195,6 +2025,7 @@ if (
 
                         </div>
 
+
                         <button
                             type="button"
                             id="getLocationBtn"
@@ -1202,6 +2033,7 @@ if (
                         >
 
                             <i class="bi bi-geo-alt-fill"></i>
+
 
                             <span>
                                 Gunakan GPS
@@ -1212,7 +2044,16 @@ if (
                     </div>
 
 
+<<<<<<< HEAD
+=======
+
+                    <!-- =================================================
+                         MAP
+                    ================================================== -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
                     <div class="map-section">
+
 
                         <div class="map-header">
 
@@ -1222,11 +2063,13 @@ if (
                                     TITIK LOKASI
                                 </span>
 
+
                                 <h3>
                                     Pilih lokasi di peta
                                 </h3>
 
                             </div>
+
 
                             <a
                                 href="<?= e($googleMapsUrl) ?>"
@@ -1245,15 +2088,18 @@ if (
                         </div>
 
 
+
                         <div
                             id="coverageMap"
                             class="coverage-map"
                         ></div>
 
 
+
                         <div class="map-help">
 
                             <i class="bi bi-info-circle"></i>
+
 
                             <span>
 
@@ -1267,7 +2113,16 @@ if (
                     </div>
 
 
+<<<<<<< HEAD
+=======
+
+                    <!-- =================================================
+                         COORDINATES
+                    ================================================== -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
                     <div class="coordinates-grid">
+
 
                         <div class="coordinate-box">
 
@@ -1275,9 +2130,15 @@ if (
                                 Latitude
                             </span>
 
+
                             <strong id="latitudeDisplay">
 
+<<<<<<< HEAD
                                 <?= $latitude !== ""
+=======
+                                <?=
+                                    $latitude !== ""
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
                                     ? e($latitude)
                                     : "-"
                                 ?>
@@ -1287,15 +2148,25 @@ if (
                         </div>
 
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
                         <div class="coordinate-box">
 
                             <span>
                                 Longitude
                             </span>
 
+
                             <strong id="longitudeDisplay">
 
+<<<<<<< HEAD
                                 <?= $longitude !== ""
+=======
+                                <?=
+                                    $longitude !== ""
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
                                     ? e($longitude)
                                     : "-"
                                 ?>
@@ -1307,12 +2178,21 @@ if (
                     </div>
 
 
+<<<<<<< HEAD
+=======
+
+                    <!-- =================================================
+                         HIDDEN COORDINATES
+                    ================================================== -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
                     <input
                         type="hidden"
                         name="latitude"
                         id="latitude"
                         value="<?= e($latitude) ?>"
                     >
+
 
                     <input
                         type="hidden"
@@ -1322,6 +2202,14 @@ if (
                     >
 
 
+<<<<<<< HEAD
+=======
+
+                    <!-- =================================================
+                         SUBMIT
+                    ================================================== -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
                     <button
                         type="submit"
                         class="check-button"
@@ -1336,6 +2224,7 @@ if (
 
                         </span>
 
+
                         <i class="bi bi-arrow-right"></i>
 
                     </button>
@@ -1345,10 +2234,25 @@ if (
             </div>
 
 
+<<<<<<< HEAD
+            <aside class="coverage-sidebar">
+
+=======
+
+            <!-- =================================================
+                 RIGHT
+            ================================================== -->
+
             <aside class="coverage-sidebar">
 
 
+                <!-- =================================================
+                     STATUS
+                ================================================== -->
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
+
                 <div class="status-card">
+
 
                     <div class="status-card-header">
 
@@ -1356,12 +2260,17 @@ if (
                             STATUS COVERAGE
                         </span>
 
+
                         <i class="bi bi-broadcast-pin"></i>
 
                     </div>
 
 
+
                     <?php if ($coverageStatus === "tersedia"): ?>
+
+
+                        <!-- AVAILABLE -->
 
                         <div class="status-icon available">
 
@@ -1369,9 +2278,11 @@ if (
 
                         </div>
 
+
                         <h3>
                             Coverage Tersedia
                         </h3>
+
 
                         <p>
 
@@ -1380,6 +2291,7 @@ if (
 
                         </p>
 
+<<<<<<< HEAD
 
                     <?php elseif ($coverageStatus === "tidak_tersedia"): ?>
 
@@ -1421,9 +2333,11 @@ if (
                         </p>
 
                     <?php endif; ?>
+=======
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
 
 
-                    <?php if ($coverageStatus === "tersedia"): ?>
+                        <!-- CONTINUE -->
 
                         <a
                             href="langganan.php"
@@ -1436,18 +2350,88 @@ if (
 
                         </a>
 
+
+
+                    <?php elseif (
+                        $coverageStatus === "tidak_tersedia"
+                    ): ?>
+
+
+                        <!-- NOT AVAILABLE -->
+
+                        <div class="status-icon unavailable">
+
+                            <i class="bi bi-x-lg"></i>
+
+                        </div>
+
+
+                        <h3>
+                            Coverage Belum Tersedia
+                        </h3>
+
+
+                        <p>
+
+                            Lokasi Anda berada di luar radius
+                            coverage ODP terdekat.
+
+                        </p>
+
+
+                        <!--
+                        Tidak ada tombol lanjut.
+                        User tetap berada di halaman ini.
+                        -->
+
+
+                    <?php else: ?>
+
+
+                        <!-- WAITING -->
+
+                        <div class="status-icon waiting">
+
+                            <i class="bi bi-geo-alt"></i>
+
+                        </div>
+
+
+                        <h3>
+                            Belum Dicek
+                        </h3>
+
+
+                        <p>
+
+                            Tentukan lokasi Anda lalu lakukan
+                            pengecekan coverage.
+
+                        </p>
+
+
                     <?php endif; ?>
 
                 </div>
 
 
+<<<<<<< HEAD
+=======
+
+                <!-- =================================================
+                     NETWORK INFO
+                ================================================== -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
                 <?php if ($odpId !== null): ?>
 
                     <div class="network-card">
 
+
                         <div class="network-card-title">
 
                             <i class="bi bi-router"></i>
+
 
                             <span>
                                 Informasi Jaringan
@@ -1456,19 +2440,30 @@ if (
                         </div>
 
 
+
                         <div class="network-item">
 
                             <span>
                                 ODP Terdekat
                             </span>
 
+
                             <strong>
+<<<<<<< HEAD
                                 <?= e(
                                     $namaOdp ?: "-"
                                 ) ?>
+=======
+
+                                <?= e(
+                                    $namaOdp ?: "-"
+                                ) ?>
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
                             </strong>
 
                         </div>
+
 
 
                         <div class="network-item">
@@ -1477,9 +2472,15 @@ if (
                                 Jarak ODP
                             </span>
 
+
                             <strong>
 
+<<<<<<< HEAD
                                 <?= $jarakOdp !== null
+=======
+                                <?=
+                                    $jarakOdp !== null
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
                                     ? number_format(
                                         $jarakOdp,
                                         3,
@@ -1494,15 +2495,22 @@ if (
                         </div>
 
 
+
                         <div class="network-item">
 
                             <span>
                                 Radius Coverage
                             </span>
 
+
                             <strong>
 
+<<<<<<< HEAD
                                 <?= $radiusOdp !== null
+=======
+                                <?=
+                                    $radiusOdp !== null
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
                                     ? number_format(
                                         $radiusOdp,
                                         3,
@@ -1521,7 +2529,16 @@ if (
                 <?php endif; ?>
 
 
+<<<<<<< HEAD
+=======
+
+                <!-- =================================================
+                     TIPS
+                ================================================== -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
                 <div class="tips-card">
+
 
                     <div class="tips-title">
 
@@ -1531,19 +2548,23 @@ if (
 
                     </div>
 
+
                     <ul>
 
                         <li>
                             Pastikan GPS perangkat aktif.
                         </li>
 
+
                         <li>
                             Gunakan titik lokasi rumah yang sebenarnya.
                         </li>
 
+
                         <li>
                             Masukkan alamat secara lengkap.
                         </li>
+
 
                         <li>
                             Jika GPS kurang akurat, geser marker
@@ -1563,6 +2584,14 @@ if (
 </main>
 
 
+<<<<<<< HEAD
+=======
+
+<!-- =========================================================
+     LEAFLET JS
+========================================================= -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
 <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
@@ -1570,9 +2599,18 @@ if (
 ></script>
 
 
+<<<<<<< HEAD
+=======
+
+<!-- =========================================================
+     CUSTOM JS
+========================================================= -->
+
+>>>>>>> 16196d306c9dd609bc470f6fd3d556f65da7b08e
 <script
     src="../assets/js/coverage.js?v=<?= file_exists(__DIR__ . '/../assets/js/coverage.js') ? filemtime(__DIR__ . '/../assets/js/coverage.js') : time() ?>"
 ></script>
 
 </body>
+
 </html>

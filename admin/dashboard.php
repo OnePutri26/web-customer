@@ -1,53 +1,78 @@
 <?php
 
+require_once "auth_check.php";
 require_once "../config/database.php";
-require_once "../config/auth.php";
 
-requireRole('admin');
+$totalPelanggan = 0;
+$pelangganAktif = 0;
+$pengaduanAktif = 0;
+$totalBelumBayar = 0;
 
-$customers =
-$conn->query("SELECT COUNT(*) total FROM customers")
-->fetch_assoc()['total'];
+$result = $conn->query("
+    SELECT COUNT(*) AS total
+    FROM customers
+");
 
-$installations =
-$conn->query(
-    "SELECT COUNT(*) total
-     FROM installations
-     WHERE status NOT IN ('completed','cancelled')"
-)
-->fetch_assoc()['total'];
+if ($result) {
+    $totalPelanggan = (int)$result->fetch_assoc()['total'];
+}
 
-$complaints =
-$conn->query(
-    "SELECT COUNT(*) total
-     FROM complaints
-     WHERE status NOT IN ('resolved','closed')"
-)
-->fetch_assoc()['total'];
+$result = $conn->query("
+    SELECT COUNT(*) AS total
+    FROM customers
+    WHERE status_langganan = 'aktif'
+");
 
-$technicians =
-$conn->query(
-    "SELECT COUNT(*) total
-     FROM technicians"
-)
-->fetch_assoc()['total'];
+if ($result) {
+    $pelangganAktif = (int)$result->fetch_assoc()['total'];
+}
 
+$result = $conn->query("
+    SELECT COUNT(*) AS total
+    FROM complaints
+    WHERE status IN (
+        'baru',
+        'diproses',
+        'ditugaskan'
+    )
+");
+
+if ($result) {
+    $pengaduanAktif = (int)$result->fetch_assoc()['total'];
+}
+
+$result = $conn->query("
+    SELECT COALESCE(SUM(jumlah), 0) AS total
+    FROM invoices
+    WHERE status IN (
+        'belum_bayar',
+        'terlambat'
+    )
+");
+
+if ($result) {
+    $totalBelumBayar = (float)$result->fetch_assoc()['total'];
+}
 ?>
 
 <!DOCTYPE html>
-
 <html lang="id">
 
 <head>
 
-<meta charset="UTF-8">
+    <meta charset="UTF-8">
 
-<title>Admin Dashboard</title>
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
 
-<link
-href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-rel="stylesheet"
->
+    <title>Dashboard Admin</title>
+
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
 
 </head>
 
@@ -55,119 +80,178 @@ rel="stylesheet"
 
 <nav class="navbar navbar-dark bg-dark">
 
-<div class="container">
+    <div class="container-fluid">
 
-<span class="navbar-brand">
-📡 WiFi Admin
-</span>
+        <span class="navbar-brand">
+            WiFi Management - Admin
+        </span>
 
-<a
-href="../logout.php"
-class="btn btn-light btn-sm"
->
-Logout
-</a>
+        <div class="text-white">
 
-</div>
+            <?= htmlspecialchars($_SESSION['nama']) ?>
+
+            <a
+                href="logout.php"
+                class="btn btn-sm btn-danger ms-3"
+            >
+                Logout
+            </a>
+
+        </div>
+
+    </div>
 
 </nav>
 
-<div class="container py-4">
+<div class="container-fluid p-4">
 
-<h3>
-Dashboard Admin
-</h3>
+    <h3 class="mb-4">
+        Dashboard
+    </h3>
 
-<div class="row g-3 mt-2">
+    <div class="row g-4">
 
-<div class="col-md-3">
+        <div class="col-md-3">
 
-<div class="card shadow-sm">
+            <div class="card shadow-sm border-0">
 
-<div class="card-body">
+                <div class="card-body">
 
-<h6>Customer</h6>
+                    <h6>Total Pelanggan</h6>
 
-<h2>
-<?= $customers ?>
-</h2>
+                    <h2>
+                        <?= number_format($totalPelanggan) ?>
+                    </h2>
 
-</div>
+                </div>
 
-</div>
+            </div>
 
-</div>
+        </div>
 
-<div class="col-md-3">
+        <div class="col-md-3">
 
-<div class="card shadow-sm">
+            <div class="card shadow-sm border-0">
 
-<div class="card-body">
+                <div class="card-body">
 
-<h6>Pemasangan</h6>
+                    <h6>Pelanggan Aktif</h6>
 
-<h2>
-<?= $installations ?>
-</h2>
+                    <h2>
+                        <?= number_format($pelangganAktif) ?>
+                    </h2>
 
-<a href="installations.php">
-Lihat
-</a>
+                </div>
 
-</div>
+            </div>
 
-</div>
+        </div>
 
-</div>
+        <div class="col-md-3">
 
-<div class="col-md-3">
+            <div class="card shadow-sm border-0">
 
-<div class="card shadow-sm">
+                <div class="card-body">
 
-<div class="card-body">
+                    <h6>Pengaduan Aktif</h6>
 
-<h6>Complaint</h6>
+                    <h2>
+                        <?= number_format($pengaduanAktif) ?>
+                    </h2>
 
-<h2>
-<?= $complaints ?>
-</h2>
+                </div>
 
-<a href="complaints.php">
-Lihat
-</a>
+            </div>
 
-</div>
+        </div>
 
-</div>
+        <div class="col-md-3">
 
-</div>
+            <div class="card shadow-sm border-0">
 
-<div class="col-md-3">
+                <div class="card-body">
 
-<div class="card shadow-sm">
+                    <h6>Tagihan Belum Bayar</h6>
 
-<div class="card-body">
+                    <h2>
+                        Rp <?= number_format(
+                            $totalBelumBayar,
+                            0,
+                            ',',
+                            '.'
+                        ) ?>
+                    </h2>
 
-<h6>Teknisi</h6>
+                </div>
 
-<h2>
-<?= $technicians ?>
-</h2>
+            </div>
 
-<a href="technicians.php">
-Lihat
-</a>
+        </div>
 
-</div>
+    </div>
 
-</div>
+    <div class="row mt-4">
 
-</div>
+        <div class="col-md-4">
 
-</div>
+            <div class="list-group shadow-sm">
+
+                <a
+                    href="pelanggan/index.php"
+                    class="list-group-item list-group-item-action"
+                >
+                    👥 Pelanggan
+                </a>
+
+                <a
+                    href="paket/index.php"
+                    class="list-group-item list-group-item-action"
+                >
+                    📦 Paket Internet
+                </a>
+
+                <a
+                    href="tagihan/index.php"
+                    class="list-group-item list-group-item-action"
+                >
+                    🧾 Tagihan
+                </a>
+
+                <a
+                    href="pembayaran/index.php"
+                    class="list-group-item list-group-item-action"
+                >
+                    💳 Pembayaran
+                </a>
+
+                <a
+                    href="pengaduan/index.php"
+                    class="list-group-item list-group-item-action"
+                >
+                    🛠 Pengaduan
+                </a>
+
+                <a
+                    href="teknisi/index.php"
+                    class="list-group-item list-group-item-action"
+                >
+                    👷 Teknisi
+                </a>
+
+                <a
+                    href="jaringan/area.php"
+                    class="list-group-item list-group-item-action"
+                >
+                    🌐 Jaringan
+                </a>
+
+            </div>
+
+        </div>
+
+    </div>
 
 </div>
 
 </body>
-
 </html>
