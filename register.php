@@ -1,34 +1,14 @@
 <?php
 
-declare(strict_types=1);
-
 session_start();
+
+require_once "config/database.php";
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-require_once __DIR__ . "/config/database.php";
-require_once __DIR__ . "/config/auth.php";
-
-date_default_timezone_set("Asia/Jakarta");
-
 /*
 |--------------------------------------------------------------------------
-| HELPER
-|--------------------------------------------------------------------------
-*/
-
-function e(mixed $value): string
-{
-    return htmlspecialchars(
-        (string) $value,
-        ENT_QUOTES,
-        "UTF-8"
-    );
-}
-
-/*
-|--------------------------------------------------------------------------
-| DATABASE CHECK
+| CEK DATABASE
 |--------------------------------------------------------------------------
 */
 
@@ -36,24 +16,16 @@ if (!isset($conn) || !($conn instanceof mysqli)) {
     die("Koneksi database tidak tersedia.");
 }
 
-$conn->set_charset("utf8mb4");
-
 try {
+    $dbName = $conn->query("SELECT DATABASE()")->fetch_row()[0];
 
-    $databaseResult = $conn->query(
-        "SELECT DATABASE() AS db_name"
-    );
-
-    $databaseRow = $databaseResult->fetch_assoc();
-
-    if (($databaseRow["db_name"] ?? "") !== "wifi_management") {
+    if ($dbName !== "wifi_management") {
         die("Database aktif bukan wifi_management.");
     }
-
-} catch (Throwable $exception) {
-
-    die("Database tidak dapat diperiksa.");
+} catch (Exception $e) {
+    die("Gagal memeriksa database.");
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -62,119 +34,190 @@ try {
 */
 
 $error = "";
+$success = "";
 
-$nama = "";
-$username = "";
-$email = "";
-$telephone = "";
-$password = "";
-$passwordConfirm = "";
-$nik = "";
-$alamat = "";
+$nama       = "";
+$username   = "";
+$email      = "";
+$telephone  = "";
+$nik        = "";
+$alamat     = "";
+
 
 /*
 |--------------------------------------------------------------------------
-| POST
+| ROLE
+|--------------------------------------------------------------------------
+|
+| Default = customer
+|
+| Untuk admin:
+| register.php?role=admin
+|
+*/
+
+$requestedRole = $_GET['role'] ?? 'customer';
+
+if ($requestedRole === 'admin') {
+    $role = 'admin';
+} else {
+    $role = 'customer';
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| PROSES REGISTER
 |--------------------------------------------------------------------------
 */
 
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
-
-    $nama = trim((string) ($_POST["nama"] ?? ""));
-    $username = trim((string) ($_POST["username"] ?? ""));
-    $email = trim((string) ($_POST["email"] ?? ""));
-    $telephone = trim((string) ($_POST["telephone"] ?? ""));
-    $password = (string) ($_POST["password"] ?? "");
-    $passwordConfirm = (string) ($_POST["password_confirm"] ?? "");
-    $nik = trim((string) ($_POST["nik"] ?? ""));
-    $alamat = trim((string) ($_POST["alamat"] ?? ""));
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     /*
     |--------------------------------------------------------------------------
-    | VALIDATION
+    | AMBIL DATA
+    |--------------------------------------------------------------------------
+    */
+
+    $nama       = trim($_POST['nama'] ?? '');
+    $username   = trim($_POST['username'] ?? '');
+    $email      = trim($_POST['email'] ?? '');
+    $telephone  = trim($_POST['telephone'] ?? '');
+    $password   = $_POST['password'] ?? '';
+    $nik        = trim($_POST['nik'] ?? '');
+    $alamat     = trim($_POST['alamat'] ?? '');
+
+    /*
+    |--------------------------------------------------------------------------
+    | ROLE
+    |--------------------------------------------------------------------------
+    |
+    | Jangan percaya role dari user.
+    | Role tetap mengikuti URL halaman.
+    |
+    */
+
+    $postRole = $_POST['role'] ?? 'customer';
+
+    if (!in_array($postRole, ['customer', 'admin'], true)) {
+        $postRole = 'customer';
+    }
+
+    $role = $postRole;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | VALIDASI
     |--------------------------------------------------------------------------
     */
 
     if (
-        $nama === "" ||
-        $username === "" ||
-        $email === "" ||
-        $telephone === "" ||
-        $password === "" ||
-        $passwordConfirm === "" ||
-        $nik === "" ||
-        $alamat === ""
+        $nama === '' ||
+        $username === '' ||
+        $email === '' ||
+        $telephone === '' ||
+        $password === '' ||
+        $alamat === ''
     ) {
-
         $error = "Semua field wajib diisi.";
-
-    } elseif (mb_strlen($nama) < 3) {
-
-        $error = "Nama lengkap minimal 3 karakter.";
-
-    } elseif (
-        mb_strlen($username) < 4 ||
-        mb_strlen($username) > 50
-    ) {
-
-        $error = "Username harus 4-50 karakter.";
-
-    } elseif (!preg_match(
-        '/^[A-Za-z0-9._-]+$/',
-        $username
-    )) {
-
-        $error =
-            "Username hanya boleh menggunakan huruf, angka, titik, underscore, dan tanda minus.";
-
-    } elseif (!filter_var(
-        $email,
-        FILTER_VALIDATE_EMAIL
-    )) {
-
-        $error = "Format email tidak valid.";
-
-    } elseif (!preg_match(
-        '/^[0-9+\-\s]{8,20}$/',
-        $telephone
-    )) {
-
-        $error = "Nomor telepon tidak valid.";
-
-    } elseif (mb_strlen($password) < 6) {
-
-        $error = "Password minimal 6 karakter.";
-
-    } elseif ($password !== $passwordConfirm) {
-
-        $error = "Konfirmasi password tidak sesuai.";
-
-    } elseif (!preg_match(
-        '/^[0-9]{10,20}$/',
-        $nik
-    )) {
-
-        $error = "NIK harus berupa 10-20 digit angka.";
-
-    } elseif (mb_strlen($alamat) < 10) {
-
-        $error =
-            "Alamat harus diisi lebih lengkap.";
-
     }
 
     /*
     |--------------------------------------------------------------------------
-    | DUPLICATE CHECK
+    | VALIDASI NAMA
     |--------------------------------------------------------------------------
     */
 
-    if ($error === "") {
+    elseif (mb_strlen($nama) < 3) {
+        $error = "Nama minimal 3 karakter.";
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | VALIDASI USERNAME
+    |--------------------------------------------------------------------------
+    */
+
+    elseif (
+        mb_strlen($username) < 4 ||
+        mb_strlen($username) > 50
+    ) {
+        $error = "Username harus 4 sampai 50 karakter.";
+    }
+
+    elseif (!preg_match('/^[a-zA-Z0-9._]+$/', $username)) {
+        $error = "Username hanya boleh menggunakan huruf, angka, titik, dan underscore.";
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | VALIDASI EMAIL
+    |--------------------------------------------------------------------------
+    */
+
+    elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $error = "Format email tidak valid.";
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | VALIDASI PASSWORD
+    |--------------------------------------------------------------------------
+    */
+
+    elseif (strlen($password) < 6) {
+        $error = "Password minimal 6 karakter.";
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | VALIDASI NIK CUSTOMER
+    |--------------------------------------------------------------------------
+    |
+    | Admin tidak wajib memiliki NIK.
+    |
+    */
+
+    elseif ($role === 'customer') {
+
+        if ($nik === '') {
+            $error = "NIK wajib diisi.";
+        }
+
+        elseif (!preg_match('/^[0-9]+$/', $nik)) {
+            $error = "NIK hanya boleh berisi angka.";
+        }
+
+        elseif (strlen($nik) < 10) {
+            $error = "NIK minimal 10 digit.";
+        }
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | JIKA VALIDASI AMAN
+    |--------------------------------------------------------------------------
+    */
+
+    if ($error === '') {
 
         try {
 
             /*
-            | Username
+            |--------------------------------------------------------------------------
+            | START TRANSACTION
+            |--------------------------------------------------------------------------
+            */
+
+            $conn->begin_transaction();
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | CEK DUPLICATE USERNAME
+            |--------------------------------------------------------------------------
             */
 
             $stmt = $conn->prepare("
@@ -190,47 +233,63 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             );
 
             $stmt->execute();
-            $stmt->store_result();
 
-            if ($stmt->num_rows > 0) {
-                $error = "Username sudah digunakan.";
+            $result = $stmt->get_result();
+
+            if ($result->num_rows > 0) {
+                $stmt->close();
+
+                throw new Exception(
+                    "Username sudah digunakan."
+                );
             }
 
             $stmt->close();
 
+
             /*
-            | Email
+            |--------------------------------------------------------------------------
+            | CEK DUPLICATE EMAIL
+            |--------------------------------------------------------------------------
             */
 
-            if ($error === "") {
+            $stmt = $conn->prepare("
+                SELECT id
+                FROM users
+                WHERE email = ?
+                LIMIT 1
+            ");
 
-                $stmt = $conn->prepare("
-                    SELECT id
-                    FROM users
-                    WHERE email = ?
-                    LIMIT 1
-                ");
+            $stmt->bind_param(
+                "s",
+                $email
+            );
 
-                $stmt->bind_param(
-                    "s",
-                    $email
-                );
+            $stmt->execute();
 
-                $stmt->execute();
-                $stmt->store_result();
+            $result = $stmt->get_result();
 
-                if ($stmt->num_rows > 0) {
-                    $error = "Email sudah terdaftar.";
-                }
-
+            if ($result->num_rows > 0) {
                 $stmt->close();
+
+                throw new Exception(
+                    "Email sudah digunakan."
+                );
             }
 
+            $stmt->close();
+
+
             /*
-            | NIK
+            |--------------------------------------------------------------------------
+            | CEK DUPLICATE NIK
+            |--------------------------------------------------------------------------
+            |
+            | Hanya customer.
+            |
             */
 
-            if ($error === "") {
+            if ($role === 'customer') {
 
                 $stmt = $conn->prepare("
                     SELECT id
@@ -245,36 +304,25 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 );
 
                 $stmt->execute();
-                $stmt->store_result();
 
-                if ($stmt->num_rows > 0) {
-                    $error = "NIK sudah terdaftar.";
+                $result = $stmt->get_result();
+
+                if ($result->num_rows > 0) {
+                    $stmt->close();
+
+                    throw new Exception(
+                        "NIK sudah terdaftar."
+                    );
                 }
 
                 $stmt->close();
             }
 
-        } catch (Throwable $exception) {
-
-            $error =
-                "Gagal memeriksa data pendaftaran.";
-        }
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | INSERT USER + CUSTOMER
-    |--------------------------------------------------------------------------
-    */
-
-    if ($error === "") {
-
-        try {
-
-            $conn->begin_transaction();
 
             /*
-            | Password
+            |--------------------------------------------------------------------------
+            | HASH PASSWORD
+            |--------------------------------------------------------------------------
             */
 
             $passwordHash = password_hash(
@@ -288,11 +336,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 );
             }
 
+
             /*
-            | USER
+            |--------------------------------------------------------------------------
+            | INSERT USERS
+            |--------------------------------------------------------------------------
             */
 
-            $role = "customer";
             $status = 1;
 
             $stmt = $conn->prepare("
@@ -322,68 +372,75 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             $stmt->execute();
 
+            /*
+            |--------------------------------------------------------------------------
+            | AMBIL USER ID
+            |--------------------------------------------------------------------------
+            */
+
             $userId = (int) $conn->insert_id;
 
             $stmt->close();
 
             if ($userId <= 0) {
                 throw new Exception(
-                    "User ID tidak valid."
+                    "User ID tidak valid setelah proses register."
                 );
             }
+
 
             /*
             |--------------------------------------------------------------------------
             | CUSTOMER
             |--------------------------------------------------------------------------
             |
-            | Customer BARU belum memilih paket.
+            | Customer disimpan ke tabel customers.
             |
             */
 
-            $paketId = null;
+            if ($role === 'customer') {
 
-            $statusLangganan =
-                "belum_berlangganan";
+                $statusLangganan = "belum_berlangganan";
 
-            $stmt = $conn->prepare("
-                INSERT INTO customers
-                (
-                    user_id,
-                    paket_id,
-                    nama,
-                    telephone,
-                    email,
-                    nik,
-                    alamat,
-                    status_langganan
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ");
+                $stmt = $conn->prepare("
+                    INSERT INTO customers
+                    (
+                        user_id,
+                        paket_id,
+                        nama,
+                        telephone,
+                        email,
+                        nik,
+                        alamat,
+                        status_langganan
+                    )
+                    VALUES (?, NULL, ?, ?, ?, ?, ?, ?)
+                ");
 
-            $stmt->bind_param(
-                "iissssss",
-                $userId,
-                $paketId,
-                $nama,
-                $telephone,
-                $email,
-                $nik,
-                $alamat,
-                $statusLangganan
-            );
-
-            $stmt->execute();
-
-            $customerId = (int) $conn->insert_id;
-
-            $stmt->close();
-
-            if ($customerId <= 0) {
-                throw new Exception(
-                    "Customer ID tidak valid."
+                $stmt->bind_param(
+                    "issssss",
+                    $userId,
+                    $nama,
+                    $telephone,
+                    $email,
+                    $nik,
+                    $alamat,
+                    $statusLangganan
                 );
+
+                $stmt->execute();
+
+                $customerId = (int) $conn->insert_id;
+
+                $stmt->close();
+
+                if ($customerId <= 0) {
+                    throw new Exception(
+                        "Customer ID tidak valid."
+                    );
+                }
             }
+
 
             /*
             |--------------------------------------------------------------------------
@@ -393,69 +450,66 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             $conn->commit();
 
+
             /*
             |--------------------------------------------------------------------------
             | SESSION
             |--------------------------------------------------------------------------
             */
 
-            session_regenerate_id(true);
+            $_SESSION['user_id']     = $userId;
+            $_SESSION['username']    = $username;
+            $_SESSION['nama']        = $nama;
+            $_SESSION['email']       = $email;
+            $_SESSION['telephone']   = $telephone;
+            $_SESSION['role']        = $role;
+            $_SESSION['user_status'] = $status;
 
-            $_SESSION["user_id"] =
-                $userId;
-
-            $_SESSION["customer_id"] =
-                $customerId;
-
-            $_SESSION["username"] =
-                $username;
-
-            $_SESSION["nama"] =
-                $nama;
-
-            $_SESSION["email"] =
-                $email;
-
-            $_SESSION["telephone"] =
-                $telephone;
-
-            $_SESSION["role"] =
-                $role;
-
-            $_SESSION["user_status"] =
-                $status;
-
-            $_SESSION["status_langganan"] =
-                $statusLangganan;
 
             /*
             |--------------------------------------------------------------------------
-            | REDIRECT KE COVERAGE
+            | REDIRECT
             |--------------------------------------------------------------------------
             */
 
-            header(
-                "Location: customer/coverage.php"
-            );
+            if ($role === 'customer') {
 
-            exit;
+                header(
+                    "Location: customer/langganan.php"
+                );
 
-        } catch (Throwable $exception) {
+                exit;
+
+            } else {
+
+                header(
+                    "Location: admin/index.php"
+                );
+
+                exit;
+            }
+
+
+        } catch (Exception $e) {
+
+            /*
+            |--------------------------------------------------------------------------
+            | ROLLBACK
+            |--------------------------------------------------------------------------
+            */
 
             try {
                 $conn->rollback();
-            } catch (Throwable $rollbackException) {
-                // Abaikan rollback error
+            } catch (Exception $rollbackError) {
+                // Abaikan error rollback.
             }
 
-            $error =
-                "Registrasi gagal. Silakan coba kembali.";
+            $error = $e->getMessage();
         }
     }
 }
 
 ?>
-
 <!DOCTYPE html>
 <html lang="id">
 
@@ -469,7 +523,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     >
 
     <title>
-        Daftar Akun - WiFi Management
+        Register - WiFi Management
     </title>
 
     <link
@@ -478,7 +532,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     >
 
     <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
         rel="stylesheet"
     >
 
@@ -491,414 +545,352 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
 <body>
 
-<div class="register-wrapper">
+<div class="container py-5">
 
-    <div class="register-card">
+    <div class="row justify-content-center">
 
-        <div class="register-logo">
+        <div class="col-lg-6 col-md-8">
 
-            <img
-                src="logo-yesnet.png"
-                alt="YESNET"
-            >
+            <div class="card shadow border-0">
+
+                <div class="card-body p-4 p-md-5">
+
+                    <div class="text-center mb-4">
+
+                        <h2 class="fw-bold">
+                            Selamat Datang di WiFi Management
+                        </h2>
+
+                        <p class="text-muted mb-0">
+
+                            <?php if ($role === 'admin'): ?>
+
+                                Buat akun administrator
+
+                            <?php else: ?>
+
+                                Buat akun pelanggan baru
+
+                            <?php endif; ?>
+
+                        </p>
+
+                    </div>
+
+
+                    <?php if ($error !== ''): ?>
+
+                        <div
+                            class="alert alert-danger"
+                            role="alert"
+                        >
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+
+                            <?= htmlspecialchars(
+                                $error,
+                                ENT_QUOTES,
+                                'UTF-8'
+                            ) ?>
+                        </div>
+
+                    <?php endif; ?>
+
+
+                    <?php if ($success !== ''): ?>
+
+                        <div
+                            class="alert alert-success"
+                            role="alert"
+                        >
+                            <?= htmlspecialchars(
+                                $success,
+                                ENT_QUOTES,
+                                'UTF-8'
+                            ) ?>
+                        </div>
+
+                    <?php endif; ?>
+
+
+                    <form
+                        method="POST"
+                        action=""
+                        autocomplete="off"
+                    >
+
+                        <!-- ROLE -->
+
+                        <input
+                            type="hidden"
+                            name="role"
+                            value="<?= htmlspecialchars(
+                                $role,
+                                ENT_QUOTES,
+                                'UTF-8'
+                            ) ?>"
+                        >
+
+
+                        <!-- NAMA -->
+
+                        <div class="mb-3">
+
+                            <label
+                                for="nama"
+                                class="form-label"
+                            >
+                                Nama Lengkap
+                            </label>
+
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="nama"
+                                name="nama"
+                                value="<?= htmlspecialchars(
+                                    $nama,
+                                    ENT_QUOTES,
+                                    'UTF-8'
+                                ) ?>"
+                                required
+                                minlength="3"
+                            >
+
+                        </div>
+
+
+                        <!-- USERNAME -->
+
+                        <div class="mb-3">
+
+                            <label
+                                for="username"
+                                class="form-label"
+                            >
+                                Username
+                            </label>
+
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="username"
+                                name="username"
+                                value="<?= htmlspecialchars(
+                                    $username,
+                                    ENT_QUOTES,
+                                    'UTF-8'
+                                ) ?>"
+                                required
+                                minlength="4"
+                                maxlength="50"
+                            >
+
+                            <div class="form-text">
+                                Huruf, angka, titik, dan underscore.
+                            </div>
+
+                        </div>
+
+
+                        <!-- EMAIL -->
+
+                        <div class="mb-3">
+
+                            <label
+                                for="email"
+                                class="form-label"
+                            >
+                                Email
+                            </label>
+
+                            <input
+                                type="email"
+                                class="form-control"
+                                id="email"
+                                name="email"
+                                value="<?= htmlspecialchars(
+                                    $email,
+                                    ENT_QUOTES,
+                                    'UTF-8'
+                                ) ?>"
+                                required
+                            >
+
+                        </div>
+
+
+                        <!-- TELEPHONE -->
+
+                        <div class="mb-3">
+
+                            <label
+                                for="telephone"
+                                class="form-label"
+                            >
+                                Nomor Telepon
+                            </label>
+
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="telephone"
+                                name="telephone"
+                                value="<?= htmlspecialchars(
+                                    $telephone,
+                                    ENT_QUOTES,
+                                    'UTF-8'
+                                ) ?>"
+                                required
+                            >
+
+                        </div>
+
+
+                        <!-- PASSWORD -->
+
+                        <div class="mb-3">
+
+                            <label
+                                for="password"
+                                class="form-label"
+                            >
+                                Password
+                            </label>
+
+                            <input
+                                type="password"
+                                class="form-control"
+                                id="password"
+                                name="password"
+                                required
+                                minlength="6"
+                            >
+
+                            <div class="form-text">
+                                Minimal 6 karakter.
+                            </div>
+
+                        </div>
+
+
+                        <?php if ($role === 'customer'): ?>
+
+                            <!-- NIK -->
+
+                            <div class="mb-3">
+
+                                <label
+                                    for="nik"
+                                    class="form-label"
+                                >
+                                    NIK
+                                </label>
+
+                                <input
+                                    type="text"
+                                    class="form-control"
+                                    id="nik"
+                                    name="nik"
+                                    value="<?= htmlspecialchars(
+                                        $nik,
+                                        ENT_QUOTES,
+                                        'UTF-8'
+                                    ) ?>"
+                                    required
+                                    inputmode="numeric"
+                                >
+
+                            </div>
+
+
+                            <!-- ALAMAT -->
+
+                            <div class="mb-3">
+
+                                <label
+                                    for="alamat"
+                                    class="form-label"
+                                >
+                                    Alamat
+                                </label>
+
+                                <textarea
+                                    class="form-control"
+                                    id="alamat"
+                                    name="alamat"
+                                    rows="3"
+                                    required
+                                ><?= htmlspecialchars(
+                                    $alamat,
+                                    ENT_QUOTES,
+                                    'UTF-8'
+                                ) ?></textarea>
+
+                            </div>
+
+                        <?php endif; ?>
+
+
+                        <!-- SUBMIT -->
+
+                        <div class="d-grid mt-4">
+
+                            <button
+                                type="submit"
+                                class="btn btn-primary btn-lg"
+                            >
+
+                                <?php if ($role === 'admin'): ?>
+
+                                    <i class="bi bi-person-gear me-2"></i>
+                                    Daftar Admin
+
+                                <?php else: ?>
+
+                                    <i class="bi bi-person-plus me-2"></i>
+                                    Daftar sebagai Customer
+
+                                <?php endif; ?>
+
+                            </button>
+
+                        </div>
+
+                    </form>
+
+
+                    <!-- LOGIN -->
+
+                    <div class="text-center mt-4">
+
+                        <span class="text-muted">
+                            Sudah punya akun?
+                        </span>
+
+                        <a
+                            href="login.php"
+                            class="text-decoration-none fw-semibold"
+                        >
+                            Login
+                        </a>
+
+                    </div>
+
+                </div>
+
+            </div>
 
         </div>
-
-        <div class="register-header">
-
-            <h1>
-                Selamat Datang di WiFi Management
-            </h1>
-
-            <p>
-                Buat akun untuk berlangganan layanan internet YESNET.
-            </p>
-
-        </div>
-
-        <?php if ($error !== ""): ?>
-
-            <div class="alert alert-danger">
-
-                <i class="bi bi-exclamation-circle-fill"></i>
-
-                <?= e($error) ?>
-
-            </div>
-
-        <?php endif; ?>
-
-        <form
-            method="POST"
-            action=""
-            autocomplete="off"
-        >
-
-            <div class="row">
-
-                <!-- NAMA -->
-
-                <div class="col-md-6 mb-3">
-
-                    <label class="form-label">
-                        Nama Lengkap
-                    </label>
-
-                    <div class="input-group">
-
-                        <span class="input-group-text">
-                            <i class="bi bi-person"></i>
-                        </span>
-
-                        <input
-                            type="text"
-                            name="nama"
-                            class="form-control"
-                            placeholder="Masukkan nama lengkap"
-                            value="<?= e($nama) ?>"
-                            required
-                        >
-
-                    </div>
-
-                </div>
-
-                <!-- USERNAME -->
-
-                <div class="col-md-6 mb-3">
-
-                    <label class="form-label">
-                        Username
-                    </label>
-
-                    <div class="input-group">
-
-                        <span class="input-group-text">
-                            <i class="bi bi-person-badge"></i>
-                        </span>
-
-                        <input
-                            type="text"
-                            name="username"
-                            class="form-control"
-                            placeholder="Masukkan username"
-                            value="<?= e($username) ?>"
-                            required
-                        >
-
-                    </div>
-
-                </div>
-
-                <!-- EMAIL -->
-
-                <div class="col-md-6 mb-3">
-
-                    <label class="form-label">
-                        Email
-                    </label>
-
-                    <div class="input-group">
-
-                        <span class="input-group-text">
-                            <i class="bi bi-envelope"></i>
-                        </span>
-
-                        <input
-                            type="email"
-                            name="email"
-                            class="form-control"
-                            placeholder="contoh@email.com"
-                            value="<?= e($email) ?>"
-                            required
-                        >
-
-                    </div>
-
-                </div>
-
-                <!-- TELEPHONE -->
-
-                <div class="col-md-6 mb-3">
-
-                    <label class="form-label">
-                        Nomor Telepon
-                    </label>
-
-                    <div class="input-group">
-
-                        <span class="input-group-text">
-                            <i class="bi bi-telephone"></i>
-                        </span>
-
-                        <input
-                            type="text"
-                            name="telephone"
-                            id="telephone"
-                            class="form-control"
-                            placeholder="08xxxxxxxxxx"
-                            value="<?= e($telephone) ?>"
-                            inputmode="numeric"
-                            required
-                        >
-
-                    </div>
-
-                </div>
-
-                <!-- PASSWORD -->
-
-                <div class="col-md-6 mb-3">
-
-                    <label class="form-label">
-                        Password
-                    </label>
-
-                    <div class="input-group">
-
-                        <span class="input-group-text">
-                            <i class="bi bi-lock"></i>
-                        </span>
-
-                        <input
-                            type="password"
-                            name="password"
-                            id="password"
-                            class="form-control"
-                            placeholder="Minimal 6 karakter"
-                            required
-                        >
-
-                        <button
-                            type="button"
-                            class="btn btn-outline-secondary"
-                            id="togglePassword"
-                        >
-                            <i class="bi bi-eye"></i>
-                        </button>
-
-                    </div>
-
-                </div>
-
-                <!-- PASSWORD CONFIRM -->
-
-                <div class="col-md-6 mb-3">
-
-                    <label class="form-label">
-                        Konfirmasi Password
-                    </label>
-
-                    <div class="input-group">
-
-                        <span class="input-group-text">
-                            <i class="bi bi-lock-fill"></i>
-                        </span>
-
-                        <input
-                            type="password"
-                            name="password_confirm"
-                            id="passwordConfirm"
-                            class="form-control"
-                            placeholder="Ulangi password"
-                            required
-                        >
-
-                        <button
-                            type="button"
-                            class="btn btn-outline-secondary"
-                            id="togglePasswordConfirm"
-                        >
-                            <i class="bi bi-eye"></i>
-                        </button>
-
-                    </div>
-
-                </div>
-
-                <!-- NIK -->
-
-                <div class="col-md-6 mb-3">
-
-                    <label class="form-label">
-                        NIK
-                    </label>
-
-                    <div class="input-group">
-
-                        <span class="input-group-text">
-                            <i class="bi bi-card-text"></i>
-                        </span>
-
-                        <input
-                            type="text"
-                            name="nik"
-                            id="nik"
-                            class="form-control"
-                            placeholder="Masukkan NIK"
-                            value="<?= e($nik) ?>"
-                            inputmode="numeric"
-                            required
-                        >
-
-                    </div>
-
-                </div>
-
-                <!-- ALAMAT -->
-
-                <div class="col-md-6 mb-3">
-
-                    <label class="form-label">
-                        Alamat
-                    </label>
-
-                    <div class="input-group">
-
-                        <span class="input-group-text">
-                            <i class="bi bi-geo-alt"></i>
-                        </span>
-
-                        <textarea
-                            name="alamat"
-                            class="form-control"
-                            rows="1"
-                            placeholder="Masukkan alamat lengkap"
-                            required
-                        ><?= e($alamat) ?></textarea>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-            <button
-                type="submit"
-                class="btn-register"
-            >
-
-                <i class="bi bi-person-plus-fill"></i>
-
-                Daftar Sekarang
-
-            </button>
-
-            <div class="register-footer">
-
-                <span>
-                    Sudah punya akun?
-                </span>
-
-                <a href="login.php">
-                    Login di sini
-                </a>
-
-            </div>
-
-        </form>
 
     </div>
 
 </div>
 
-<script>
 
-function togglePasswordField(buttonId, inputId)
-{
-    const button =
-        document.getElementById(buttonId);
-
-    const input =
-        document.getElementById(inputId);
-
-    if (!button || !input) {
-        return;
-    }
-
-    button.addEventListener(
-        "click",
-        function ()
-        {
-
-            if (input.type === "password") {
-
-                input.type = "text";
-
-                this.innerHTML =
-                    '<i class="bi bi-eye-slash"></i>';
-
-            } else {
-
-                input.type = "password";
-
-                this.innerHTML =
-                    '<i class="bi bi-eye"></i>';
-            }
-
-        }
-    );
-}
-
-togglePasswordField(
-    "togglePassword",
-    "password"
-);
-
-togglePasswordField(
-    "togglePasswordConfirm",
-    "passwordConfirm"
-);
-
-
-/*
-|--------------------------------------------------------------------------
-| NIK
-|--------------------------------------------------------------------------
-*/
-
-const nikInput =
-    document.getElementById("nik");
-
-if (nikInput) {
-
-    nikInput.addEventListener(
-        "input",
-        function ()
-        {
-
-            this.value =
-                this.value.replace(/\D/g, "");
-
-        }
-    );
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| TELEPHONE
-|--------------------------------------------------------------------------
-*/
-
-const telephoneInput =
-    document.getElementById("telephone");
-
-if (telephoneInput) {
-
-    telephoneInput.addEventListener(
-        "input",
-        function ()
-        {
-
-            this.value =
-                this.value.replace(/\D/g, "");
-
-        }
-    );
-}
-
-</script>
+<script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+></script>
 
 </body>
+
 </html>
