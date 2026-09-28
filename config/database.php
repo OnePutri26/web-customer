@@ -6,12 +6,22 @@ $host = "103.209.250.78";
 $user = "wifi_app";
 $pass = "PasswordKuat123!";
 $db   = "wifi_management";
+$port = 3306;
 
-$conn = new mysqli(
-    $host,
-    $user,
-    $pass,
-    $db
-);
+try {
 
-$conn->set_charset("utf8mb4");
+    $conn = new mysqli(
+        $host,
+        $user,
+        $pass,
+        $db,
+        $port
+    );
+
+    $conn->set_charset("utf8mb4");
+
+} catch (mysqli_sql_exception $e) {
+
+    die("Koneksi database gagal: " . $e->getMessage());
+
+}
