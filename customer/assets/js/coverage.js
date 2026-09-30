@@ -2,39 +2,38 @@
 
 /*
 |--------------------------------------------------------------------------
-| COVERAGE MAP
+| YESNET COVERAGE JAVASCRIPT
 |--------------------------------------------------------------------------
 */
 
 document.addEventListener("DOMContentLoaded", function () {
 
-    const mapElement = document.getElementById("coverageMap");
+    const mapElement =
+        document.getElementById("coverageMap");
 
-    const latitudeInput = document.getElementById("latitude");
-    const longitudeInput = document.getElementById("longitude");
+    const latitudeInput =
+        document.getElementById("latitude");
 
-    const latitudeDisplay = document.getElementById("latitudeDisplay");
-    const longitudeDisplay = document.getElementById("longitudeDisplay");
+    const longitudeInput =
+        document.getElementById("longitude");
 
-    const getLocationBtn = document.getElementById("getLocationBtn");
+    const latitudeDisplay =
+        document.getElementById("latitudeDisplay");
 
-    const openMapsBtn = document.getElementById("openMapsBtn");
+    const longitudeDisplay =
+        document.getElementById("longitudeDisplay");
 
-    const coverageForm = document.getElementById("coverageForm");
+    const getLocationBtn =
+        document.getElementById("getLocationBtn");
+
+    const coverageForm =
+        document.getElementById("coverageForm");
 
     const checkCoverageBtn =
         document.getElementById("checkCoverageBtn");
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | CEK ELEMENT
-    |--------------------------------------------------------------------------
-    */
-
-    if (!mapElement) {
-        return;
-    }
+    const openMapsBtn =
+        document.getElementById("openMapsBtn");
 
 
     /*
@@ -42,41 +41,80 @@ document.addEventListener("DOMContentLoaded", function () {
     | DEFAULT LOCATION
     |--------------------------------------------------------------------------
     |
-    | Default hanya untuk tampilan awal.
-    | User tetap bisa memilih titik sendiri.
+    | Jika belum ada koordinat, gunakan pusat Indonesia.
+    | Nantinya user dapat klik peta atau gunakan GPS.
     |
     */
 
-    const DEFAULT_LATITUDE = -7.2575;
-    const DEFAULT_LONGITUDE = 112.7521;
+    const defaultLatitude = -2.5489;
+    const defaultLongitude = 118.0149;
 
 
     /*
     |--------------------------------------------------------------------------
-    | DATA AWAL
-    |--------------------------------------------------------------------------
-    */
-
-    let initialLatitude =
-        parseFloat(latitudeInput?.value);
-
-    let initialLongitude =
-        parseFloat(longitudeInput?.value);
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | VALIDASI KOORDINAT AWAL
+    | CEK LEAFLET
     |--------------------------------------------------------------------------
     */
 
     if (
-        !Number.isFinite(initialLatitude) ||
-        !Number.isFinite(initialLongitude)
+        typeof L === "undefined"
     ) {
 
-        initialLatitude = DEFAULT_LATITUDE;
-        initialLongitude = DEFAULT_LONGITUDE;
+        console.error(
+            "Leaflet gagal dimuat."
+        );
+
+        if (mapElement) {
+
+            mapElement.innerHTML = `
+                <div style="
+                    height:100%;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    padding:20px;
+                    text-align:center;
+                    color:#64748b;
+                    background:#f8fafc;
+                    font-size:13px;
+                ">
+                    Peta gagal dimuat.
+                    Silakan refresh halaman.
+                </div>
+            `;
+        }
+
+        return;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | KOORDINAT AWAL
+    |--------------------------------------------------------------------------
+    */
+
+    let initialLatitude =
+        parseFloat(
+            latitudeInput?.value
+        );
+
+    let initialLongitude =
+        parseFloat(
+            longitudeInput?.value
+        );
+
+
+    if (
+        Number.isNaN(initialLatitude) ||
+        Number.isNaN(initialLongitude)
+    ) {
+
+        initialLatitude =
+            defaultLatitude;
+
+        initialLongitude =
+            defaultLongitude;
     }
 
 
@@ -86,24 +124,31 @@ document.addEventListener("DOMContentLoaded", function () {
     |--------------------------------------------------------------------------
     */
 
-    const map = L.map(
-        mapElement,
-        {
-            zoomControl: true,
-            scrollWheelZoom: true
-        }
-    ).setView(
-        [
-            initialLatitude,
-            initialLongitude
-        ],
-        15
-    );
+    const map =
+        L.map(
+            mapElement,
+            {
+                center: [
+                    initialLatitude,
+                    initialLongitude
+                ],
+
+                zoom:
+                    latitudeInput?.value &&
+                    longitudeInput?.value
+                        ? 17
+                        : 5,
+
+                zoomControl: true,
+
+                attributionControl: true
+            }
+        );
 
 
     /*
     |--------------------------------------------------------------------------
-    | OPEN STREET MAP
+    | TILE
     |--------------------------------------------------------------------------
     */
 
@@ -111,8 +156,9 @@ document.addEventListener("DOMContentLoaded", function () {
         "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
         {
             maxZoom: 20,
+
             attribution:
-                '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>'
+                '&copy; OpenStreetMap contributors'
         }
     ).addTo(map);
 
@@ -123,121 +169,19 @@ document.addEventListener("DOMContentLoaded", function () {
     |--------------------------------------------------------------------------
     */
 
-    const marker = L.marker(
-        [
-            initialLatitude,
-            initialLongitude
-        ],
-        {
-            draggable: true
-        }
-    ).addTo(map);
+    let marker = null;
 
 
     /*
     |--------------------------------------------------------------------------
-    | POPUP
+    | UPDATE COORDINATE
     |--------------------------------------------------------------------------
     */
 
-    marker.bindPopup(
-        `
-        <div class="map-popup">
-            <strong>Lokasi Pemasangan</strong>
-            <br>
-            Geser marker atau klik peta
-            untuk mengubah lokasi.
-        </div>
-        `
-    );
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | UPDATE COORDINATES
-    |--------------------------------------------------------------------------
-    */
-
-    function updateCoordinates(latitude, longitude) {
-
-        const lat =
-            Number(latitude);
-
-        const lng =
-            Number(longitude);
-
-
-        if (
-            !Number.isFinite(lat) ||
-            !Number.isFinite(lng)
-        ) {
-            return;
-        }
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | INPUT
-        |--------------------------------------------------------------------------
-        */
-
-        if (latitudeInput) {
-            latitudeInput.value =
-                lat.toFixed(7);
-        }
-
-        if (longitudeInput) {
-            longitudeInput.value =
-                lng.toFixed(7);
-        }
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | DISPLAY
-        |--------------------------------------------------------------------------
-        */
-
-        if (latitudeDisplay) {
-
-            latitudeDisplay.textContent =
-                lat.toFixed(7);
-        }
-
-        if (longitudeDisplay) {
-
-            longitudeDisplay.textContent =
-                lng.toFixed(7);
-        }
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | GOOGLE MAPS
-        |--------------------------------------------------------------------------
-        */
-
-        if (openMapsBtn) {
-
-            openMapsBtn.href =
-                "https://www.google.com/maps/search/?api=1&query="
-                + encodeURIComponent(
-                    lat + "," + lng
-                );
-        }
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | SET LOCATION
-    |--------------------------------------------------------------------------
-    */
-
-    function setLocation(
+    function updateCoordinates(
         latitude,
         longitude,
-        zoom = 17
+        moveMap = true
     ) {
 
         const lat =
@@ -251,63 +195,117 @@ document.addEventListener("DOMContentLoaded", function () {
             !Number.isFinite(lat) ||
             !Number.isFinite(lng)
         ) {
+
             return;
         }
 
 
-        marker.setLatLng(
-            [
-                lat,
-                lng
-            ]
-        );
+        const latFixed =
+            lat.toFixed(7);
+
+        const lngFixed =
+            lng.toFixed(7);
 
 
-        map.setView(
-            [
-                lat,
-                lng
-            ],
-            zoom
-        );
+        /*
+        | Hidden input
+        */
+
+        if (latitudeInput) {
+            latitudeInput.value =
+                latFixed;
+        }
+
+        if (longitudeInput) {
+            longitudeInput.value =
+                lngFixed;
+        }
 
 
-        updateCoordinates(
-            lat,
-            lng
-        );
+        /*
+        | Display
+        */
+
+        if (latitudeDisplay) {
+
+            latitudeDisplay.textContent =
+                latFixed;
+        }
+
+        if (longitudeDisplay) {
+
+            longitudeDisplay.textContent =
+                lngFixed;
+        }
 
 
-        marker.openPopup();
+        /*
+        | Marker
+        */
+
+        if (!marker) {
+
+            marker =
+                L.marker(
+                    [lat, lng],
+                    {
+                        draggable: true
+                    }
+                ).addTo(map);
+
+
+            /*
+            | Marker drag
+            */
+
+            marker.on(
+                "dragend",
+                function (event) {
+
+                    const position =
+                        event.target.getLatLng();
+
+                    updateCoordinates(
+                        position.lat,
+                        position.lng,
+                        false
+                    );
+
+                    updateGoogleMapsLink();
+                }
+            );
+
+        } else {
+
+            marker.setLatLng(
+                [lat, lng]
+            );
+        }
+
+
+        /*
+        | Pindahkan map
+        */
+
+        if (moveMap) {
+
+            map.setView(
+                [lat, lng],
+                17,
+                {
+                    animate: true
+                }
+            );
+        }
+
+
+        updateGoogleMapsLink();
     }
 
 
     /*
     |--------------------------------------------------------------------------
-    | MARKER DRAG
-    |--------------------------------------------------------------------------
-    */
-
-    marker.on(
-        "dragend",
-        function () {
-
-            const position =
-                marker.getLatLng();
-
-
-            updateCoordinates(
-                position.lat,
-                position.lng
-            );
-
-        }
-    );
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | MAP CLICK
+    | KLIK MAP
     |--------------------------------------------------------------------------
     */
 
@@ -315,19 +313,45 @@ document.addEventListener("DOMContentLoaded", function () {
         "click",
         function (event) {
 
-            setLocation(
+            updateCoordinates(
                 event.latlng.lat,
                 event.latlng.lng,
-                map.getZoom()
+                true
             );
-
         }
     );
 
 
     /*
     |--------------------------------------------------------------------------
-    | GPS BUTTON
+    | INIT MARKER JIKA SUDAH ADA
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        latitudeInput &&
+        longitudeInput &&
+        latitudeInput.value !== "" &&
+        longitudeInput.value !== ""
+    ) {
+
+        updateCoordinates(
+            parseFloat(
+                latitudeInput.value
+            ),
+
+            parseFloat(
+                longitudeInput.value
+            ),
+
+            true
+        );
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | GPS
     |--------------------------------------------------------------------------
     */
 
@@ -337,7 +361,9 @@ document.addEventListener("DOMContentLoaded", function () {
             "click",
             function () {
 
-                if (!navigator.geolocation) {
+                if (
+                    !navigator.geolocation
+                ) {
 
                     alert(
                         "Browser Anda tidak mendukung GPS."
@@ -347,32 +373,19 @@ document.addEventListener("DOMContentLoaded", function () {
                 }
 
 
-                /*
-                |--------------------------------------------------------------------------
-                | LOADING
-                |--------------------------------------------------------------------------
-                */
+                getLocationBtn.disabled =
+                    true;
+
 
                 const originalHTML =
                     getLocationBtn.innerHTML;
 
 
-                getLocationBtn.disabled =
-                    true;
+                getLocationBtn.innerHTML = `
+                    <i class="bi bi-arrow-repeat"></i>
+                    <span>Mengambil lokasi...</span>
+                `;
 
-
-                getLocationBtn.innerHTML =
-                    `
-                    <span class="button-spinner"></span>
-                    Mengambil lokasi...
-                    `;
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | GET LOCATION
-                |--------------------------------------------------------------------------
-                */
 
                 navigator.geolocation.getCurrentPosition(
 
@@ -385,10 +398,10 @@ document.addEventListener("DOMContentLoaded", function () {
                             position.coords.longitude;
 
 
-                        setLocation(
+                        updateCoordinates(
                             latitude,
                             longitude,
-                            18
+                            true
                         );
 
 
@@ -406,12 +419,18 @@ document.addEventListener("DOMContentLoaded", function () {
                         let message =
                             "Tidak dapat mengambil lokasi.";
 
-                        switch (error.code) {
+                        switch (
+                            error.code
+                        ) {
 
                             case error.PERMISSION_DENIED:
 
                                 message =
-                                    "Izin lokasi ditolak. Aktifkan izin lokasi pada browser.";
+                                    "Izin lokasi ditolak. "
+                                    +
+                                    "Silakan aktifkan izin lokasi "
+                                    +
+                                    "pada browser.";
 
                                 break;
 
@@ -419,7 +438,7 @@ document.addEventListener("DOMContentLoaded", function () {
                             case error.POSITION_UNAVAILABLE:
 
                                 message =
-                                    "Lokasi perangkat tidak tersedia.";
+                                    "Informasi lokasi tidak tersedia.";
 
                                 break;
 
@@ -427,7 +446,7 @@ document.addEventListener("DOMContentLoaded", function () {
                             case error.TIMEOUT:
 
                                 message =
-                                    "Pengambilan lokasi terlalu lama. Silakan coba lagi.";
+                                    "Pengambilan lokasi terlalu lama.";
 
                                 break;
                         }
@@ -439,19 +458,19 @@ document.addEventListener("DOMContentLoaded", function () {
                         getLocationBtn.disabled =
                             false;
 
-
                         getLocationBtn.innerHTML =
                             originalHTML;
-
                     },
+
 
                     {
                         enableHighAccuracy: true,
+
                         timeout: 15000,
+
                         maximumAge: 0
                     }
                 );
-
             }
         );
     }
@@ -459,39 +478,109 @@ document.addEventListener("DOMContentLoaded", function () {
 
     /*
     |--------------------------------------------------------------------------
-    | INITIAL COORDINATE
+    | GOOGLE MAPS
     |--------------------------------------------------------------------------
     */
 
-    const existingLat =
-        parseFloat(latitudeInput?.value);
+    function updateGoogleMapsLink() {
 
-    const existingLng =
-        parseFloat(longitudeInput?.value);
+        if (!openMapsBtn) {
+            return;
+        }
 
 
-    if (
-        Number.isFinite(existingLat) &&
-        Number.isFinite(existingLng)
-    ) {
+        const latitude =
+            latitudeInput?.value;
 
-        setLocation(
-            existingLat,
-            existingLng,
-            17
+        const longitude =
+            longitudeInput?.value;
+
+
+        if (
+            latitude === "" ||
+            longitude === "" ||
+            !Number.isFinite(
+                parseFloat(latitude)
+            ) ||
+            !Number.isFinite(
+                parseFloat(longitude)
+            )
+        ) {
+
+            openMapsBtn.href = "#";
+
+            openMapsBtn.classList.add(
+                "is-disabled"
+            );
+
+            openMapsBtn.setAttribute(
+                "aria-disabled",
+                "true"
+            );
+
+            openMapsBtn.setAttribute(
+                "tabindex",
+                "-1"
+            );
+
+            return;
+        }
+
+
+        const url =
+            "https://www.google.com/maps/search/?api=1&query="
+            +
+            encodeURIComponent(
+                latitude + "," + longitude
+            );
+
+
+        openMapsBtn.href =
+            url;
+
+
+        openMapsBtn.classList.remove(
+            "is-disabled"
         );
 
-    } else {
 
-        /*
-        |--------------------------------------------------------------------------
-        | DEFAULT MAP ONLY
-        |--------------------------------------------------------------------------
-        */
+        openMapsBtn.setAttribute(
+            "aria-disabled",
+            "false"
+        );
 
-        updateCoordinates(
-            "",
-            ""
+
+        openMapsBtn.removeAttribute(
+            "tabindex"
+        );
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | PREVENT GOOGLE MAPS DISABLED CLICK
+    |--------------------------------------------------------------------------
+    */
+
+    if (openMapsBtn) {
+
+        openMapsBtn.addEventListener(
+            "click",
+            function (event) {
+
+                if (
+                    openMapsBtn.classList.contains(
+                        "is-disabled"
+                    )
+                ) {
+
+                    event.preventDefault();
+
+                    alert(
+                        "Tentukan lokasi terlebih dahulu."
+                    );
+                }
+            }
         );
     }
 
@@ -508,7 +597,7 @@ document.addEventListener("DOMContentLoaded", function () {
             "submit",
             function (event) {
 
-                const address =
+                const alamat =
                     document
                         .getElementById("alamat")
                         ?.value
@@ -516,24 +605,16 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
                 const latitude =
-                    parseFloat(
-                        latitudeInput?.value
-                    );
+                    latitudeInput?.value
+                    .trim();
 
 
                 const longitude =
-                    parseFloat(
-                        longitudeInput?.value
-                    );
+                    longitudeInput?.value
+                    .trim();
 
 
-                /*
-                |--------------------------------------------------------------------------
-                | ADDRESS
-                |--------------------------------------------------------------------------
-                */
-
-                if (!address) {
+                if (!alamat) {
 
                     event.preventDefault();
 
@@ -541,71 +622,50 @@ document.addEventListener("DOMContentLoaded", function () {
                         "Alamat pemasangan wajib diisi."
                     );
 
-                    document
-                        .getElementById("alamat")
-                        ?.focus();
-
                     return;
                 }
 
-
-                if (address.length < 10) {
-
-                    event.preventDefault();
-
-                    alert(
-                        "Masukkan alamat yang lebih lengkap."
-                    );
-
-                    document
-                        .getElementById("alamat")
-                        ?.focus();
-
-                    return;
-                }
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | COORDINATE
-                |--------------------------------------------------------------------------
-                */
 
                 if (
-                    !Number.isFinite(latitude) ||
-                    !Number.isFinite(longitude)
+                    !latitude ||
+                    !longitude
                 ) {
 
                     event.preventDefault();
 
                     alert(
-                        "Lokasi belum dipilih. Gunakan GPS atau klik lokasi pada peta."
+                        "Silakan tentukan lokasi "
+                        +
+                        "pemasangan terlebih dahulu."
                     );
 
                     return;
                 }
 
 
-                /*
-                |--------------------------------------------------------------------------
-                | LOADING BUTTON
-                |--------------------------------------------------------------------------
-                */
-
-                if (checkCoverageBtn) {
+                if (
+                    checkCoverageBtn
+                ) {
 
                     checkCoverageBtn.disabled =
                         true;
 
-                    checkCoverageBtn.innerHTML =
-                        `
-                        <span>
-                            <span class="button-spinner"></span>
-                            Memeriksa coverage...
-                        </span>
-                        `;
-                }
+                    checkCoverageBtn.classList.add(
+                        "loading"
+                    );
 
+                    checkCoverageBtn.dataset.original =
+                        checkCoverageBtn.innerHTML;
+
+
+                    checkCoverageBtn.innerHTML = `
+                        <span>
+                            <i class="bi bi-search"></i>
+                            Mengecek Coverage...
+                        </span>
+                        <i class="bi bi-arrow-repeat"></i>
+                    `;
+                }
             }
         );
     }
@@ -613,7 +673,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     /*
     |--------------------------------------------------------------------------
-    | FIX LEAFLET SIZE
+    | FIX MAP SIZE
     |--------------------------------------------------------------------------
     */
 
@@ -624,6 +684,16 @@ document.addEventListener("DOMContentLoaded", function () {
 
         },
         300
+    );
+
+
+    window.addEventListener(
+        "resize",
+        function () {
+
+            map.invalidateSize();
+
+        }
     );
 
 });
