@@ -275,5 +275,130 @@ session_start();
 
 </footer>
 
+    <!-- ================================
+         JAVASCRIPT ANIMASI
+         ================================ -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+
+            // Navbar berubah saat scroll
+            const navbar = document.querySelector('.navbar');
+
+            window.addEventListener('scroll', function () {
+                if (window.scrollY > 30) {
+                    navbar?.classList.add('scrolled');
+                } else {
+                    navbar?.classList.remove('scrolled');
+                }
+            });
+
+
+            // ================================
+            // REVEAL ANIMATION SAAT SCROLL
+            // ================================
+            const revealElements = document.querySelectorAll(
+                '.feature, .process-item, .stats, .cta'
+            );
+
+            const observer = new IntersectionObserver(
+                function (entries) {
+                    entries.forEach(function (entry) {
+                        if (entry.isIntersecting) {
+                            entry.target.classList.add('is-visible');
+                            observer.unobserve(entry.target);
+                        }
+                    });
+                },
+                {
+                    threshold: 0.15
+                }
+            );
+
+            revealElements.forEach(function (element) {
+                observer.observe(element);
+            });
+
+
+            // ================================
+            // COUNTER 0 → 100
+            // ================================
+            const speedValue = document.querySelector('.speed-value');
+
+            if (speedValue) {
+                let started = false;
+
+                const counterObserver = new IntersectionObserver(
+                    function (entries) {
+                        entries.forEach(function (entry) {
+
+                            if (entry.isIntersecting && !started) {
+                                started = true;
+
+                                let current = 0;
+                                const target = 100;
+                                const duration = 1200;
+                                const increment = target / (duration / 16);
+
+                                const counter = setInterval(function () {
+
+                                    current += increment;
+
+                                    if (current >= target) {
+                                        current = target;
+                                        clearInterval(counter);
+                                    }
+
+                                    speedValue.textContent = Math.floor(current);
+
+                                }, 16);
+
+                                counterObserver.unobserve(entry.target);
+                            }
+
+                        });
+                    },
+                    {
+                        threshold: 0.5
+                    }
+                );
+
+                counterObserver.observe(speedValue);
+            }
+
+
+            // ================================
+            // SMOOTH SCROLL
+            // ================================
+            document.querySelectorAll('a[href^="#"]').forEach(function (link) {
+
+                link.addEventListener('click', function (e) {
+
+                    const targetId = this.getAttribute('href');
+
+                    if (!targetId || targetId === '#') {
+                        return;
+                    }
+
+                    const target = document.querySelector(targetId);
+
+                    if (target) {
+                        e.preventDefault();
+
+                        target.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
+                    }
+
+                });
+
+            });
+
+        });
+    </script>
+
+</body>
+</html>
+
 </body>
 </html>
