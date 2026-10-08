@@ -1,50 +1,89 @@
-/* Cek coverage: geocode alamat (Nominatim/OSM) lalu kirim koordinat ke server */
-(function () {
-  var f = document.getElementById('covForm');
-  if (!f) return;
-  var btn = f.querySelector('button[type=submit]');
-  var info = document.getElementById('covInfo');
-  var busy = false;
+document.addEventListener("DOMContentLoaded", function () {
 
-  function say(t) { if (info) info.textContent = t; }
+    const form = document.getElementById("covForm");
+    const alamat = document.getElementById("alamat");
+    const latitude = document.getElementById("latitude");
+    const longitude = document.getElementById("longitude");
+    const info = document.getElementById("covInfo");
+    const gpsButton = document.getElementById("covGps");
 
-  async function geocode(q) {
-    var c = new AbortController();
-    var t = setTimeout(function () { c.abort(); }, 6000);
-    try {
-      var r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=id&q=' + encodeURIComponent(q), { signal: c.signal });
-      var j = await r.json();
-      return j && j[0] ? j[0] : null;
-    } catch (e) { return null; } finally { clearTimeout(t); }
-  }
-
-  f.addEventListener('submit', async function (ev) {
-    if (f.dataset.ready) return;
-    ev.preventDefault();
-    if (busy) return;
-    busy = true;
-    btn.disabled = true; btn.classList.add('loading');
-    say('Mencari lokasi alamat Anda...');
-    if (!f.latitude.value) {
-      var g = await geocode(f.alamat.value);
-      if (g) { f.latitude.value = g.lat; f.longitude.value = g.lon; }
+    if (!form || !alamat) {
+        return;
     }
-    say('Mengecek jaringan di lokasi Anda...');
-    f.dataset.ready = '1';
-    setTimeout(function () { f.submit(); }, 500);
-  });
 
-  var gps = document.getElementById('covGps');
-  if (gps && navigator.geolocation) {
-    gps.hidden = false;
-    gps.addEventListener('click', function () {
-      say('Mengambil lokasi perangkat...');
-      navigator.geolocation.getCurrentPosition(function (p) {
-        f.latitude.value = p.coords.latitude; f.longitude.value = p.coords.longitude;
-        say('Lokasi perangkat terdeteksi. Lengkapi alamat lalu klik Cek Ketersediaan.');
-      }, function () { say('Lokasi tidak bisa diambil. Silakan isi alamat secara manual.'); });
+
+    /*
+     * Validasi alamat
+     */
+    form.addEventListener("submit", function (event) {
+
+        const value = alamat.value.trim();
+
+        if (value.length < 10) {
+
+            event.preventDefault();
+
+            info.textContent =
+                "Alamat terlalu pendek. Masukkan alamat lengkap minimal 10 karakter.";
+
+            alamat.focus();
+
+            return;
+        }
+
+        info.textContent =
+            "Sedang mengecek ketersediaan jaringan YesNet...";
+
     });
-  }
 
-  if (f.dataset.auto === '1') f.requestSubmit();
-})();
+
+    /*
+     * GPS
+     */
+    if (
+        gpsButton &&
+        navigator.geolocation
+    ) {
+
+        gpsButton.hidden = false;
+
+        gpsButton.addEventListener("click", function () {
+
+            info.textContent =
+                "Mengambil lokasi Anda...";
+
+            navigator.geolocation.getCurrentPosition(
+
+                function (position) {
+
+                    latitude.value =
+                        position.coords.latitude;
+
+                    longitude.value =
+                        position.coords.longitude;
+
+                    info.textContent =
+                        "Lokasi berhasil didapatkan. Anda tetap dapat memperbaiki alamat secara manual.";
+
+                },
+
+                function () {
+
+                    info.textContent =
+                        "Lokasi tidak dapat digunakan. Silakan masukkan alamat secara manual.";
+
+                },
+
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+
+            );
+
+        });
+
+    }
+
+});
