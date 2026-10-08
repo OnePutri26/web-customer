@@ -55,24 +55,6 @@ function clearLoginSession(): void
 
 
 /*
-| Tujuan customer yang belum berlangganan:
-| - alur Lihat Paket  -> pembayaran
-| - alur Cek Coverage -> verifikasi data
-| - lainnya           -> daftar paket
-*/
-function urlLangganan(): string
-{
-    $f = $_SESSION["flow"] ?? [];
-    if (!empty($f["paket_id"]) && ($f["mode"] ?? "") === "direct") {
-        return "pembayaran.php?paket=" . (int) $f["paket_id"];
-    }
-    if (!empty($f["paket_id"]) && !empty($f["tersedia"])) {
-        return "verifikasi.php";
-    }
-    return "paket.php?mode=direct";
-}
-
-/*
 |--------------------------------------------------------------------------
 | REDIRECT CUSTOMER
 |--------------------------------------------------------------------------
@@ -126,7 +108,7 @@ function redirectCustomer(mysqli $conn, int $userId): void
         $_SESSION['subscription_status'] =
             'belum_berlangganan';
 
-        header("Location: " . urlLangganan());
+        header("Location: customer/langganan.php");
         exit;
     }
 
@@ -227,7 +209,7 @@ function redirectCustomer(mysqli $conn, int $userId): void
     if ($status === 'belum_berlangganan') {
 
         header(
-            "Location: " . urlLangganan()
+            "Location: customer/langganan.php"
         );
 
         exit;
@@ -243,7 +225,7 @@ function redirectCustomer(mysqli $conn, int $userId): void
     if ($status === 'pending') {
 
         header(
-            "Location: status_order.php"
+            "Location: customer/installation.php"
         );
 
         exit;

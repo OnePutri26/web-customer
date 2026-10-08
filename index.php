@@ -1,190 +1,1645 @@
 <?php
-require_once __DIR__ . '/config/app.php';
-
-try {
-    $pakets = listPaket($conn, 4);
-} catch (Throwable $e) {
-    $pakets = [];
-}
-$heroFoto = file_exists(__DIR__ . '/assets/img/hero.jpg') ? 'assets/img/hero.jpg' : null;
+session_start();
 ?>
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="YesNet - Internet fiber optic cepat, stabil dan terjangkau untuk rumah, keluarga, dan bisnis.">
-    <title>YesNet - Internet Cepat &amp; Stabil</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,700;0,800;1,500&display=swap">
-    <link rel="stylesheet" href="assets/css/yesnet.css?v=<?= @filemtime(__DIR__ . '/assets/css/yesnet.css') ?>">
-    <link rel="stylesheet" href="landing.css?v=<?= @filemtime(__DIR__ . '/landing.css') ?>">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="description"
+        content="YesNet - Internet cepat, stabil dan terjangkau untuk rumah, keluarga dan bisnis."
+    >
+
+    <title>YesNet - Internet Cepat & Stabil</title>
+
+    <link
+        rel="stylesheet"
+        href="landing.css?v=<?= time() ?>"
+    >
 </head>
-<body class="landing">
+
+<body>
+
+
+<!-- =====================================================
+     NAVBAR
+===================================================== -->
 
 <header class="navbar">
-    <a href="#home" class="brand"><?= logoHtml() ?></a>
-    <nav class="nav-links">
-        <a href="#home" class="active">Home</a>
-        <a href="#keunggulan">Keunggulan</a>
-        <a href="#paket">Paket</a>
-        <a href="#kontak">Kontak</a>
+
+    <a
+        href="#home"
+        class="brand"
+    >
+
+        <div class="brand-wifi">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+
+        <strong>
+            YES<span>NET</span>
+        </strong>
+
+    </a>
+
+
+    <nav class="nav-center">
+
+        <a
+            href="#home"
+            class="active"
+        >
+            Home
+        </a>
+
+        <a href="#keunggulan">
+            Keunggulan
+        </a>
+
+        <a href="#paket">
+            Paket
+        </a>
+
+        <a href="#kontak">
+            Kontak
+        </a>
+
     </nav>
-    <?php if (isCustomer()): ?>
-        <a href="redirect.php" class="btn btn-primary">Dashboard</a>
-    <?php else: ?>
-        <a href="login.php" class="btn btn-primary">Login Customer</a>
-    <?php endif; ?>
+
+
+    <a
+        href="login.php"
+        class="nav-login"
+    >
+
+        <span class="login-icon">
+            ♙
+        </span>
+
+        Login Customer
+
+    </a>
+
 </header>
 
-<!-- ================= HERO ================= -->
-<section id="home" class="hero">
-    <div class="hero-text">
-        <span class="chip hero-in" style="--d:0s">Internet untuk Hidup yang Lebih Baik</span>
-        <h1 class="hero-in" style="--d:.1s">YesNet - Internet <span>Cepat &amp; Stabil</span></h1>
-        <p class="hero-in" style="--d:.2s">Nikmati koneksi internet fiber optic dengan kecepatan tinggi, stabil, dan harga terjangkau. Untuk rumah, keluarga, dan bisnis Anda.</p>
-        <div class="hero-actions hero-in" style="--d:.3s">
-            <a class="btn btn-primary" href="coverage.php">Cek Coverage</a>
-            <a class="btn" href="paket.php?mode=direct">Lihat Paket</a>
-            <a class="btn" href="login.php">Login Customer</a>
-        </div>
-        <div class="hero-stats hero-in" style="--d:.4s">
-            <span><b>99.9%</b>Uptime Jaringan</span>
-            <span><b>Layanan 24/7</b>Siap membantu</span>
-            <span><b>Tim Teknis</b>Profesional</span>
-        </div>
-    </div>
 
-    <div class="hero-art hero-in" style="--d:.2s">
-        <p class="hero-note">Koneksi Stabil<br>untuk Masa Depan<br>Lebih Baik</p>
-        <?php if ($heroFoto): ?>
-            <img src="<?= e($heroFoto) ?>" alt="Rumah dengan koneksi internet YesNet" class="hero-photo">
-        <?php else: ?>
-            <svg viewBox="0 0 520 380" role="img" aria-label="Rumah dengan sinyal WiFi">
-                <g fill="none" stroke="#2f8bff" stroke-width="7" stroke-linecap="round">
-                    <path class="arc" d="M200 120a85 85 0 01120 0"/>
-                    <path class="arc" d="M222 142a52 52 0 0176 0"/>
-                    <path class="arc" d="M244 164a20 20 0 0132 0"/>
-                </g>
-                <circle cx="260" cy="190" r="6" fill="#2f8bff"/>
-                <ellipse class="ring" cx="260" cy="322" rx="232" ry="38" fill="none" stroke="#7a5cff" stroke-width="4"/>
-                <rect x="60" y="250" width="50" height="68" rx="3" fill="#9fb4de"/>
-                <rect x="415" y="235" width="42" height="84" rx="3" fill="#9fb4de"/>
-                <rect x="150" y="215" width="220" height="104" rx="4" fill="#f4e9d6"/>
-                <polygon points="128,222 260,160 392,222 372,234 148,234" fill="#2a3f6e"/>
-                <rect class="win" x="170" y="244" width="60" height="50" rx="2" fill="#ffc861"/>
-                <rect class="win" x="290" y="244" width="60" height="50" rx="2" fill="#ffc861"/>
-                <rect x="240" y="258" width="30" height="61" rx="2" fill="#5b4a3a"/>
-            </svg>
-        <?php endif; ?>
-    </div>
-</section>
 
-<!-- ================= KEUNGGULAN ================= -->
-<section id="keunggulan" class="section">
-    <div class="features">
-        <?php foreach ([
-            ['⚡', 'Kecepatan Tinggi', 'Streaming, gaming, dan bekerja lebih lancar tanpa hambatan.'],
-            ['🛡️', 'Jaringan Stabil', 'Koneksi tetap stabil di segala aktivitas Anda.'],
-            ['📶', 'Fiber Optic', 'Teknologi modern untuk internet terbaik.'],
-            ['🏷️', 'Harga Terjangkau', 'Paket lengkap dengan harga bersahabat.'],
-            ['🎧', 'Layanan Pelanggan', 'Siap membantu kapan saja saat Anda membutuhkan.'],
-        ] as $f): ?>
-            <div class="feature reveal">
-                <span class="ic"><?= $f[0] ?></span>
-                <b><?= e($f[1]) ?></b>
-                <small><?= e($f[2]) ?></small>
+<!-- =====================================================
+     HERO
+===================================================== -->
+
+<section
+    id="home"
+    class="hero"
+>
+
+    <!-- Background decoration -->
+
+    <div class="hero-glow hero-glow-one"></div>
+
+    <div class="hero-glow hero-glow-two"></div>
+
+    <div class="hero-grid"></div>
+
+
+    <div class="hero-content">
+
+
+        <!-- HERO LEFT -->
+
+        <div class="hero-text">
+
+            <div class="eyebrow">
+                Internet untuk Hidup yang Lebih Baik
             </div>
-        <?php endforeach; ?>
-    </div>
-</section>
 
-<!-- ================= CEK COVERAGE ================= -->
-<section id="coverage" class="section">
-    <div class="coverage reveal">
-        <div>
-            <div class="coverage-title">
-                <span class="ic">📍</span>
-                <div>
-                    <h2>Cek Coverage</h2>
-                    <p>Pastikan alamat Anda sudah terjangkau jaringan YesNet.</p>
+
+            <h1>
+
+                YesNet -
+                Internet
+
+                <span>
+                    Cepat &amp; Stabil
+                </span>
+
+            </h1>
+
+
+            <p class="hero-description">
+
+                Nikmati koneksi internet fiber optic
+                dengan kecepatan tinggi, stabil,
+                dan harga terjangkau.
+
+                Untuk rumah, keluarga, dan bisnis Anda.
+
+            </p>
+
+
+            <div class="hero-actions">
+
+                <a
+                    href="coverage.php"
+                    class="btn btn-primary"
+                >
+
+                    <span>⌖</span>
+
+                    Cek Coverage
+
+                </a>
+
+
+                <a
+                    href="#paket"
+                    class="btn btn-outline"
+                >
+
+                    <span>▱</span>
+
+                    Lihat Paket
+
+                </a>
+
+
+                <a
+                    href="login.php"
+                    class="btn btn-outline btn-login-hero"
+                >
+
+                    <span>♙</span>
+
+                    Login Customer
+
+                </a>
+
+            </div>
+
+
+            <!-- HERO STATS -->
+
+            <div class="hero-stats">
+
+                <div class="hero-stat">
+
+                    <div class="hero-stat-icon">
+                        ◉
+                    </div>
+
+                    <div>
+                        <strong>
+                            99,9%
+                        </strong>
+
+                        <small>
+                            Uptime Jaringan
+                        </small>
+                    </div>
+
                 </div>
+
+
+                <div class="hero-stat">
+
+                    <div class="hero-stat-icon">
+                        ⚡
+                    </div>
+
+                    <div>
+                        <strong>
+                            24/7
+                        </strong>
+
+                        <small>
+                            Layanan
+                        </small>
+                    </div>
+
+                </div>
+
+
+                <div class="hero-stat">
+
+                    <div class="hero-stat-icon">
+                        ◈
+                    </div>
+
+                    <div>
+                        <strong>
+                            Profesional
+                        </strong>
+
+                        <small>
+                            Tim Teknisi
+                        </small>
+                    </div>
+
+                </div>
+
             </div>
-            <form action="coverage.php" method="get" class="coverage-form">
-                <input type="hidden" name="auto" value="1">
-                <input class="in" type="text" name="alamat" placeholder="Masukkan alamat lengkap Anda..." required minlength="10" aria-label="Alamat lengkap">
-                <button class="btn btn-primary" type="submit">Cek Sekarang</button>
+
+        </div>
+
+
+
+        <!-- =================================================
+             HERO VISUAL
+        ================================================= -->
+
+        <div class="hero-visual">
+
+
+            <!-- floating WiFi -->
+
+            <div class="wifi-signal">
+
+                <div class="wifi-arc arc-one"></div>
+
+                <div class="wifi-arc arc-two"></div>
+
+                <div class="wifi-arc arc-three"></div>
+
+                <div class="wifi-dot"></div>
+
+            </div>
+
+
+            <!-- House illustration -->
+
+            <div class="house-scene">
+
+
+                <!-- sky -->
+
+                <div class="scene-sky"></div>
+
+
+                <!-- city -->
+
+                <div class="city city-one"></div>
+                <div class="city city-two"></div>
+                <div class="city city-three"></div>
+
+
+                <!-- ground -->
+
+                <div class="ground"></div>
+
+
+                <!-- house -->
+
+                <div class="house">
+
+                    <div class="roof-main"></div>
+
+                    <div class="roof-side"></div>
+
+
+                    <div class="house-wall">
+
+                        <div class="window window-one">
+
+                            <span></span>
+                            <span></span>
+
+                        </div>
+
+
+                        <div class="window window-two">
+
+                            <span></span>
+                            <span></span>
+
+                        </div>
+
+
+                        <div class="door">
+
+                            <div class="door-handle"></div>
+
+                        </div>
+
+                    </div>
+
+
+                    <!-- balcony -->
+
+                    <div class="balcony">
+
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                        <div></div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- trees -->
+
+                <div class="tree tree-one">
+                    <span></span>
+                </div>
+
+                <div class="tree tree-two">
+                    <span></span>
+                </div>
+
+
+                <!-- glowing network -->
+
+                <div class="network-line line-one"></div>
+
+                <div class="network-line line-two"></div>
+
+                <div class="network-line line-three"></div>
+
+
+                <div class="network-node node-one"></div>
+
+                <div class="network-node node-two"></div>
+
+                <div class="network-node node-three"></div>
+
+            </div>
+
+
+            <!-- handwritten message -->
+
+            <div class="hero-note">
+
+                Koneksi Stabil
+                <br>
+
+                untuk Masa Depan
+                <br>
+
+                Lebih Baik
+
+                <span>
+                    ↙
+                </span>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+
+<!-- =====================================================
+     KEUNGGULAN
+===================================================== -->
+
+<section
+    id="keunggulan"
+    class="advantages"
+>
+
+    <div class="advantage-grid">
+
+
+        <div class="advantage-card">
+
+            <div class="advantage-icon">
+                ⚡
+            </div>
+
+            <h3>
+                Kecepatan Tinggi
+            </h3>
+
+            <p>
+                Streaming, gaming, dan bekerja
+                lebih lancar tanpa hambatan.
+            </p>
+
+        </div>
+
+
+        <div class="advantage-card">
+
+            <div class="advantage-icon">
+                ◈
+            </div>
+
+            <h3>
+                Jaringan Stabil
+            </h3>
+
+            <p>
+                Koneksi tetap stabil di segala
+                aktivitas Anda.
+            </p>
+
+        </div>
+
+
+        <div class="advantage-card">
+
+            <div class="advantage-icon">
+                ◉
+            </div>
+
+            <h3>
+                Fiber Optic
+            </h3>
+
+            <p>
+                Teknologi modern untuk internet
+                terbaik.
+            </p>
+
+        </div>
+
+
+        <div class="advantage-card">
+
+            <div class="advantage-icon">
+                ♢
+            </div>
+
+            <h3>
+                Harga Terjangkau
+            </h3>
+
+            <p>
+                Paket lengkap dengan harga
+                bersahabat.
+            </p>
+
+        </div>
+
+
+        <div class="advantage-card">
+
+            <div class="advantage-icon">
+                ♧
+            </div>
+
+            <h3>
+                Layanan Pelanggan
+            </h3>
+
+            <p>
+                Siap membantu kapan saja saat
+                Anda membutuhkan.
+            </p>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+
+<!-- =====================================================
+     COVERAGE
+===================================================== -->
+
+<section class="coverage-section">
+
+    <div class="coverage-box">
+
+
+        <div class="coverage-content">
+
+            <div class="coverage-heading">
+
+                <div class="coverage-icon">
+                    ⌖
+                </div>
+
+                <div>
+
+                    <h2>
+                        Cek Coverage
+                    </h2>
+
+                    <p>
+                        Pastikan alamat Anda sudah
+                        terjangkau jaringan YesNet.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <form
+                action="coverage.php"
+                method="get"
+                class="coverage-form"
+            >
+
+                <div class="coverage-input">
+
+                    <span>
+                        ⌕
+                    </span>
+
+                    <input
+                        type="text"
+                        name="alamat"
+                        placeholder="Masukkan alamat lengkap Anda..."
+                    >
+
+                </div>
+
+
+                <button
+                    type="submit"
+                    class="coverage-button"
+                >
+
+                    ⌕
+                    Cek Sekarang
+
+                </button>
+
             </form>
-            <ol class="coverage-steps">
-                <li><b>Masukkan Alamat</b><small>Ketik alamat lengkap rumah Anda</small></li>
-                <li><b>Cek Ketersediaan</b><small>Kami akan mengecek jaringan di lokasi Anda</small></li>
-                <li><b>Pilih Paket</b><small>Dapatkan rekomendasi paket terbaik</small></li>
-            </ol>
+
+
+            <!-- COVERAGE STEPS -->
+
+            <div class="coverage-steps">
+
+                <div class="coverage-step">
+
+                    <span>
+                        1
+                    </span>
+
+                    <div>
+
+                        <strong>
+                            Masukkan Alamat
+                        </strong>
+
+                        <small>
+                            Ketik alamat lengkap rumah Anda
+                        </small>
+
+                    </div>
+
+                </div>
+
+
+                <div class="step-arrow">
+                    →
+                </div>
+
+
+                <div class="coverage-step">
+
+                    <span>
+                        2
+                    </span>
+
+                    <div>
+
+                        <strong>
+                            Cek Ketersediaan
+                        </strong>
+
+                        <small>
+                            Kami akan mengecek jaringan
+                        </small>
+
+                    </div>
+
+                </div>
+
+
+                <div class="step-arrow">
+                    →
+                </div>
+
+
+                <div class="coverage-step">
+
+                    <span>
+                        3
+                    </span>
+
+                    <div>
+
+                        <strong>
+                            Pilih Paket
+                        </strong>
+
+                        <small>
+                            Dapatkan rekomendasi paket
+                        </small>
+
+                    </div>
+
+                </div>
+
+            </div>
+
         </div>
-        <div class="coverage-art" aria-hidden="true">
-            <span class="coverage-badge">✓ Jaringan YesNet<br><small>Tersedia di Lokasi Anda</small></span>
-            <span class="coverage-pin">📍</span>
+
+
+
+        <!-- COVERAGE MAP -->
+
+        <div class="coverage-map">
+
+            <div class="map-road road-one"></div>
+
+            <div class="map-road road-two"></div>
+
+            <div class="map-road road-three"></div>
+
+
+            <div class="map-house house-a"></div>
+
+            <div class="map-house house-b"></div>
+
+            <div class="map-house house-c"></div>
+
+            <div class="map-house house-d"></div>
+
+            <div class="map-house house-e"></div>
+
+
+            <div class="map-pin">
+
+                <div>
+                    ⌖
+                </div>
+
+            </div>
+
+
+            <div class="coverage-status">
+
+                <span></span>
+
+                <div>
+
+                    <strong>
+                        Jaringan YesNet
+                    </strong>
+
+                    <small>
+                        Tersedia di Lokasi Anda
+                    </small>
+
+                </div>
+
+            </div>
+
         </div>
+
     </div>
+
 </section>
 
-<!-- ================= PAKET ================= -->
-<section id="paket" class="section">
-    <div class="section-head">
-        <span class="chip">Paket Internet</span>
-        <h2>Pilih Paket yang Sesuai dengan Kebutuhan Anda</h2>
-        <p>Berbagai pilihan paket dengan kecepatan terbaik untuk rumah, keluarga, dan bisnis.</p>
+
+
+<!-- =====================================================
+     PAKET
+===================================================== -->
+
+<section
+    id="paket"
+    class="packages-section"
+>
+
+    <div class="section-heading">
+
+        <span class="section-label">
+            Paket Internet
+        </span>
+
+        <h2>
+            Pilih Paket yang Sesuai
+            <br>
+            dengan Kebutuhan Anda
+        </h2>
+
+        <p>
+            Berbagai pilihan paket dengan
+            kecepatan terbaik untuk rumah,
+            keluarga, dan bisnis.
+        </p>
+
     </div>
-    <?php if ($pakets): ?>
-        <?= renderPaketCards($pakets, 'paket.php?mode=direct') ?>
-    <?php else: ?>
-        <p class="center muted" style="margin-top:24px">Paket belum tersedia. Silakan hubungi kami.</p>
-    <?php endif; ?>
+
+
+    <div class="packages-grid">
+
+
+        <!-- BASIC -->
+
+        <div class="package-card">
+
+            <div class="package-top">
+
+                <div class="package-icon">
+                    ▣
+                </div>
+
+                <div>
+
+                    <strong>
+                        Basic
+                    </strong>
+
+                    <small>
+                        Cocok untuk browsing dan sosmed
+                    </small>
+
+                </div>
+
+            </div>
+
+
+            <div class="package-speed">
+
+                <span>
+                    ◉
+                </span>
+
+                20 Mbps
+
+            </div>
+
+
+            <div class="package-price">
+
+                Rp 200.000
+
+                <small>
+                    /bulan
+                </small>
+
+            </div>
+
+
+            <ul>
+
+                <li>
+                    ✓ Internet Unlimited
+                </li>
+
+                <li>
+                    ✓ WiFi Router
+                </li>
+
+                <li>
+                    ✓ Instalasi Gratis
+                </li>
+
+            </ul>
+
+
+            <a
+                href="paket.php"
+                class="package-button"
+            >
+                Pilih Paket
+            </a>
+
+        </div>
+
+
+
+        <!-- FAMILY -->
+
+        <div class="package-card popular">
+
+            <div class="popular-label">
+                Paling Popular
+            </div>
+
+
+            <div class="package-top">
+
+                <div class="package-icon">
+                    ▣
+                </div>
+
+                <div>
+
+                    <strong>
+                        Family
+                    </strong>
+
+                    <small>
+                        Ideal untuk keluarga modern
+                    </small>
+
+                </div>
+
+            </div>
+
+
+            <div class="package-speed">
+
+                <span>
+                    ◉
+                </span>
+
+                50 Mbps
+
+            </div>
+
+
+            <div class="package-price">
+
+                Rp 350.000
+
+                <small>
+                    /bulan
+                </small>
+
+            </div>
+
+
+            <ul>
+
+                <li>
+                    ✓ Internet Unlimited
+                </li>
+
+                <li>
+                    ✓ WiFi Router
+                </li>
+
+                <li>
+                    ✓ Instalasi Gratis
+                </li>
+
+            </ul>
+
+
+            <a
+                href="paket.php"
+                class="package-button"
+            >
+                Pilih Paket
+            </a>
+
+        </div>
+
+
+
+        <!-- PREMIUM -->
+
+        <div class="package-card premium">
+
+            <div class="package-top">
+
+                <div class="package-icon">
+                    ◇
+                </div>
+
+                <div>
+
+                    <strong>
+                        Premium
+                    </strong>
+
+                    <small>
+                        Untuk streaming & gaming
+                    </small>
+
+                </div>
+
+            </div>
+
+
+            <div class="package-speed">
+
+                <span>
+                    ◉
+                </span>
+
+                100 Mbps
+
+            </div>
+
+
+            <div class="package-price">
+
+                Rp 500.000
+
+                <small>
+                    /bulan
+                </small>
+
+            </div>
+
+
+            <ul>
+
+                <li>
+                    ✓ Internet Unlimited
+                </li>
+
+                <li>
+                    ✓ WiFi Router
+                </li>
+
+                <li>
+                    ✓ Instalasi Gratis
+                </li>
+
+            </ul>
+
+
+            <a
+                href="paket.php"
+                class="package-button"
+            >
+                Pilih Paket
+            </a>
+
+        </div>
+
+
+
+        <!-- BUSINESS -->
+
+        <div class="package-card business">
+
+            <div class="package-top">
+
+                <div class="package-icon">
+                    ⚒
+                </div>
+
+                <div>
+
+                    <strong>
+                        Business
+                    </strong>
+
+                    <small>
+                        Solusi terbaik untuk bisnis Anda
+                    </small>
+
+                </div>
+
+            </div>
+
+
+            <div class="package-speed">
+
+                <span>
+                    ◉
+                </span>
+
+                200 Mbps
+
+            </div>
+
+
+            <div class="package-price">
+
+                Rp 750.000
+
+                <small>
+                    /bulan
+                </small>
+
+            </div>
+
+
+            <ul>
+
+                <li>
+                    ✓ Internet Unlimited
+                </li>
+
+                <li>
+                    ✓ WiFi Router
+                </li>
+
+                <li>
+                    ✓ Instalasi Gratis
+                </li>
+
+                <li>
+                    ✓ IP Publik (Opsional)
+                </li>
+
+            </ul>
+
+
+            <a
+                href="paket.php"
+                class="package-button"
+            >
+                Pilih Paket
+            </a>
+
+        </div>
+
+    </div>
+
 </section>
 
-<!-- ================= PROSES ================= -->
-<section class="section proses">
-    <div class="section-head">
-        <h2>Proses Berlangganan Mudah &amp; Cepat</h2>
-        <p>Dari pendaftaran hingga instalasi, semua bisa dilakukan dengan mudah.</p>
+
+
+<!-- =====================================================
+     PROSES BERLANGGANAN
+===================================================== -->
+
+<section class="process-section">
+
+    <div class="section-heading">
+
+        <span class="section-label">
+            Cara Berlangganan
+        </span>
+
+        <h2>
+            Proses Berlangganan
+            <br>
+            Mudah &amp; Cepat
+        </h2>
+
+        <p>
+            Dari pendaftaran hingga instalasi,
+            semua bisa dilakukan dengan mudah.
+        </p>
+
     </div>
-    <ol class="proses-list">
-        <?php foreach ([
-            ['🔍', 'Cek Coverage', 'Pastikan alamat Anda terjangkau jaringan YesNet'],
-            ['📝', 'Daftar & Pilih Paket', 'Isi data diri dan pilih paket internet yang diinginkan'],
-            ['💳', 'Lakukan Pembayaran', 'Pilih metode pembayaran yang tersedia'],
-            ['🔧', 'Instalasi & Aktivasi', 'Teknisi kami akan datang ke lokasi Anda'],
-            ['📶', 'Nikmati Internet', 'Koneksi aktif, siap digunakan sepanjang hari'],
-        ] as $i => $s): ?>
-            <li class="reveal" style="--d:<?= $i * .08 ?>s">
-                <span class="ic"><?= $s[0] ?></span>
-                <b><?= ($i + 1) . '. ' . e($s[1]) ?></b>
-                <small><?= e($s[2]) ?></small>
-            </li>
-        <?php endforeach; ?>
-    </ol>
+
+
+    <div class="process-grid">
+
+
+        <div class="process-item">
+
+            <div class="process-icon">
+                ⌕
+            </div>
+
+            <div class="process-number">
+                1
+            </div>
+
+            <h3>
+                Cek Coverage
+            </h3>
+
+            <p>
+                Pastikan alamat Anda
+                terjangkau jaringan YesNet.
+            </p>
+
+        </div>
+
+
+        <div class="process-arrow">
+            →
+        </div>
+
+
+        <div class="process-item">
+
+            <div class="process-icon">
+                ▣
+            </div>
+
+            <div class="process-number">
+                2
+            </div>
+
+            <h3>
+                Daftar &amp; Pilih Paket
+            </h3>
+
+            <p>
+                Isi data diri dan pilih
+                paket internet yang diinginkan.
+            </p>
+
+        </div>
+
+
+        <div class="process-arrow">
+            →
+        </div>
+
+
+        <div class="process-item">
+
+            <div class="process-icon">
+                ▤
+            </div>
+
+            <div class="process-number">
+                3
+            </div>
+
+            <h3>
+                Lakukan Pembayaran
+            </h3>
+
+            <p>
+                Pilih metode pembayaran
+                yang tersedia.
+            </p>
+
+        </div>
+
+
+        <div class="process-arrow">
+            →
+        </div>
+
+
+        <div class="process-item">
+
+            <div class="process-icon">
+                ⚒
+            </div>
+
+            <div class="process-number">
+                4
+            </div>
+
+            <h3>
+                Instalasi &amp; Aktivasi
+            </h3>
+
+            <p>
+                Teknisi kami akan datang
+                ke lokasi Anda.
+            </p>
+
+        </div>
+
+
+        <div class="process-arrow">
+            →
+        </div>
+
+
+        <div class="process-item">
+
+            <div class="process-icon">
+                ◉
+            </div>
+
+            <div class="process-number">
+                5
+            </div>
+
+            <h3>
+                Nikmati Internet
+            </h3>
+
+            <p>
+                Koneksi aktif dan siap
+                digunakan sepanjang hari.
+            </p>
+
+        </div>
+
+    </div>
+
 </section>
 
-<!-- ================= FOOTER ================= -->
-<footer id="kontak" class="footer">
-    <div>
-        <a href="#home" class="brand" style="color:#fff"><?= logoHtml() ?></a>
-        <p>Internet Cepat &amp; Stabil</p>
+
+
+<!-- =====================================================
+     FOOTER
+===================================================== -->
+
+<footer id="kontak">
+
+    <div class="footer-inner">
+
+
+        <div class="footer-brand">
+
+            <a
+                href="#home"
+                class="brand footer-logo"
+            >
+
+                <div class="brand-wifi">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+
+                <strong>
+                    YES<span>NET</span>
+                </strong>
+
+            </a>
+
+
+            <p>
+                Internet Cepat &amp; Stabil
+            </p>
+
+        </div>
+
+
+
+        <div class="footer-column">
+
+            <h4>
+                Tautan Cepat
+            </h4>
+
+            <a href="#home">
+                Home
+            </a>
+
+            <a href="#keunggulan">
+                Keunggulan
+            </a>
+
+            <a href="#paket">
+                Paket
+            </a>
+
+            <a href="#kontak">
+                Kontak
+            </a>
+
+        </div>
+
+
+
+        <div class="footer-column">
+
+            <h4>
+                Hubungi Kami
+            </h4>
+
+            <a href="#">
+                ☎ &nbsp; 0812 3456 7890
+            </a>
+
+            <a href="#">
+                ✉ &nbsp; cs@yesnet.my.id
+            </a>
+
+            <a href="#">
+                ⌖ &nbsp; Jl. Merdeka No. 123
+            </a>
+
+        </div>
+
+
+
+        <div class="footer-column">
+
+            <h4>
+                Ikuti Kami
+            </h4>
+
+            <div class="social-links">
+
+                <a href="#">
+                    f
+                </a>
+
+                <a href="#">
+                    ◎
+                </a>
+
+                <a href="#">
+                    ▶
+                </a>
+
+                <a href="#">
+                    ◇
+                </a>
+
+            </div>
+
+        </div>
+
     </div>
-    <div>
-        <b>Tautan Cepat</b>
-        <a href="#home">Home</a><a href="#keunggulan">Keunggulan</a><a href="#paket">Paket</a><a href="#kontak">Kontak</a>
+
+
+    <div class="footer-bottom">
+
+        <span>
+            © <?= date('Y') ?> YesNet.
+            All rights reserved.
+        </span>
+
+        <span>
+            Internet Cepat &amp; Stabil
+        </span>
+
     </div>
-    <div>
-        <b>Hubungi Kami</b>
-        <span>📞 0812 3456 7890</span>
-        <span>✉️ cs@yesnet.my.id</span>
-        <span>📍 Jl. Merdeka No. 123, Kota Anda</span>
-    </div>
-    <div class="footer-copy">© <?= date('Y') ?> YesNet. All rights reserved.</div>
+
 </footer>
 
-<script src="assets/js/landing.js"></script>
+
+
+<!-- =====================================================
+     JAVASCRIPT
+===================================================== -->
+
+<script>
+
+document.addEventListener(
+    'DOMContentLoaded',
+    function () {
+
+
+        /* =============================================
+           NAVBAR SCROLL
+        ============================================= */
+
+        const navbar =
+            document.querySelector('.navbar');
+
+        function updateNavbar() {
+
+            if (!navbar) {
+                return;
+            }
+
+            if (window.scrollY > 30) {
+
+                navbar.classList.add(
+                    'scrolled'
+                );
+
+            } else {
+
+                navbar.classList.remove(
+                    'scrolled'
+                );
+
+            }
+
+        }
+
+        window.addEventListener(
+            'scroll',
+            updateNavbar,
+            { passive: true }
+        );
+
+        updateNavbar();
+
+
+
+        /* =============================================
+           SCROLL REVEAL
+        ============================================= */
+
+        const revealElements =
+            document.querySelectorAll(
+                '.advantage-card, ' +
+                '.coverage-box, ' +
+                '.package-card, ' +
+                '.process-item'
+            );
+
+
+        if (
+            'IntersectionObserver'
+            in window
+        ) {
+
+            const observer =
+                new IntersectionObserver(
+
+                    function (entries) {
+
+                        entries.forEach(
+                            function (entry) {
+
+                                if (
+                                    entry.isIntersecting
+                                ) {
+
+                                    entry.target
+                                        .classList
+                                        .add(
+                                            'is-visible'
+                                        );
+
+                                    observer.unobserve(
+                                        entry.target
+                                    );
+
+                                }
+
+                            }
+                        );
+
+                    },
+
+                    {
+                        threshold: .12
+                    }
+
+                );
+
+
+            revealElements.forEach(
+                function (element) {
+
+                    observer.observe(
+                        element
+                    );
+
+                }
+            );
+
+        } else {
+
+            revealElements.forEach(
+                function (element) {
+
+                    element.classList.add(
+                        'is-visible'
+                    );
+
+                }
+            );
+
+        }
+
+
+
+        /* =============================================
+           SMOOTH SCROLL
+        ============================================= */
+
+        document
+            .querySelectorAll(
+                'a[href^="#"]'
+            )
+            .forEach(
+                function (link) {
+
+                    link.addEventListener(
+                        'click',
+                        function (event) {
+
+                            const targetId =
+                                this.getAttribute(
+                                    'href'
+                                );
+
+                            if (
+                                !targetId ||
+                                targetId === '#'
+                            ) {
+                                return;
+                            }
+
+
+                            const target =
+                                document.querySelector(
+                                    targetId
+                                );
+
+
+                            if (target) {
+
+                                event.preventDefault();
+
+
+                                target.scrollIntoView({
+                                    behavior: 'smooth',
+                                    block: 'start'
+                                });
+
+                            }
+
+                        }
+                    );
+
+                }
+            );
+
+
+
+        /* =============================================
+           ACTIVE NAVIGATION
+        ============================================= */
+
+        const sections =
+            document.querySelectorAll(
+                'section[id]'
+            );
+
+        const navLinks =
+            document.querySelectorAll(
+                '.nav-center a'
+            );
+
+
+        if (
+            'IntersectionObserver'
+            in window
+        ) {
+
+            const sectionObserver =
+                new IntersectionObserver(
+
+                    function (entries) {
+
+                        entries.forEach(
+                            function (entry) {
+
+                                if (
+                                    entry.isIntersecting
+                                ) {
+
+                                    navLinks
+                                        .forEach(
+                                            function (link) {
+
+                                                link.classList
+                                                    .remove(
+                                                        'active'
+                                                    );
+
+                                            }
+                                        );
+
+
+                                    const activeLink =
+                                        document.querySelector(
+                                            '.nav-center a[href="#' +
+                                            entry.target.id +
+                                            '"]'
+                                        );
+
+
+                                    if (
+                                        activeLink
+                                    ) {
+
+                                        activeLink
+                                            .classList
+                                            .add(
+                                                'active'
+                                            );
+
+                                    }
+
+                                }
+
+                            }
+                        );
+
+                    },
+
+                    {
+                        rootMargin:
+                            '-30% 0px -60% 0px'
+                    }
+
+                );
+
+
+            sections.forEach(
+                function (section) {
+
+                    sectionObserver.observe(
+                        section
+                    );
+
+                }
+            );
+
+        }
+
+    }
+
+);
+
+</script>
+
+
 </body>
 </html>
