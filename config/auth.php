@@ -283,7 +283,7 @@ function requireActiveCustomer(mysqli $conn): void
             'belum_berlangganan';
 
         header(
-            "Location: langganan.php"
+            "Location: ../paket.php?mode=direct"
         );
 
         exit;
@@ -302,7 +302,7 @@ function requireActiveCustomer(mysqli $conn): void
             'pending';
 
         header(
-            "Location: installation.php"
+            "Location: ../status_order.php"
         );
 
         exit;
@@ -400,7 +400,7 @@ function requireCustomerInstallation(mysqli $conn): void
     if ($status === 'belum_berlangganan') {
 
         header(
-            "Location: langganan.php"
+            "Location: ../paket.php?mode=direct"
         );
 
         exit;

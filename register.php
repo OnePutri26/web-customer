@@ -85,7 +85,7 @@ $username = "";
 $email = "";
 $telephone = "";
 $nik = "";
-$alamat = "";
+$alamat = (string) ($_SESSION["flow"]["alamat"] ?? "");
 
 $password = "";
 $passwordConfirm = "";
@@ -614,7 +614,7 @@ if (
             */
 
             header(
-                "Location: customer/coverage.php",
+                "Location: " . (!empty($_SESSION["flow"]["tersedia"]) ? (!empty($_SESSION["flow"]["paket_id"]) ? "verifikasi.php" : "paket.php?mode=coverage") : "coverage.php"),
                 true,
                 302
             );
