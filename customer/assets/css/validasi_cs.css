@@ -1,0 +1,269 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: #f5f7fb;
+    color: #172033;
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.page-wrapper {
+    min-height: 100vh;
+}
+
+.top-header {
+    background: #fff;
+    border-bottom: 1px solid #e6eaf0;
+}
+
+.header-container,
+.main-container,
+.footer > div {
+    width: min(1100px, calc(100% - 32px));
+    margin: 0 auto;
+}
+
+.header-container {
+    min-height: 76px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.brand,
+.header-right,
+.user-box,
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.brand {
+    color: #155eef;
+    text-decoration: none;
+    font-weight: 800;
+}
+
+.brand-icon,
+.user-avatar,
+.validation-icon,
+.process-icon {
+    display: grid;
+    place-items: center;
+    border-radius: 14px;
+    background: #eff6ff;
+    color: #155eef;
+}
+
+.brand-icon,
+.user-avatar {
+    width: 42px;
+    height: 42px;
+}
+
+.brand-text,
+.user-info {
+    display: grid;
+    gap: 3px;
+}
+
+.user-info span,
+.page-label,
+.step-content span,
+.intro,
+.info-item span,
+.footer {
+    color: #667085;
+}
+
+.logout-btn,
+.back-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border: 1px solid #d0d5dd;
+    border-radius: 10px;
+    color: #344054;
+    background: #fff;
+    text-decoration: none;
+    font-weight: 700;
+}
+
+.main-container {
+    padding: 36px 0;
+}
+
+.progress-wrapper {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    margin-bottom: 28px;
+}
+
+.step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 220px;
+}
+
+.step-number {
+    display: grid;
+    place-items: center;
+    flex: 0 0 36px;
+    height: 36px;
+    border: 1px solid #d0d5dd;
+    border-radius: 50%;
+    background: #fff;
+}
+
+.step.completed .step-number,
+.step.current .step-number {
+    border-color: #155eef;
+    color: #fff;
+    background: #155eef;
+}
+
+.step-content {
+    display: grid;
+    gap: 3px;
+    font-size: 13px;
+}
+
+.step-line {
+    width: clamp(16px, 5vw, 70px);
+    height: 2px;
+    margin: 17px 10px 0;
+    background: #d0d5dd;
+}
+
+.step-line.active {
+    background: #155eef;
+}
+
+.validation-card {
+    max-width: 850px;
+    margin: 0 auto;
+    padding: clamp(20px, 4vw, 36px);
+    border: 1px solid #e6eaf0;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 10px 35px rgba(16, 24, 40, .07);
+}
+
+.validation-icon,
+.process-icon {
+    width: 54px;
+    height: 54px;
+    font-size: 24px;
+}
+
+.status-badge {
+    display: inline-flex;
+    margin: 12px 0;
+    padding: 7px 11px;
+    border-radius: 999px;
+    color: #175cd3;
+    background: #eff8ff;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.section-box,
+.process-box,
+.address-box {
+    margin-top: 20px;
+    padding: 18px;
+    border: 1px solid #e6eaf0;
+    border-radius: 12px;
+    background: #fff;
+}
+
+.section-heading {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 14px;
+    font-weight: 700;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.info-item {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+}
+
+.info-item strong,
+.address-box,
+.package-summary {
+    overflow-wrap: anywhere;
+}
+
+.package-summary {
+    padding: 14px;
+    border-radius: 10px;
+    background: #f8fafc;
+}
+
+.success-text {
+    color: #039855;
+}
+
+.location-info {
+    margin-top: 10px;
+    color: #667085;
+}
+
+.process-box {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: #f8fafc;
+}
+
+.actions {
+    justify-content: flex-start;
+    margin-top: 22px;
+}
+
+.footer {
+    padding: 20px 0;
+    text-align: center;
+    font-size: 12px;
+}
+
+@media (max-width: 640px) {
+    .header-container {
+        flex-wrap: wrap;
+        padding: 12px 0;
+    }
+
+    .header-right {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .progress-wrapper {
+        justify-content: flex-start;
+        overflow-x: auto;
+    }
+
+    .step {
+        min-width: max-content;
+    }
+
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+}

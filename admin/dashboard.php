@@ -20,7 +20,7 @@ if ($result) {
 $result = $conn->query("
     SELECT COUNT(*) AS total
     FROM customers
-    WHERE status_langganan = 'aktif'
+    WHERE LOWER(status_langganan) IN ('aktif', 'active')
 ");
 
 if ($result) {
@@ -43,11 +43,8 @@ if ($result) {
 
 $result = $conn->query("
     SELECT COALESCE(SUM(jumlah), 0) AS total
-    FROM invoices
-    WHERE status IN (
-        'belum_bayar',
-        'terlambat'
-    )
+    FROM tagihan
+    WHERE status IN ('unpaid', 'pending')
 ");
 
 if ($result) {
@@ -197,49 +194,49 @@ if ($result) {
             <div class="list-group shadow-sm">
 
                 <a
-                    href="pelanggan/index.php"
+                    href="overview.php?section=customers"
                     class="list-group-item list-group-item-action"
                 >
                     👥 Pelanggan
                 </a>
 
                 <a
-                    href="paket/index.php"
+                    href="overview.php?section=packages"
                     class="list-group-item list-group-item-action"
                 >
                     📦 Paket Internet
                 </a>
 
                 <a
-                    href="tagihan/index.php"
+                    href="overview.php?section=invoices"
                     class="list-group-item list-group-item-action"
                 >
                     🧾 Tagihan
                 </a>
 
                 <a
-                    href="pembayaran/index.php"
+                    href="overview.php?section=payments"
                     class="list-group-item list-group-item-action"
                 >
                     💳 Pembayaran
                 </a>
 
                 <a
-                    href="pengaduan/index.php"
+                    href="complaints.php"
                     class="list-group-item list-group-item-action"
                 >
                     🛠 Pengaduan
                 </a>
 
                 <a
-                    href="teknisi/index.php"
+                    href="overview.php?section=technicians"
                     class="list-group-item list-group-item-action"
                 >
                     👷 Teknisi
                 </a>
 
                 <a
-                    href="jaringan/area.php"
+                    href="overview.php?section=network"
                     class="list-group-item list-group-item-action"
                 >
                     🌐 Jaringan

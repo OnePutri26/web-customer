@@ -9,6 +9,9 @@ if (
     !isset($_SESSION['role']) ||
     $_SESSION['role'] !== 'admin'
 ) {
-    header("Location: login.php");
+    $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+    $adminPosition = strpos($scriptName, '/admin/');
+    $basePath = $adminPosition === false ? '' : substr($scriptName, 0, $adminPosition);
+    header('Location: ' . $basePath . '/admin/login.php');
     exit;
 }

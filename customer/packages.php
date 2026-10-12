@@ -398,7 +398,7 @@ unset($_SESSION['flash_error']);
 
     <link
         rel="stylesheet"
-        href="../assets/css/packages.css?v=1.1"
+        href="assets/css/packages.css?v=1.1"
     >
 
 </head>

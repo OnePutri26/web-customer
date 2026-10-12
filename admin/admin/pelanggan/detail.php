@@ -1,7 +1,7 @@
 <?php
 
-require_once "../auth_check.php";
-require_once "../../config/database.php";
+require_once __DIR__ . "/../../auth_check.php";
+require_once __DIR__ . "/../../../config/database.php";
 
 $id = filter_input(
     INPUT_GET,
@@ -220,7 +220,7 @@ Rp <?= number_format(
 </table>
 
 <a
-href="index.php"
+href="../../dashboard.php"
 class="btn btn-secondary"
 >
 Kembali

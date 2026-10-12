@@ -15,7 +15,7 @@ $email = trim((string) ($_POST['email'] ?? ''));
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_ok()) {
         $error = 'Sesi kedaluwarsa. Muat ulang halaman lalu coba lagi.';
-    } elseif (mb_strlen($nama) < 3) {
+    } elseif (preg_match_all('/./us', $nama) < 3) {
         $error = 'Nama lengkap minimal 3 karakter.';
     } elseif (!preg_match('/^[0-9+\-\s]{9,20}$/', $telp)) {
         $error = 'Nomor WhatsApp tidak valid.';

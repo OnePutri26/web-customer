@@ -116,7 +116,7 @@ $subscriptionStatus = $subscription['status'] ?? null;
 
             <?php else: ?>
 
-                <a href="installation_status.php" class="btn-primary">
+                <a href="../status_order.php" class="btn-primary">
                     <i class="bi bi-clipboard2-check"></i> Lihat Status Pemasangan
                 </a>
 

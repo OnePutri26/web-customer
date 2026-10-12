@@ -171,12 +171,9 @@ if ($nama === '') {
 
 
 $initial = strtoupper(
-    mb_substr(
-        $nama,
-        0,
-        1,
-        'UTF-8'
-    )
+    preg_match('/^./us', $nama, $initialMatch) === 1
+        ? $initialMatch[0]
+        : '?'
 );
 
 
@@ -356,7 +353,7 @@ $stmtComplaint->close();
 
     <link
         rel="stylesheet"
-        href="/dashboard/web-customer/assets/css/complaint.css?v=10"
+        href="assets/css/complaint.css?v=10"
     >
 
 </head>

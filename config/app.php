@@ -11,13 +11,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 date_default_timezone_set('Asia/Jakarta');
 require_once __DIR__ . '/database.php';
-
-/*
-| PAYMENT_DEMO = true  -> pembayaran disimulasikan (ada pilihan Berhasil/Gagal)
-|                         dan tahap instalasi bisa disimulasikan di status_order.php.
-| Ubah ke false saat Midtrans sudah dipasang (lihat config/midtrans.php).
-*/
-const PAYMENT_DEMO = true;
+require_once __DIR__ . '/settings.php';
 
 function e($v): string
 {

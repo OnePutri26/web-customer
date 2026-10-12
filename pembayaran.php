@@ -61,15 +61,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $pilih = (string) ($_POST['metode'] ?? '');
     if (!csrf_ok()) {
         $error = 'Sesi kedaluwarsa. Muat ulang halaman.';
+    } elseif (!PAYMENT_DEMO) {
+        $error = 'Pembayaran online belum dikonfigurasi. Silakan hubungi tim YesNet.';
     } elseif (!in_array($pilih, $metode, true)) {
         $error = 'Pilih metode pembayaran.';
+    } elseif (!in_array($_POST['hasil'] ?? '', ['berhasil', 'gagal'], true)) {
+        $error = 'Hasil pembayaran tidak valid.';
     } else {
         /*
         | MODE DEMO: hasil ditentukan dari pilihan "Simulasi hasil".
         | Untuk Midtrans: buat Snap token di sini, simpan midtrans_order_id,
         | dan biarkan customer/payment_webhook.php yang mengubah status.
         */
-        $berhasil = !PAYMENT_DEMO || (($_POST['hasil'] ?? 'berhasil') === 'berhasil');
+        $berhasil = $_POST['hasil'] === 'berhasil';
         $statusBayar = $berhasil ? 'success' : 'failed';
         $trx = $berhasil ? 'settlement' : 'deny';
         $noBayar = nomor('PAY');
@@ -116,23 +120,25 @@ require __DIR__ . '/inc/header.php';
     <div class="sum"><span>Jatuh tempo</span><b><?= e(date('d M Y', strtotime($tg['jatuh_tempo']))) ?></b></div>
     <div class="sum"><span>Total</span><b style="font-size:18px;color:var(--blue)"><?= rupiah($tg['jumlah']) ?></b></div>
 
-    <form method="post" id="payForm">
-        <?= csrf_field() ?>
-        <label>Metode pembayaran</label>
-        <div class="pay-grid">
-            <?php foreach ($metode as $i => $m): ?>
-                <label class="pay-opt"><input type="radio" name="metode" value="<?= e($m) ?>" <?= $i === 0 ? 'checked' : '' ?>><?= e($m) ?></label>
-            <?php endforeach; ?>
-        </div>
-        <?php if (PAYMENT_DEMO): ?>
+    <?php if (PAYMENT_DEMO): ?>
+        <form method="post" id="payForm">
+            <?= csrf_field() ?>
+            <label>Metode pembayaran</label>
+            <div class="pay-grid">
+                <?php foreach ($metode as $i => $m): ?>
+                    <label class="pay-opt"><input type="radio" name="metode" value="<?= e($m) ?>" <?= $i === 0 ? 'checked' : '' ?>><?= e($m) ?></label>
+                <?php endforeach; ?>
+            </div>
             <label>Simulasi hasil (mode demo)</label>
             <div class="pay-grid">
                 <label class="pay-opt"><input type="radio" name="hasil" value="berhasil" checked>Berhasil</label>
                 <label class="pay-opt"><input type="radio" name="hasil" value="gagal">Gagal</label>
             </div>
-        <?php endif; ?>
-        <button class="btn btn-primary btn-block" type="submit" style="margin-top:22px">Bayar <?= rupiah($tg['jumlah']) ?></button>
-    </form>
+            <button class="btn btn-primary btn-block" type="submit" style="margin-top:22px">Bayar <?= rupiah($tg['jumlah']) ?></button>
+        </form>
+    <?php else: ?>
+        <div class="alert warn" role="status">Pembayaran online belum dikonfigurasi. Pembayaran tidak akan dicatat sebagai berhasil.</div>
+    <?php endif; ?>
 </div>
 <script>
 document.getElementById('payForm').addEventListener('submit',function(){

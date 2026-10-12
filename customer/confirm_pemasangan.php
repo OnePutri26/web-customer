@@ -617,7 +617,7 @@ $isAlreadyConfirmed =
 
     <link
         rel="stylesheet"
-        href="../assets/css/confirm_pemasangan.css"
+        href="assets/css/confirm_pemasangan.css"
     >
 
 </head>

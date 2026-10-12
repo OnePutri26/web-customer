@@ -4,12 +4,18 @@ session_start();
 
 require_once "../config/database.php";
 require_once "../config/auth.php";
+require_once __DIR__ . '/../config/settings.php';
 
 requireActiveCustomer($conn);
 
 date_default_timezone_set('Asia/Jakarta');
 
 requireRole('customer');
+
+if (!PAYMENT_DEMO) {
+    http_response_code(503);
+    exit('Pembayaran online belum dikonfigurasi. Silakan hubungi tim YesNet.');
+}
 
 
 /*

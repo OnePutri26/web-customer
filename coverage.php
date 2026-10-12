@@ -7,20 +7,20 @@ session_start();
 |--------------------------------------------------------------------------
 | Load konfigurasi utama
 |--------------------------------------------------------------------------
-| Karena file ini berada di:
-| /var/www/html/customer/coverage.php
-|
-| sedangkan config berada di:
-| /var/www/html/config/app.php
+| File coverage.php dan direktori config berada di root project yang sama.
 */
-require_once __DIR__ . '/../config/app.php';
+require_once __DIR__ . '/config/app.php';
 
 $error = '';
 
 $alamat = trim((string) ($_GET['alamat'] ?? ''));
+$addressLength = static function (string $value): int {
+    $length = preg_match_all('/./us', $value);
+    return $length === false ? 0 : $length;
+};
 
 $auto = isset($_GET['auto'])
-    && mb_strlen($alamat) >= 10;
+    && $addressLength($alamat) >= 10;
 
 
 /*
@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $error = 'Sesi kedaluwarsa. Muat ulang halaman lalu coba lagi.';
 
-    } elseif (mb_strlen($alamat) < 10) {
+    } elseif ($addressLength($alamat) < 10) {
 
         $error = 'Masukkan alamat lengkap minimal 10 karakter.';
 
@@ -140,27 +140,13 @@ if (!function_exists('e')) {
 
 
 $pageTitle = 'Cek Coverage';
-$step = 0;
 
 
 /*
 |--------------------------------------------------------------------------
-| Header
+| Header halaman standalone
 |--------------------------------------------------------------------------
 */
-$headerFile = __DIR__ . '/../inc/header.php';
-
-if (file_exists($headerFile)) {
-
-    require $headerFile;
-
-} else {
-
-    /*
-    |--------------------------------------------------------------------------
-    | Fallback header
-    |--------------------------------------------------------------------------
-    */
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -172,7 +158,7 @@ if (file_exists($headerFile)) {
 
     <link
         rel="stylesheet"
-        href="../assets/css/coverage.css?v=1.0"
+        href="assets/css/coverage.css?v=1.0"
     >
 </head>
 
@@ -182,22 +168,17 @@ if (file_exists($headerFile)) {
 
     <div class="container">
 
-        <a href="../index.php" class="logo">
+        <a href="index.php" class="logo">
             YES<span>NET</span>
         </a>
 
-        <a href="../index.php" class="back-link">
+        <a href="index.php" class="back-link">
             ← Kembali
         </a>
 
     </div>
 
 </header>
-
-<?php
-}
-?>
-
 
 <main class="coverage-page">
 
@@ -326,20 +307,7 @@ if (file_exists($headerFile)) {
 </main>
 
 
-<script src="../assets/js/cek-coverage.js"></script>
-
-
-<?php
-
-$footerFile = __DIR__ . '/../inc/footer.php';
-
-if (file_exists($footerFile)) {
-
-    require $footerFile;
-
-} else {
-
-?>
+<script src="assets/js/cek-coverage.js"></script>
 
 <footer class="simple-footer">
 
@@ -351,7 +319,3 @@ if (file_exists($footerFile)) {
 
 </body>
 </html>
-
-<?php
-}
-?>

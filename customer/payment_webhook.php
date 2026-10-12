@@ -10,6 +10,12 @@ mysqli_report(
     MYSQLI_REPORT_STRICT
 );
 
+if (!MIDTRANS_CONFIGURED) {
+    http_response_code(503);
+    echo "Payment notifications are not configured";
+    exit;
+}
+
 
 /*
 |--------------------------------------------------------------------------

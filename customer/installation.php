@@ -121,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_installation']
 
             mysqli_commit($conn);
 
-            header("Location: installation_status.php");
+            header("Location: validasi_cs.php");
             exit;
 
         } catch (Exception $e) {

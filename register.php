@@ -164,7 +164,7 @@ if (
             "Nama lengkap wajib diisi.";
 
     } elseif (
-        mb_strlen($nama) < 3
+        preg_match_all('/./us', $nama) < 3
     ) {
 
         $error =
@@ -603,18 +603,8 @@ if (
                 $statusLangganan;
 
 
-            /*
-            |--------------------------------------------------------------------------
-            | REDIRECT SETELAH REGISTRASI
-            |--------------------------------------------------------------------------
-            |
-            | PENTING:
-            | coverage.php berada di folder customer/
-            |
-            */
-
             header(
-                "Location: customer/coverage.php",
+                "Location: coverage.php",
                 true,
                 302
             );

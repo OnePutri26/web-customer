@@ -1,7 +1,7 @@
 <?php
 
-require_once "../auth_check.php";
-require_once "../../config/database.php";
+require_once __DIR__ . "/../../../auth_check.php";
+require_once __DIR__ . "/../../../../config/database.php";
 
 $sql = "
     SELECT

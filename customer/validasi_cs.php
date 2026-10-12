@@ -339,7 +339,7 @@ $initial = strtoupper(
 
     <link
         rel="stylesheet"
-        href="../assets/css/validasi_cs.css?v=1.0"
+        href="assets/css/validasi_cs.css?v=1.0"
     >
 
 </head>
