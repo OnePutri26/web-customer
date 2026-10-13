@@ -2,6 +2,11 @@
     box-sizing: border-box;
 }
 
+/* Pastikan atribut hidden selalu menyembunyikan elemen (tombol GPS) */
+[hidden] {
+    display: none !important;
+}
+
 html,
 body {
     margin: 0;
@@ -194,10 +199,20 @@ label {
     line-height: 1.5;
 }
 
+/* Area pesan status: tinggi tetap agar form tidak melompat saat teks muncul */
+#covInfo {
+    min-height: 20px;
+    margin: 10px 0 0;
+}
+
 
 /* BUTTON */
 
 .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
     min-height: 48px;
 
     padding: 0 20px;
@@ -212,6 +227,7 @@ label {
     font-family: inherit;
     font-size: 14px;
     font-weight: 700;
+    text-decoration: none;
 
     cursor: pointer;
 
@@ -228,6 +244,11 @@ label {
         0 5px 15px rgba(16, 24, 40, .08);
 }
 
+.btn:focus-visible {
+    outline: 3px solid rgba(22, 119, 255, .35);
+    outline-offset: 2px;
+}
+
 .btn-primary {
     background: #1677ff;
     border-color: #1677ff;
@@ -239,7 +260,22 @@ label {
     background: #0969e8;
 }
 
+/* Tombol nonaktif (saat form sedang dikirim) */
+.btn:disabled,
+.btn[disabled] {
+    opacity: .65;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.btn-primary:disabled,
+.btn-primary[disabled] {
+    background: #1677ff;
+}
+
 .btn-block {
+    display: flex;
     width: 100%;
     margin-top: 14px;
 }
@@ -329,6 +365,19 @@ label {
     to {
         opacity: 1;
         transform: translateY(0);
+    }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .enter {
+        animation: none;
+    }
+
+    .btn,
+    .in {
+        transition: none;
     }
 
 }
