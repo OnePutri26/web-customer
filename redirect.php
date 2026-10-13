@@ -1,35 +1,15 @@
 <?php
 
-session_start();
+require_once __DIR__ . '/config/auth.php';
 
-// User belum login
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit;
+if ((int) ($_SESSION['user_id'] ?? 0) <= 0) {
+    appRedirect('login.php');
 }
 
-$role = $_SESSION['role'] ?? '';
+require_once __DIR__ . '/config/database.php';
 
-switch ($role) {
-
-    // Admin
-    case 'admin':
-        header("Location: admin/dashboard.php");
-        exit;
-
-    // Teknisi
-    case 'teknisi':
-        header("Location: teknisi/dashboard.php");
-        exit;
-
-    // Customer
-    case 'customer':
-        header("Location: customer/dashboard.php");
-        exit;
-
-    // Role tidak dikenal
-    default:
-        session_destroy();
-        header("Location: login.php");
-        exit;
-}
+redirectRoleHome(
+    $conn,
+    (string) ($_SESSION['role'] ?? ''),
+    (int) $_SESSION['user_id']
+);

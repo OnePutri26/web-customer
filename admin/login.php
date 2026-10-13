@@ -3,17 +3,31 @@
 session_start();
 
 require_once "../config/database.php";
+require_once "../config/auth.php";
 
-if (
-    isset($_SESSION['user_id']) &&
-    isset($_SESSION['role']) &&
-    $_SESSION['role'] === 'admin'
-) {
-    header("Location: dashboard.php");
-    exit;
+$error = (string) ($_SESSION['login_error'] ?? '');
+unset($_SESSION['login_error']);
+
+if (isset($_SESSION['user_id'], $_SESSION['role'])) {
+    $existingUserId = (int) $_SESSION['user_id'];
+    $stmt = $conn->prepare('SELECT role, status FROM users WHERE id = ? LIMIT 1');
+    $stmt->bind_param('i', $existingUserId);
+    $stmt->execute();
+    $existingUser = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (
+        $existingUser &&
+        normalizeAuthRole($existingUser['role'] ?? '') === 'admin' &&
+        in_array(strtolower(trim((string) ($existingUser['status'] ?? ''))), ['1', 'active', 'aktif'], true)
+    ) {
+        header('Location: dashboard.php');
+        exit;
+    }
+
+    $_SESSION = [];
+    session_regenerate_id(true);
 }
-
-$error = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 

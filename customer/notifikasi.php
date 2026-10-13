@@ -3,6 +3,7 @@ session_start();
 
 require_once "../config/database.php";
 require_once "../config/auth.php";
+requireRole('customer');
 
 /*
 |--------------------------------------------------------------------------
@@ -13,31 +14,13 @@ require_once "../config/auth.php";
 |--------------------------------------------------------------------------
 */
 
-$userId = 0;
-
-if (isset($_SESSION['id_user'])) {
-    $userId = (int) $_SESSION['id_user'];
-} elseif (isset($_SESSION['id_user'])) {
-    $userId = (int) $_SESSION['id_user'];
-}
+$userId = (int) ($_SESSION['user_id'] ?? 0);
 
 /*
 |--------------------------------------------------------------------------
 | CEK ROLE
 |--------------------------------------------------------------------------
 */
-
-$sessionRole = $_SESSION['role'] ?? $_SESSION['user_role'] ?? '';
-
-if ($userId <= 0) {
-    header("Location: ../login.php");
-    exit;
-}
-
-if ($sessionRole !== '' && strtolower($sessionRole) !== 'customer') {
-    header("Location: ../login.php");
-    exit;
-}
 
 /*
 |--------------------------------------------------------------------------
@@ -47,33 +30,26 @@ if ($sessionRole !== '' && strtolower($sessionRole) !== 'customer') {
 
 $customerName = "Customer";
 
-$customerStmt = mysqli_prepare(
-    $conn,
-    "SELECT nama FROM customers WHERE id_user = ? LIMIT 1"
+$customerStmt = $conn->prepare(
+    "SELECT nama FROM customers WHERE user_id = ? LIMIT 1"
 );
 
 if ($customerStmt) {
 
-    mysqli_stmt_bind_param(
-        $customerStmt,
-        "i",
-        $userId
-    );
+    $customerStmt->bind_param('i', $userId);
+    $customerStmt->execute();
+    $customerResult = $customerStmt->get_result();
 
-    mysqli_stmt_execute($customerStmt);
+    if ($customerResult && $customerResult->num_rows > 0) {
 
-    $customerResult = mysqli_stmt_get_result($customerStmt);
-
-    if ($customerResult && mysqli_num_rows($customerResult) > 0) {
-
-        $customerData = mysqli_fetch_assoc($customerResult);
+        $customerData = $customerResult->fetch_assoc();
 
         if (!empty($customerData['nama'])) {
             $customerName = $customerData['nama'];
         }
     }
 
-    mysqli_stmt_close($customerStmt);
+    $customerStmt->close();
 }
 
 /*

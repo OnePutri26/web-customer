@@ -1,6 +1,6 @@
 <?php
 session_start();
-$loginUrl = !empty($_SESSION['customer_id']) ? 'dashboard.php' : 'login.php';
+$loginUrl = !empty($_SESSION['user_id']) ? 'redirect.php' : 'login.php';
 
 $paket = [
     ['basic',   'Basic',    'Cocok untuk browsing dan sosmed',  20,  '200.000', 'box',  ''],

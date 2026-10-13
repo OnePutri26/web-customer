@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/config/app.php';
+requireRole('customer');
 
 if (!isCustomer()) {
     redirect('login.php');

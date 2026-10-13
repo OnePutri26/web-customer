@@ -24,6 +24,6 @@ if (ini_get("session.use_cookies")) {
 // Hancurkan session
 session_destroy();
 
-// Kembali ke login
-header("Location: login.php");
+// Kembali ke beranda
+header("Location: index.php");
 exit;

@@ -10,8 +10,6 @@ requireActiveCustomer($conn);
 
 date_default_timezone_set('Asia/Jakarta');
 
-requireRole('customer');
-
 if (!PAYMENT_DEMO) {
     http_response_code(503);
     exit('Pembayaran online belum dikonfigurasi. Silakan hubungi tim YesNet.');

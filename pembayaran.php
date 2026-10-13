@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/config/app.php';
+requireRole('customer');
 
 /*
 | Masuk lewat:

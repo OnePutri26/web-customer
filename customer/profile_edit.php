@@ -2,12 +2,9 @@
 
 session_start();
 require_once '../config/database.php';
+require_once '../config/auth.php';
 
-// Pastikan user sudah login
-if (!isset($_SESSION['user_id'])) {
-    header("Location: ../login.php");
-    exit;
-}
+requireRole('customer');
 
 $user_id = $_SESSION['user_id'];
 

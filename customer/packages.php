@@ -8,6 +8,11 @@ require_once __DIR__ . "/../config/database.php";
 require_once __DIR__ . "/../config/auth.php";
 
 requireRole('customer');
+$routingState = customerRoutingState($conn, (int) $_SESSION['user_id']);
+$routingTarget = customerRedirectPath($routingState);
+if ($routingTarget !== 'customer/packages.php') {
+    appRedirect($routingTarget);
+}
 
 
 /*
@@ -228,46 +233,6 @@ $statusLangganan = strtolower(
         )
     )
 );
-
-
-/*
-|--------------------------------------------------------------------------
-| JIKA SUDAH AKTIF
-|--------------------------------------------------------------------------
-*/
-
-if (
-    in_array(
-        $statusLangganan,
-        ['aktif', 'active', '1'],
-        true
-    )
-) {
-    header("Location: dashboard.php");
-    exit;
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| JIKA SUDAH MENUNGGU PEMBAYARAN
-|--------------------------------------------------------------------------
-*/
-
-if (
-    in_array(
-        $statusLangganan,
-        [
-            'menunggu_pembayaran',
-            'pending_pembayaran',
-            'pending_payment'
-        ],
-        true
-    )
-) {
-    header("Location: payment.php");
-    exit;
-}
 
 
 /*

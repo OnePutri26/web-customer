@@ -4,18 +4,9 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-if (empty($_SESSION['user_id'])) {
-    header('Location: ../login.php');
-    exit;
-}
-
-$role = strtolower((string) ($_SESSION['role'] ?? ''));
-if (!in_array($role, ['teknisi', 'technician'], true)) {
-    http_response_code(403);
-    exit('Akses hanya untuk teknisi.');
-}
-
 require_once __DIR__ . '/../config/app.php';
+require_once __DIR__ . '/../config/auth.php';
+requireRole('teknisi');
 
 $namaTeknisi = trim((string) ($_SESSION['nama'] ?? ''));
 if ($namaTeknisi === '') {
