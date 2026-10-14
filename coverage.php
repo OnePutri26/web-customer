@@ -94,6 +94,7 @@ if (!function_exists('e')) {
 }
 
 $error = '';
+$serviceError = false;
 
 $alamat = trim((string) ($_GET['alamat'] ?? ''));
 
@@ -117,6 +118,8 @@ $parseCoord = static function ($raw, float $min, float $max): ?float {
 };
 
 $auto = isset($_GET['auto']) && $addressLength($alamat) >= 10;
+$lat = null;
+$lng = null;
 
 
 /*
@@ -180,7 +183,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Detail error hanya ke log server, bukan ke customer.
             error_log('Coverage error: ' . $e->getMessage());
 
-            $error = 'Pengecekan coverage gagal diproses. Silakan coba lagi.';
+            $serviceError = true;
+            $error = 'Layanan pengecekan coverage sedang mengalami gangguan. Alamat Anda belum dapat diperiksa.';
         }
     }
 }
@@ -264,8 +268,8 @@ $assetUrl = static function (string $relative) use ($baseDir): string {
                 }
                 ?>
 
-                <input type="hidden" name="latitude" id="latitude" value="">
-                <input type="hidden" name="longitude" id="longitude" value="">
+                <input type="hidden" name="latitude" id="latitude" value="<?= e($lat ?? '') ?>">
+                <input type="hidden" name="longitude" id="longitude" value="<?= e($lng ?? '') ?>">
 
                 <label for="alamat">Alamat lengkap</label>
 
@@ -285,7 +289,7 @@ $assetUrl = static function (string $relative) use ($baseDir): string {
                     type="submit"
                     id="covSubmit"
                 >
-                    Cek Ketersediaan
+                    <?= $serviceError ? 'Coba Lagi' : 'Cek Ketersediaan' ?>
                 </button>
 
                 <button class="btn btn-block" type="button" id="covGps" hidden>

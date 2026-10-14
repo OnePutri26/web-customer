@@ -35,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $conn->prepare("
                     UPDATE coverage_expansion_requests
                     SET status = ?, catatan_teknisi = ?, surveyed_by = ?, surveyed_at = NOW()
-                    WHERE id = ? AND status = 'survei'
+                    WHERE id = ? AND status = 'perlu_survei'
                 ");
                 $stmt->bind_param('ssii', $decision, $surveyNote, $technicianId, $coverageRequestId);
                 $stmt->execute();
@@ -132,7 +132,7 @@ $coverageRequests = $conn->query("
     SELECT id, nomor_pengajuan, nama, telepon, email, alamat, latitude, longitude,
            catatan, status, created_at
     FROM coverage_expansion_requests
-    WHERE status = 'survei'
+    WHERE status = 'perlu_survei'
     ORDER BY created_at ASC
 ");
 

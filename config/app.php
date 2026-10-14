@@ -128,8 +128,24 @@ function cekCoverage(mysqli $conn, string $alamat, ?float $lat, ?float $lng): ar
 
     if ($lat !== null && $lng !== null) {
         $best = null;
-        $res = $conn->query('SELECT id, nama_odp, latitude, longitude, radius FROM odp');
+        $res = $conn->query('SELECT * FROM odp');
         while ($o = $res->fetch_assoc()) {
+            if (array_key_exists('status', $o)) {
+                $odpStatus = strtolower(trim((string) $o['status']));
+                if ($odpStatus !== '' && !in_array($odpStatus, ['aktif', 'active', '1', 'tersedia', 'available'], true)) {
+                    continue;
+                }
+            }
+
+            if (
+                !isset($o['id'], $o['nama_odp'], $o['latitude'], $o['longitude'], $o['radius'])
+                || !is_numeric($o['latitude'])
+                || !is_numeric($o['longitude'])
+                || !is_numeric($o['radius'])
+            ) {
+                continue;
+            }
+
             $j = hitungJarakKm($lat, $lng, (float) $o['latitude'], (float) $o['longitude']);
             if ($j <= (float) $o['radius'] && ($best === null || $j < $best['jarak'])) {
                 $best = ['odp_id' => (int) $o['id'], 'odp' => $o['nama_odp'], 'jarak' => round($j, 3)];
@@ -141,7 +157,13 @@ function cekCoverage(mysqli $conn, string $alamat, ?float $lat, ?float $lng): ar
     }
 
     // Cadangan: alamat memuat nama area jaringan yang aktif
-    $st = $conn->prepare("SELECT nama_area FROM network_areas WHERE status <> 'maintenance' AND ? LIKE CONCAT('%', nama_area, '%') LIMIT 1");
+    $st = $conn->prepare("
+        SELECT nama_area
+        FROM network_areas
+        WHERE LOWER(TRIM(status)) NOT IN ('maintenance', 'inactive', 'nonaktif', 'non-aktif', 'disabled', '0')
+          AND ? LIKE CONCAT('%', nama_area, '%')
+        LIMIT 1
+    ");
     $st->bind_param('s', $alamat);
     $st->execute();
     $area = $st->get_result()->fetch_assoc();

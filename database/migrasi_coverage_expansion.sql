@@ -1,5 +1,5 @@
--- Coverage expansion request workflow for YesNet.
--- Run against wifi_management before deploying the related PHP changes.
+-- Run once against wifi_management after taking a database backup.
+-- Keeps the existing coverage_expansion_requests table and its submitted data.
 
 CREATE TABLE IF NOT EXISTS `coverage_expansion_requests` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
@@ -9,11 +9,15 @@ CREATE TABLE IF NOT EXISTS `coverage_expansion_requests` (
   `telepon` varchar(20) NOT NULL,
   `email` varchar(120) DEFAULT NULL,
   `alamat` text NOT NULL,
+  `kelurahan` varchar(150) DEFAULT NULL,
+  `kecamatan` varchar(150) DEFAULT NULL,
+  `patokan` varchar(150) DEFAULT NULL,
   `latitude` decimal(10,7) DEFAULT NULL,
   `longitude` decimal(10,7) DEFAULT NULL,
-  `catatan` varchar(500) DEFAULT NULL,
-  `status` enum('menunggu','evaluasi','survei','disetujui','ditolak','tersedia','selesai') NOT NULL DEFAULT 'menunggu',
-  `catatan_admin` varchar(500) DEFAULT NULL,
+  `maps_url` varchar(500) DEFAULT NULL,
+  `catatan` varchar(1000) DEFAULT NULL,
+  `status` enum('menunggu','perlu_survei','dalam_perencanaan','terjadwal','disetujui','ditolak') NOT NULL DEFAULT 'menunggu',
+  `catatan_admin` varchar(1000) DEFAULT NULL,
   `catatan_teknisi` varchar(500) DEFAULT NULL,
   `reviewed_by` int(10) unsigned DEFAULT NULL,
   `surveyed_by` int(10) unsigned DEFAULT NULL,
@@ -28,16 +32,41 @@ CREATE TABLE IF NOT EXISTS `coverage_expansion_requests` (
   KEY `idx_coverage_expansion_contact` (`telepon`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Upgrade tables created by earlier coverage_hasil.php versions.
+-- Add fields to tables created by earlier releases of coverage_hasil.php.
 ALTER TABLE `coverage_expansion_requests`
-  MODIFY `status` enum('menunggu','evaluasi','survei','disetujui','ditolak','tersedia','selesai') NOT NULL DEFAULT 'menunggu',
-  ADD COLUMN IF NOT EXISTS `catatan_teknisi` varchar(500) DEFAULT NULL AFTER `catatan_admin`,
-  ADD COLUMN IF NOT EXISTS `reviewed_by` int(10) unsigned DEFAULT NULL AFTER `catatan_teknisi`,
-  ADD COLUMN IF NOT EXISTS `surveyed_by` int(10) unsigned DEFAULT NULL AFTER `reviewed_by`,
-  ADD COLUMN IF NOT EXISTS `network_available` tinyint(1) NOT NULL DEFAULT 0 AFTER `surveyed_by`,
-  ADD COLUMN IF NOT EXISTS `surveyed_at` datetime DEFAULT NULL AFTER `updated_at`,
-  ADD COLUMN IF NOT EXISTS `network_ready_at` datetime DEFAULT NULL AFTER `surveyed_at`;
+  ADD COLUMN IF NOT EXISTS `kelurahan` varchar(150) DEFAULT NULL AFTER `alamat`,
+  ADD COLUMN IF NOT EXISTS `kecamatan` varchar(150) DEFAULT NULL AFTER `kelurahan`,
+  ADD COLUMN IF NOT EXISTS `patokan` varchar(150) DEFAULT NULL AFTER `kecamatan`,
+  ADD COLUMN IF NOT EXISTS `maps_url` varchar(500) DEFAULT NULL AFTER `longitude`,
+  MODIFY COLUMN `catatan` varchar(1000) DEFAULT NULL,
+  MODIFY COLUMN `catatan_admin` varchar(1000) DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS `catatan_teknisi` varchar(500) DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS `reviewed_by` int(10) unsigned DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS `surveyed_by` int(10) unsigned DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS `network_available` tinyint(1) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS `surveyed_at` datetime DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS `network_ready_at` datetime DEFAULT NULL;
+
+-- Temporarily retain old ENUM values so existing rows can be normalized safely.
+ALTER TABLE `coverage_expansion_requests`
+  MODIFY COLUMN `status` enum(
+    'menunggu','perlu_survei','dalam_perencanaan','terjadwal','disetujui','ditolak',
+    'evaluasi','survei','tersedia','selesai'
+  ) NOT NULL DEFAULT 'menunggu';
 
 UPDATE `coverage_expansion_requests`
-SET `network_available` = 1
-WHERE `status` = 'tersedia';
+SET `network_available` = CASE
+  WHEN `status` IN ('tersedia','selesai') THEN 1
+  ELSE `network_available`
+END,
+`status` = CASE
+  WHEN `status` = 'evaluasi' THEN 'dalam_perencanaan'
+  WHEN `status` = 'survei' THEN 'perlu_survei'
+  WHEN `status` IN ('tersedia','selesai') THEN 'disetujui'
+  ELSE `status`
+END;
+
+ALTER TABLE `coverage_expansion_requests`
+  MODIFY COLUMN `status` enum(
+    'menunggu','perlu_survei','dalam_perencanaan','terjadwal','disetujui','ditolak'
+  ) NOT NULL DEFAULT 'menunggu';
