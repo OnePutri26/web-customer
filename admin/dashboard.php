@@ -229,6 +229,13 @@ if ($result) {
                 </a>
 
                 <a
+                    href="coverage_requests.php"
+                    class="list-group-item list-group-item-action"
+                >
+                    📍 Pengajuan Perluasan Coverage
+                </a>
+
+                <a
                     href="overview.php?section=technicians"
                     class="list-group-item list-group-item-action"
                 >

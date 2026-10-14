@@ -89,6 +89,35 @@ $alamat = "";
 
 $password = "";
 $passwordConfirm = "";
+$coveragePackageId = filter_var(
+    $_GET['paket_id'] ?? $_POST['paket_id'] ?? 0,
+    FILTER_VALIDATE_INT
+) ?: 0;
+
+if ($coveragePackageId > 0 && !empty($_SESSION['flow']['tersedia'])) {
+    $packageStmt = $conn->prepare("
+        SELECT id
+        FROM paket_wifi
+        WHERE id = ?
+          AND (
+              status IS NULL
+              OR TRIM(status) = ''
+              OR LOWER(TRIM(status)) IN ('aktif', 'active', '1', 'tersedia', 'available')
+          )
+        LIMIT 1
+    ");
+    $packageStmt->bind_param('i', $coveragePackageId);
+    $packageStmt->execute();
+    $selectedPackage = $packageStmt->get_result()->fetch_assoc();
+    $packageStmt->close();
+
+    if ($selectedPackage) {
+        $_SESSION['flow']['paket_id'] = $coveragePackageId;
+        unset($_SESSION['flow']['verified']);
+    } else {
+        $coveragePackageId = 0;
+    }
+}
 
 
 /*
@@ -603,11 +632,10 @@ if (
                 $statusLangganan;
 
 
-            header(
-                "Location: coverage.php",
-                true,
-                302
-            );
+            $nextPage = $coveragePackageId > 0 && !empty($_SESSION['flow']['tersedia'])
+                ? 'verifikasi.php'
+                : 'coverage.php';
+            header("Location: " . $nextPage, true, 302);
 
             exit;
 
@@ -783,6 +811,10 @@ if (
                         action=""
                         autocomplete="off"
                     >
+
+                        <?php if ($coveragePackageId > 0): ?>
+                            <input type="hidden" name="paket_id" value="<?= (int) $coveragePackageId ?>">
+                        <?php endif; ?>
 
 
                         <!-- ROLE -->

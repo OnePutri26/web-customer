@@ -19,9 +19,39 @@ $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $pengajuanId = filter_input(INPUT_POST, 'id_pengajuan', FILTER_VALIDATE_INT);
     $action = (string) ($_POST['action'] ?? '');
+    $coverageRequestId = filter_input(INPUT_POST, 'coverage_request_id', FILTER_VALIDATE_INT);
+    $surveyNote = trim((string) ($_POST['survey_note'] ?? ''));
 
     if (!csrf_ok()) {
         $error = 'Sesi kedaluwarsa. Muat ulang halaman lalu coba lagi.';
+    } elseif (in_array($action, ['approve_expansion', 'reject_expansion'], true)) {
+        $surveyLength = preg_match_all('/./us', $surveyNote);
+        if (!$coverageRequestId || $surveyLength === false || $surveyLength > 500) {
+            $error = 'Data hasil survei tidak valid.';
+        } else {
+            $decision = $action === 'approve_expansion' ? 'disetujui' : 'ditolak';
+            try {
+                $technicianId = (int) $_SESSION['user_id'];
+                $stmt = $conn->prepare("
+                    UPDATE coverage_expansion_requests
+                    SET status = ?, catatan_teknisi = ?, surveyed_by = ?, surveyed_at = NOW()
+                    WHERE id = ? AND status = 'survei'
+                ");
+                $stmt->bind_param('ssii', $decision, $surveyNote, $technicianId, $coverageRequestId);
+                $stmt->execute();
+                $changed = $stmt->affected_rows;
+                $stmt->close();
+
+                if ($changed !== 1) {
+                    throw new RuntimeException('Coverage request is not waiting for a technician survey.');
+                }
+                header('Location: dashboard.php');
+                exit;
+            } catch (Throwable $e) {
+                error_log('Technician coverage survey update failed: ' . $e->getMessage());
+                $error = 'Keputusan survei gagal disimpan. Pastikan pengajuan masih berstatus survei.';
+            }
+        }
     } elseif (!$pengajuanId || !in_array($action, ['start', 'complete'], true)) {
         $error = 'Permintaan perubahan status tidak valid.';
     } else {
@@ -98,6 +128,14 @@ $stmt->bind_param('s', $namaTeknisi);
 $stmt->execute();
 $installations = $stmt->get_result();
 
+$coverageRequests = $conn->query("
+    SELECT id, nomor_pengajuan, nama, telepon, email, alamat, latitude, longitude,
+           catatan, status, created_at
+    FROM coverage_expansion_requests
+    WHERE status = 'survei'
+    ORDER BY created_at ASC
+");
+
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -160,6 +198,49 @@ $installations = $stmt->get_result();
             </tbody>
         </table>
     </div>
+
+    <section class="mt-5">
+        <h2 class="h4 mb-3">Survei Perluasan Jaringan</h2>
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered align-middle">
+                <thead><tr>
+                    <th>Nomor</th><th>Customer</th><th>Kontak</th><th>Alamat / Lokasi</th><th>Catatan customer</th><th>Hasil survei</th>
+                </tr></thead>
+                <tbody>
+                <?php if ($coverageRequests->num_rows === 0): ?>
+                    <tr><td colspan="6" class="text-center">Belum ada pengajuan yang menunggu survei teknisi.</td></tr>
+                <?php else: ?>
+                    <?php while ($coverageRequest = $coverageRequests->fetch_assoc()): ?>
+                        <tr>
+                            <td><?= e($coverageRequest['nomor_pengajuan']) ?></td>
+                            <td><?= e($coverageRequest['nama']) ?></td>
+                            <td>
+                                <a href="tel:<?= e($coverageRequest['telepon']) ?>"><?= e($coverageRequest['telepon']) ?></a><br>
+                                <?= e($coverageRequest['email'] ?: '-') ?>
+                            </td>
+                            <td>
+                                <?= nl2br(e($coverageRequest['alamat'])) ?><br>
+                                <small>GPS: <?= e($coverageRequest['latitude'] ?? '-') ?>, <?= e($coverageRequest['longitude'] ?? '-') ?></small>
+                            </td>
+                            <td><?= e($coverageRequest['catatan'] ?: '-') ?></td>
+                            <td style="min-width:260px">
+                                <form method="post" class="d-grid gap-2">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="coverage_request_id" value="<?= (int) $coverageRequest['id'] ?>">
+                                    <textarea class="form-control" name="survey_note" maxlength="500" rows="2" placeholder="Catatan hasil survei (opsional)"></textarea>
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-sm btn-success" type="submit" name="action" value="approve_expansion">Setujui</button>
+                                        <button class="btn btn-sm btn-outline-danger" type="submit" name="action" value="reject_expansion">Tolak</button>
+                                    </div>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endwhile; ?>
+                <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
 </main>
 </body>
 </html>

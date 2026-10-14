@@ -150,6 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
 
             $h = cekCoverage($conn, $alamat, $lat, $lng);
+            unset($_SESSION['coverage_request_id']);
 
             /*
              * Struktur session 'flow' dipertahankan sama persis, karena

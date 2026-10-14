@@ -1,8 +1,15 @@
 <?php
 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 require_once __DIR__ . "/config/database.php";
+
+$coverageFlow = (string) ($_GET['mode'] ?? '') === 'coverage'
+    && !empty($_SESSION['flow']['tersedia']);
 
 function e($value): string
 {
@@ -798,7 +805,7 @@ $totalPackages = count($packages);
 
 
                     <a
-                        href="register.php?paket_id=<?= $packageId ?>"
+                        href="<?= $coverageFlow ? 'detail_paket.php?id=' . (int) $packageId : 'register.php?paket_id=' . (int) $packageId ?>"
                         class="choose-btn"
                     >
                         Pilih Paket Ini

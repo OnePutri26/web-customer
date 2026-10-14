@@ -1,10 +1,20 @@
 <?php
 require_once __DIR__ . '/config/app.php';
 
-if (!flow('tersedia') || !flow('paket_id')) {
-    redirect(flow('tersedia') ? 'paket.php?mode=coverage' : 'coverage.php');
+if (!flow('tersedia')) {
+    redirect('coverage.php');
 }
-$p = getPaket($conn, (int) flow('paket_id'));
+
+$selectedPackageId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+if ($selectedPackageId) {
+    $p = getPaket($conn, (int) $selectedPackageId);
+    if ($p) {
+        flowSet(['paket_id' => (int) $selectedPackageId, 'verified' => false]);
+    }
+} else {
+    $p = getPaket($conn, (int) flow('paket_id'));
+}
+
 if (!$p) {
     redirect('paket.php?mode=coverage');
 }
@@ -24,7 +34,7 @@ require __DIR__ . '/inc/header.php';
     <div class="sum"><span>Biaya instalasi</span><b>Gratis</b></div>
     <div class="sum"><span>Alamat pemasangan</span><b><?= e(flow('alamat')) ?></b></div>
     <div class="actions" style="justify-content:stretch">
-        <a class="btn btn-primary" style="flex:1" href="<?= isCustomer() ? 'verifikasi.php' : 'register.php' ?>">
+        <a class="btn btn-primary" style="flex:1" href="<?= isCustomer() ? 'verifikasi.php' : 'register.php?paket_id=' . (int) $p['id'] ?>">
             <?= isCustomer() ? 'Lanjut Verifikasi Data' : 'Lanjut Daftar Customer' ?>
         </a>
         <a class="btn" href="paket.php?mode=coverage">Ganti Paket</a>

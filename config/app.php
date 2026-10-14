@@ -95,7 +95,17 @@ function listPaket(mysqli $conn, int $limit = 12): array
 
 function getPaket(mysqli $conn, int $id): ?array
 {
-    $st = $conn->prepare("SELECT * FROM paket_wifi WHERE id = ? AND status IN ('aktif','active') LIMIT 1");
+    $st = $conn->prepare("
+        SELECT *
+        FROM paket_wifi
+        WHERE id = ?
+          AND (
+              status IS NULL
+              OR TRIM(status) = ''
+              OR LOWER(TRIM(status)) IN ('aktif', 'active', '1', 'tersedia', 'available')
+          )
+        LIMIT 1
+    ");
     $st->bind_param('i', $id);
     $st->execute();
     $row = $st->get_result()->fetch_assoc();
