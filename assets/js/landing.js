@@ -479,7 +479,8 @@
         out.textContent = '';
         out.appendChild(d.createTextNode('Kami sarankan paket '));
         var b = d.createElement('strong');
-        b.textContent = card.getAttribute('data-name') + ' (' + card.getAttribute('data-speed') + ' Mbps, Rp ' + card.getAttribute('data-price') + '/bulan)';
+        var pr = card.getAttribute('data-price');
+        b.textContent = card.getAttribute('data-name') + ' (' + card.getAttribute('data-speed') + ' Mbps' + (pr ? ', Rp ' + pr + '/bulan' : '') + ')';
         out.appendChild(b);
         var btn = $('.package-button', card);
         if (btn) {
@@ -503,7 +504,7 @@
       var input = $('input[name="alamat"]', form), btn = $('button[type="submit"]', form);
       on(form, 'submit', function (e) {
         var v = input ? input.value.replace(/\s+/g, ' ').trim() : '';
-        if (v.length < 5) {
+        if (v.length < 10) {
           e.preventDefault();
           form.classList.remove('invalid');
           void form.offsetWidth;

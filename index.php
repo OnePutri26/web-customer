@@ -1,7 +1,31 @@
 <?php
-session_start();
+/* Config dimuat lebih dulu: biasanya sudah memulai session & koneksi database ($conn). */
+$cfgFile = __DIR__ . '/config/app.php';
+if (is_file($cfgFile)) {
+    require_once $cfgFile;
+}
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+/*
+ * Cari lokasi halaman aplikasi secara otomatis: di folder website (root) atau di folder customer/.
+ * Jadi tautan tetap benar walau file coverage/paket/pembayaran/login ada di salah satu folder itu.
+ */
+if (!function_exists('appUrl')) {
+    function appUrl(string $file): string
+    {
+        foreach (['', 'customer/'] as $dir) {
+            if (is_file(__DIR__ . '/' . $dir . $file)) {
+                return $dir . $file;
+            }
+        }
+        return $file;
+    }
+}
+
 $loggedIn   = !empty($_SESSION['user_id']);
-$loginUrl   = $loggedIn ? 'redirect.php' : 'login.php';
+$loginUrl   = appUrl($loggedIn ? 'redirect.php' : 'login.php');
 $loginLabel = $loggedIn ? 'Dashboard Saya' : 'Login Customer';
 
 /* Kontak: ganti dengan nomor asli. Format WhatsApp memakai kode negara tanpa "+" atau "0" di depan. */
@@ -14,19 +38,92 @@ $waUrl     = 'https://wa.me/' . $waNumber . '?text=' . rawurlencode('Halo YesNet
 $cssVer = @filemtime(__DIR__ . '/landing.css') ?: 1;
 $jsVer  = @filemtime(__DIR__ . '/landing.js') ?: 1;
 
-$paket = [
-    ['id' => 'basic',    'nama' => 'Basic',    'desc' => 'Cocok untuk browsing dan sosmed',  'mbps' => 20,  'harga' => '200.000', 'icon' => 'box',  'kelas' => ''],
-    ['id' => 'family',   'nama' => 'Family',   'desc' => 'Ideal untuk keluarga modern',      'mbps' => 50,  'harga' => '350.000', 'icon' => 'users', 'kelas' => 'popular'],
-    ['id' => 'premium',  'nama' => 'Premium',  'desc' => 'Untuk streaming & gaming',         'mbps' => 100, 'harga' => '500.000', 'icon' => 'gem',  'kelas' => 'premium'],
-    ['id' => 'business', 'nama' => 'Business', 'desc' => 'Solusi terbaik untuk bisnis Anda', 'mbps' => 200, 'harga' => '750.000', 'icon' => 'tool', 'kelas' => 'business'],
-];
-$maxMbps = 200;
+/*
+ * Paket diambil langsung dari tabel paket_wifi, sehingga ID, nama, kecepatan dan harga
+ * SELALU sama dengan halaman pembayaran (pembayaran.php?paket=ID memakai ID angka ini).
+ */
+$daftarPaket = [];
+try {
+    if (isset($conn) && $conn instanceof mysqli) {
+        $res = $conn->query('SELECT * FROM paket_wifi ORDER BY speed_mbps ASC, id ASC');
+        while ($res && ($row = $res->fetch_assoc())) {
+            $off = false;
+            foreach (['status', 'status_paket'] as $k) {
+                if (isset($row[$k]) && in_array(strtolower((string) $row[$k]), ['nonaktif', 'non-aktif', 'tidak aktif', 'inactive', 'disabled', '0'], true)) {
+                    $off = true;
+                }
+            }
+            foreach (['aktif', 'is_active'] as $k) {
+                if (array_key_exists($k, $row) && $row[$k] !== null && (string) $row[$k] === '0') {
+                    $off = true;
+                }
+            }
+            if (!$off) {
+                $daftarPaket[] = $row;
+            }
+        }
+    }
+} catch (Throwable $e) {
+    error_log('Landing paket: ' . $e->getMessage());
+}
 
+/* Cadangan jika tabel tidak terbaca (harga tidak ditampilkan, tombol tetap mengarah ke ID yang benar) */
+if (!$daftarPaket) {
+    $daftarPaket = [
+        ['id' => 1, 'nama_paket' => 'Paket Basic',    'speed_mbps' => 10],
+        ['id' => 2, 'nama_paket' => 'Paket Standard', 'speed_mbps' => 20],
+        ['id' => 3, 'nama_paket' => 'Paket Premium',  'speed_mbps' => 50],
+        ['id' => 4, 'nama_paket' => 'Paket Ultra',    'speed_mbps' => 100],
+    ];
+}
+
+$descDefault = [
+    'Untuk browsing dan sosmed sehari-hari',
+    'Ideal untuk keluarga dan kerja dari rumah',
+    'Untuk streaming dan gaming yang lebih lancar',
+    'Performa terbaik untuk bisnis dan banyak perangkat',
+];
+$ikonRank = ['box', 'users', 'gem', 'tool'];
+
+$paket = [];
+$maxMbps = 1;
+foreach ($daftarPaket as $i => $row) {
+    $harga = null;
+    foreach ($row as $k => $v) {
+        if (preg_match('/^(harga|price|tarif|biaya)/i', (string) $k) && is_numeric($v) && (float) $v > 0) {
+            $harga = number_format((float) $v, 0, ',', '.');
+            break;
+        }
+    }
+    $desc = '';
+    foreach (['deskripsi', 'keterangan', 'deskripsi_paket'] as $k) {
+        if (!empty($row[$k]) && is_string($row[$k])) {
+            $desc = trim(mb_substr(strip_tags($row[$k]), 0, 70));
+            break;
+        }
+    }
+    $mbps = (int) ($row['speed_mbps'] ?? 0);
+    $maxMbps = max($maxMbps, $mbps);
+    $paket[] = [
+        'id'    => (int) $row['id'],
+        'nama'  => (string) ($row['nama_paket'] ?? ('Paket ' . ($i + 1))),
+        'desc'  => $desc !== '' ? $desc : $descDefault[min($i, 3)],
+        'mbps'  => $mbps,
+        'harga' => $harga,
+        'icon'  => $ikonRank[min($i, 3)],
+        'kelas' => $i === 1 ? 'popular' : ($i === 2 ? 'premium' : ($i >= 3 ? 'business' : '')),
+    ];
+}
+
+/* Pemilih kebutuhan -> paket menurut urutan kecepatan (terendah ke tertinggi) */
+$pickId = static function (int $rank) use ($paket): int {
+    return $paket[min($rank, count($paket) - 1)]['id'];
+};
 $kebutuhan = [
-    ['basic',    'Browsing & Sosmed',  'globe'],
-    ['family',   'Keluarga',           'users'],
-    ['premium',  'Streaming & Gaming', 'play'],
-    ['business', 'Bisnis & Kantor',    'briefcase'],
+    [$pickId(0), 'Browsing & Sosmed',  'globe'],
+    [$pickId(1), 'Keluarga',           'users'],
+    [$pickId(2), 'Streaming & Gaming', 'play'],
+    [$pickId(3), 'Bisnis & Kantor',    'briefcase'],
 ];
 
 $fitur = [
@@ -38,8 +135,8 @@ $fitur = [
 ];
 
 $alur = [
-    ['Cek Coverage', 'coverage.php', 'pin', ['Masukkan alamat','Cek ketersediaan','Tersedia / tidak tersedia','Pilih paket / form request','Detail paket','Register customer','Verifikasi data','Order berlangganan','Pembayaran','Berhasil / gagal','Order diproses / bayar lagi','Survey / validasi','Jadwal instalasi','Teknisi datang','Instalasi selesai','Aktivasi customer','Customer aktif','Dashboard']],
-    ['Lihat Paket', 'paket.php', 'box', ['Pilih paket','Pembayaran']],
+    ['Cek Coverage', appUrl('coverage.php'), 'pin', ['Masukkan alamat','Cek ketersediaan','Tersedia / tidak tersedia','Pilih paket / form request','Detail paket','Register customer','Verifikasi data','Order berlangganan','Pembayaran','Berhasil / gagal','Order diproses / bayar lagi','Survey / validasi','Jadwal instalasi','Teknisi datang','Instalasi selesai','Aktivasi customer','Customer aktif','Dashboard']],
+    ['Lihat Paket', appUrl('paket.php'), 'box', ['Pilih paket','Pembayaran']],
     [$loginLabel, $loginUrl, 'user', ['Login','Dashboard']],
 ];
 
@@ -47,13 +144,13 @@ $faq = [
     ['Bagaimana cara berlangganan YesNet?', 'Cek coverage dengan memasukkan alamat Anda, pilih paket, daftar sebagai customer, lalu lakukan pembayaran. Setelah data diverifikasi, tim kami melakukan survei dan menjadwalkan instalasi.'],
     ['Apakah ada biaya instalasi?', 'Semua paket sudah termasuk instalasi gratis dan WiFi router.'],
     ['Bagaimana jika alamat saya belum terjangkau?', 'Anda dapat mengirim form request melalui halaman Cek Coverage agar area Anda dapat kami pertimbangkan.'],
-    ['Paket mana yang cocok untuk saya?', 'Basic untuk browsing dan sosmed, Family untuk kebutuhan keluarga, Premium untuk streaming dan gaming, serta Business untuk kebutuhan bisnis. Gunakan pemilih kebutuhan di bagian Paket untuk rekomendasi cepat.'],
+    ['Paket mana yang cocok untuk saya?', 'Untuk browsing dan sosmed, paket dengan kecepatan lebih rendah sudah cukup. Untuk keluarga, streaming, dan gaming, pilih kecepatan yang lebih tinggi. Gunakan pemilih kebutuhan di bagian Paket untuk rekomendasi cepat.'],
     ['Bagaimana memantau layanan setelah aktif?', 'Masuk melalui menu Login Customer untuk membuka dashboard Anda.'],
     ['Ke mana saya bisa bertanya sebelum berlangganan?', 'Hubungi layanan pelanggan kami lewat WhatsApp, telepon, atau email. Kontaknya ada di bagian bawah halaman ini.'],
 ];
 
-function e($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
-function ic($n, $c = '') { return '<svg class="ic' . ($c ? ' ' . $c : '') . '" aria-hidden="true"><use href="#i-' . $n . '"/></svg>'; }
+if (!function_exists('e')) { function e($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); } }
+if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic' . ($c ? ' ' . $c : '') . '" aria-hidden="true"><use href="#i-' . $n . '"/></svg>'; } }
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -158,10 +255,11 @@ function ic($n, $c = '') { return '<svg class="ic' . ($c ? ' ' . $c : '') . '" a
       <h1 data-in style="--i:1">Internet <span class="grad">Cepat &amp; Stabil</span> dengan Harga Terjangkau</h1>
       <p class="hero-description" data-in style="--i:2">Nikmati koneksi fiber optic berkecepatan tinggi untuk rumah, keluarga, dan bisnis Anda. Instalasi gratis di semua paket.</p>
 
-      <form class="hero-check" action="coverage.php" method="get" data-coverage data-in style="--i:3">
+      <form class="hero-check" action="<?= e(appUrl('coverage.php')) ?>" method="get" data-coverage data-in style="--i:3">
+        <input type="hidden" name="auto" value="1">
         <label class="check-field"><?= ic('pin') ?>
           <span class="sr-only">Alamat pemasangan</span>
-          <input type="text" name="alamat" placeholder="Masukkan alamat pemasangan Anda…" required minlength="5" autocomplete="street-address">
+          <input type="text" name="alamat" placeholder="Masukkan alamat pemasangan Anda…" required minlength="10" autocomplete="street-address">
         </label>
         <button type="submit" class="btn btn-primary btn-lg"><span>Cek Coverage</span><?= ic('arrow') ?></button>
       </form>
@@ -195,13 +293,13 @@ function ic($n, $c = '') { return '<svg class="ic' . ($c ? ' ' . $c : '') . '" a
 
         <div class="speed-card">
           <div class="sc-top"><span>Kecepatan hingga</span><em>Fiber Optic</em></div>
-          <div class="sc-num"><b data-count="200">200</b><small>Mbps</small></div>
+          <div class="sc-num"><b data-count="<?= (int) $maxMbps ?>"><?= (int) $maxMbps ?></b><small>Mbps</small></div>
           <div class="sc-bars" aria-hidden="true">
             <?php foreach ([38,62,48,80,56,92,70,100,64,84,52,76] as $k => $h): ?><i style="--h:<?= $h ?>%;--d:<?= round($k * 0.12, 2) ?>s"></i><?php endforeach; ?>
           </div>
         </div>
       </div>
-      <div class="float-chip c1"><i><?= ic('bolt') ?></i><div><strong>Hingga 200 Mbps</strong><small>Fiber optic</small></div></div>
+      <div class="float-chip c1"><i><?= ic('bolt') ?></i><div><strong>Hingga <?= (int) $maxMbps ?> Mbps</strong><small>Fiber optic</small></div></div>
       <div class="float-chip c2"><i class="ok"><?= ic('check') ?></i><div><strong>Instalasi Gratis</strong><small>Semua paket</small></div></div>
       <div class="float-chip c3"><i class="vi"><?= ic('shield') ?></i><div><strong>Jaringan Stabil</strong><small>Siap 24/7</small></div></div>
     </div>
@@ -248,7 +346,7 @@ function ic($n, $c = '') { return '<svg class="ic' . ($c ? ' ' . $c : '') . '" a
 
     <div class="packages-grid">
       <?php foreach ($paket as $p): ?>
-      <article class="package-card reveal tilt <?= e($p['kelas']) ?>" data-id="<?= e($p['id']) ?>" data-name="<?= e($p['nama']) ?>" data-speed="<?= (int)$p['mbps'] ?>" data-price="<?= e($p['harga']) ?>">
+      <article class="package-card reveal tilt <?= e($p['kelas']) ?>" data-id="<?= e($p['id']) ?>" data-name="<?= e($p['nama']) ?>" data-speed="<?= (int)$p['mbps'] ?>" data-price="<?= e($p['harga'] ?? '') ?>">
         <?php if ($p['kelas'] === 'popular'): ?><div class="popular-label">Paling Populer</div><?php endif; ?>
         <div class="package-top">
           <div class="package-icon"><?= ic($p['icon']) ?></div>
@@ -256,14 +354,13 @@ function ic($n, $c = '') { return '<svg class="ic' . ($c ? ' ' . $c : '') . '" a
         </div>
         <div class="package-speed"><?= ic('wifi') ?><span><b data-count="<?= (int)$p['mbps'] ?>"><?= (int)$p['mbps'] ?></b> Mbps</span></div>
         <div class="speed-bar" aria-hidden="true"><i style="--w:<?= round($p['mbps'] / $maxMbps * 100) ?>%"></i></div>
-        <div class="package-price"><span class="cur">Rp</span><?= e($p['harga']) ?><small>/bulan</small></div>
+        <div class="package-price"><?php if ($p['harga'] !== null): ?><span class="cur">Rp</span><?= e($p['harga']) ?><small>/bulan</small><?php else: ?><span class="cur">Hubungi kami</span><?php endif; ?></div>
         <ul>
           <li><?= ic('check') ?>Internet Unlimited</li>
           <li><?= ic('check') ?>WiFi Router</li>
           <li><?= ic('check') ?>Instalasi Gratis</li>
-          <?php if ($p['kelas'] === 'business'): ?><li><?= ic('check') ?>IP Publik (Opsional)</li><?php endif; ?>
         </ul>
-        <a href="pembayaran.php?paket=<?= e($p['id']) ?>" class="package-button" aria-label="Pilih paket <?= e($p['nama']) ?>">Pilih Paket <?= ic('arrow') ?></a>
+        <a href="<?= e(appUrl('pembayaran.php')) ?>?paket=<?= e($p['id']) ?>" class="package-button" aria-label="Pilih paket <?= e($p['nama']) ?>">Pilih Paket <?= ic('arrow') ?></a>
       </article>
       <?php endforeach; ?>
     </div>
@@ -287,7 +384,7 @@ function ic($n, $c = '') { return '<svg class="ic' . ($c ? ' ' . $c : '') . '" a
         <div class="step-icon"><?= ic('pin') ?></div>
         <h3>Cek Coverage</h3>
         <p>Masukkan alamat Anda untuk memastikan jaringan YesNet tersedia di lokasi Anda.</p>
-        <a href="coverage.php" class="step-link">Cek sekarang <?= ic('arrow') ?></a>
+        <a href="<?= e(appUrl('coverage.php')) ?>" class="step-link">Cek sekarang <?= ic('arrow') ?></a>
       </li>
       <li class="step reveal">
         <span class="step-num">2</span>
@@ -330,10 +427,11 @@ function ic($n, $c = '') { return '<svg class="ic' . ($c ? ' ' . $c : '') . '" a
           <div class="coverage-icon"><?= ic('pin') ?></div>
           <div><h2>Cek Coverage</h2><p>Pastikan alamat Anda sudah terjangkau jaringan YesNet.</p></div>
         </div>
-        <form action="coverage.php" method="get" class="coverage-form" data-coverage>
+        <form action="<?= e(appUrl('coverage.php')) ?>" method="get" class="coverage-form" data-coverage>
+          <input type="hidden" name="auto" value="1">
           <label class="coverage-input"><?= ic('search') ?>
             <span class="sr-only">Alamat lengkap</span>
-            <input type="text" name="alamat" placeholder="Masukkan alamat lengkap Anda..." required minlength="5" autocomplete="street-address">
+            <input type="text" name="alamat" placeholder="Masukkan alamat lengkap Anda..." required minlength="10" autocomplete="street-address">
           </label>
           <button type="submit" class="btn btn-light"><span>Cek Sekarang</span><?= ic('arrow') ?></button>
         </form>
@@ -372,7 +470,7 @@ function ic($n, $c = '') { return '<svg class="ic' . ($c ? ' ' . $c : '') . '" a
     <div class="cta-band reveal">
       <div><h3>Siap menikmati internet yang lebih cepat?</h3><p>Cek alamat Anda sekarang atau langsung pilih paket.</p></div>
       <div class="cta-actions">
-        <a href="coverage.php" class="btn btn-light"><?= ic('pin') ?>Cek Coverage</a>
+        <a href="<?= e(appUrl('coverage.php')) ?>" class="btn btn-light"><?= ic('pin') ?>Cek Coverage</a>
         <a href="#paket" class="btn btn-ghost">Pilih Paket</a>
       </div>
     </div>
@@ -393,7 +491,7 @@ function ic($n, $c = '') { return '<svg class="ic' . ($c ? ' ' . $c : '') . '" a
       <div class="footer-column"><h4>Hubungi Kami</h4>
         <a href="tel:<?= e($telp) ?>"><?= ic('phone') ?><?= e($telp) ?></a>
         <a href="mailto:<?= e($email) ?>"><?= ic('mail') ?><?= e($email) ?></a>
-        <a href="coverage.php"><?= ic('pin') ?><?= e($alamat) ?></a></div>
+        <a href="<?= e(appUrl('coverage.php')) ?>"><?= ic('pin') ?><?= e($alamat) ?></a></div>
       <div class="footer-column"><h4>Ikuti Kami</h4>
         <div class="social-links"><a href="#" aria-label="Facebook">f</a><a href="#" aria-label="Instagram">ig</a><a href="#" aria-label="YouTube">yt</a><a href="<?= e($waUrl) ?>" aria-label="WhatsApp" target="_blank" rel="noopener">wa</a></div></div>
     </div>
@@ -404,7 +502,7 @@ function ic($n, $c = '') { return '<svg class="ic' . ($c ? ' ' . $c : '') . '" a
 <!-- AKSES CEPAT -->
 <a href="<?= e($waUrl) ?>" class="wa-float" target="_blank" rel="noopener" aria-label="Chat WhatsApp YesNet"><?= ic('chat') ?><span>Chat WhatsApp</span></a>
 <div class="mbar" id="mbar">
-  <a href="coverage.php" class="btn btn-outline"><?= ic('pin') ?>Cek Coverage</a>
+  <a href="<?= e(appUrl('coverage.php')) ?>" class="btn btn-outline"><?= ic('pin') ?>Cek Coverage</a>
   <a href="#paket" class="btn btn-primary">Pilih Paket</a>
 </div>
 
