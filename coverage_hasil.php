@@ -266,6 +266,16 @@ if ($request !== null && !empty($_SESSION['coverage_request_submitted'])) {
     $submissionNotice = 'Permintaan dengan alamat dan nomor WhatsApp tersebut sudah tercatat sebelumnya.';
 }
 
+$pendingPackageId = filter_var(
+    $_SESSION['pending_coverage_package_id'] ?? 0,
+    FILTER_VALIDATE_INT
+);
+if ($tersedia && $pendingPackageId > 0) {
+    $_SESSION['flow']['paket_id'] = $pendingPackageId;
+    unset($_SESSION['pending_coverage_package_id']);
+    redirect('detail_paket.php?id=' . $pendingPackageId);
+}
+
 $pageTitle = $serviceError ? 'Layanan Coverage Terganggu' : ($tersedia ? 'Jaringan Tersedia' : 'Jaringan Belum Tersedia');
 $requestStatusLabels = [
     'menunggu' => 'Menunggu evaluasi admin',

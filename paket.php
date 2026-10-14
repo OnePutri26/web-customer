@@ -805,7 +805,7 @@ $totalPackages = count($packages);
 
 
                     <a
-                        href="<?= $coverageFlow ? 'detail_paket.php?id=' . (int) $packageId : 'register.php?paket_id=' . (int) $packageId ?>"
+                        href="detail_paket.php?id=<?= (int) $packageId ?>"
                         class="choose-btn"
                     >
                         Pilih Paket Ini

@@ -201,7 +201,7 @@ if ($result) {
                 </a>
 
                 <a
-                    href="overview.php?section=packages"
+                    href="admin/Paket/index.php"
                     class="list-group-item list-group-item-action"
                 >
                     📦 Paket Internet

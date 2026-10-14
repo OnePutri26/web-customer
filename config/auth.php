@@ -286,6 +286,35 @@ function redirectCustomer(mysqli $conn, int $userId): never
     $_SESSION['subscription_status'] = $state['customer_status'];
     $target = customerRedirectPath($state);
 
+    if (
+        $target === 'customer/packages.php'
+        && !empty($_SESSION['flow']['tersedia'])
+        && (int) ($_SESSION['flow']['paket_id'] ?? 0) > 0
+    ) {
+        $packageId = (int) $_SESSION['flow']['paket_id'];
+        $stmt = $conn->prepare("
+            SELECT id
+            FROM paket_wifi
+            WHERE id = ?
+              AND (
+                  status IS NULL
+                  OR TRIM(status) = ''
+                  OR LOWER(TRIM(status)) IN ('aktif', 'active', '1', 'tersedia', 'available')
+              )
+            LIMIT 1
+        ");
+        $stmt->bind_param('i', $packageId);
+        $stmt->execute();
+        $package = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        if ($package) {
+            appRedirect('verifikasi.php');
+        }
+
+        unset($_SESSION['flow']['paket_id']);
+    }
+
     if ($target === 'login.php') {
         clearAuthSession();
         $_SESSION['login_error'] = 'Status akun tidak dapat diverifikasi. Silakan masuk kembali.';
@@ -330,8 +359,13 @@ function requireRole(string $requiredRole): void
     $requiredRole = normalizeAuthRole($requiredRole);
 
     if (!isset($conn) || !$conn instanceof mysqli) {
+        require_once __DIR__ . '/database.php';
+    }
+
+    if (!isset($conn) || !$conn instanceof mysqli) {
+        error_log('Authentication database connection is unavailable after database bootstrap.');
         http_response_code(503);
-        exit('Layanan autentikasi sementara tidak tersedia.');
+        exit('Layanan autentikasi sementara tidak tersedia. Silakan coba kembali nanti.');
     }
 
     $stmt = $conn->prepare('SELECT role, status FROM users WHERE id = ? LIMIT 1');

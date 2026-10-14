@@ -104,6 +104,9 @@ function adminOverviewEscape(mixed $value): string
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3 mb-0"><?= adminOverviewEscape($section['title']) ?></h1>
         <div class="d-flex gap-2">
+            <?php if ($sectionKey === 'packages'): ?>
+                <a href="admin/Paket/index.php" class="btn btn-primary">Kelola Paket</a>
+            <?php endif; ?>
             <?php if ($sectionKey === 'network'): ?>
                 <a href="admin/jaringan/gangguan.php" class="btn btn-primary">Catat Gangguan</a>
             <?php endif; ?>

@@ -154,6 +154,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $h = cekCoverage($conn, $alamat, $lat, $lng);
             unset($_SESSION['coverage_request_id']);
+            $pendingPackageId = filter_var(
+                $_SESSION['pending_coverage_package_id'] ?? 0,
+                FILTER_VALIDATE_INT
+            );
 
             /*
              * Struktur session 'flow' dipertahankan sama persis, karena
@@ -170,6 +174,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'odp'      => $h['odp'] ?? null,
                 'jarak'    => $h['jarak'] ?? null,
             ];
+            if (!empty($h['tersedia']) && $pendingPackageId > 0) {
+                $_SESSION['flow']['paket_id'] = $pendingPackageId;
+            }
 
             if (function_exists('redirect')) {
                 redirect('coverage_hasil.php');

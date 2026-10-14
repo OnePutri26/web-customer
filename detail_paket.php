@@ -1,22 +1,23 @@
 <?php
 require_once __DIR__ . '/config/app.php';
 
-if (!flow('tersedia')) {
+$selectedPackageId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+if (!$selectedPackageId) {
+    $selectedPackageId = (int) flow('paket_id');
+}
+
+$p = $selectedPackageId > 0 ? getPaket($conn, (int) $selectedPackageId) : null;
+if (!$p) {
+    redirect('paket.php');
+}
+
+if (empty(flow('tersedia'))) {
+    $_SESSION['pending_coverage_package_id'] = (int) $p['id'];
     redirect('coverage.php');
 }
 
-$selectedPackageId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
-if ($selectedPackageId) {
-    $p = getPaket($conn, (int) $selectedPackageId);
-    if ($p) {
-        flowSet(['paket_id' => (int) $selectedPackageId, 'verified' => false]);
-    }
-} else {
-    $p = getPaket($conn, (int) flow('paket_id'));
-}
-
-if (!$p) {
-    redirect('paket.php?mode=coverage');
+if ((int) flow('paket_id') !== (int) $p['id']) {
+    flowSet(['paket_id' => (int) $p['id'], 'verified' => false]);
 }
 
 $pageTitle = 'Detail Paket';
