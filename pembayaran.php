@@ -1,385 +1,248 @@
 <?php
 require_once __DIR__ . '/config/app.php';
-require_once __DIR__ . '/inc/midtrans.php';
 
-/*
-| Masuk lewat:
-|   pembayaran.php?tagihan=ID  -> alur coverage (order sudah dibuat) atau "Bayar Lagi"
-|   pembayaran.php?paket=ID    -> alur "Lihat Paket" (order dibuat otomatis di sini)
-|
-| Catatan: requireRole('customer') dihapus karena akan me-redirect tamu ke login
-| sebelum flowSet() sempat menyimpan paket yang dipilih. Guard manual di bawah
-| sudah menangani kasus tersebut.
-|
-| Mode pembayaran:
-|   midtrans : kunci Midtrans terisi  -> pembayaran sungguhan lewat Snap
-|   demo     : PAYMENT_DEMO = true    -> simulasi (tanpa kunci Midtrans)
-|   off      : selain itu             -> pembayaran dinonaktifkan
-*/
-if (!isCustomer()) {
-    if (isset($_GET['paket'])) {
-        flowSet(['mode' => 'direct', 'paket_id' => (int) $_GET['paket']]);
-    }
-    redirect('login.php');
-}
-$cust = currentCustomer($conn);
-if (!$cust) {
-    redirect('login.php');
-}
-if (isAktif($cust['status_langganan'])) {
-    redirect('customer/dashboard.php');
+$selectedPackageId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+if (!$selectedPackageId) {
+    $selectedPackageId = (int) flow('paket_id');
 }
 
-if (isset($_GET['paket'])) {
-    $p = getPaket($conn, (int) $_GET['paket']);
-    if (!$p) {
-        redirect('paket.php?mode=direct');
-    }
-    $alamat = (string) (flow('alamat') ?: $cust['alamat']);
-    try {
-        $tid = ensureOrder($conn, $cust, $p, $alamat);
-    } catch (Throwable $e) {
-        redirect('paket.php?mode=direct');
-    }
-    redirect('pembayaran.php?tagihan=' . $tid);
+$p = $selectedPackageId > 0 ? getPaket($conn, (int) $selectedPackageId) : null;
+if (!$p) {
+    redirect('paket.php');
 }
 
-$tid = (int) ($_GET['tagihan'] ?? 0);
-$cid = (int) $cust['id'];
-$st = $conn->prepare("
-    SELECT t.*, p.nama_paket, p.speed_mbps
-    FROM tagihan t
-    LEFT JOIN subscription s ON s.id = t.id_subscription
-    LEFT JOIN paket_wifi p ON p.id = s.paket_id
-    WHERE t.id = ? AND t.id_customer = ? LIMIT 1
-");
-$st->bind_param('ii', $tid, $cid);
-$st->execute();
-$tg = $st->get_result()->fetch_assoc();
-$st->close();
-if (!$tg) {
-    redirect('paket.php?mode=direct');
-}
-if ($tg['status'] === 'paid') {
-    redirect('status_order.php');
+if (empty(flow('tersedia'))) {
+    $_SESSION['pending_coverage_package_id'] = (int) $p['id'];
+    redirect('coverage.php');
 }
 
-$metode = ['QRIS', 'Virtual Account', 'E-Wallet', 'Transfer Bank'];
-$error = '';
-$mode = midtransReady() ? 'midtrans' : (PAYMENT_DEMO ? 'demo' : 'off');
-
-/*
-|--------------------------------------------------------------------------
-| Endpoint AJAX (Midtrans): aksi=snap -> buat/ambil token, aksi=sync -> cek status
-|--------------------------------------------------------------------------
-*/
-$aksi = (string) ($_POST['aksi'] ?? '');
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($aksi, ['snap', 'sync'], true)) {
-    header('Content-Type: application/json; charset=utf-8');
-    $json = static function (array $data, int $code = 200) {
-        http_response_code($code);
-        echo json_encode($data);
-        exit;
-    };
-
-    if (!csrf_ok()) {
-        $json(['ok' => false, 'pesan' => 'Sesi kedaluwarsa. Muat ulang halaman.'], 419);
-    }
-    if ($mode !== 'midtrans') {
-        $json(['ok' => false, 'pesan' => 'Pembayaran online belum dikonfigurasi.'], 400);
-    }
-
-    try {
-        if ($aksi === 'snap') {
-
-            // Pakai ulang transaksi pending agar pelanggan tidak membayar dobel.
-            if (empty($_POST['baru'])) {
-                $st = $conn->prepare("
-                    SELECT id, snap_token FROM pembayaran
-                    WHERE id_tagihan = ? AND id_customer = ? AND status = 'pending'
-                      AND snap_token IS NOT NULL AND snap_token <> ''
-                    ORDER BY id DESC LIMIT 1
-                ");
-                $st->bind_param('ii', $tid, $cid);
-                $st->execute();
-                $old = $st->get_result()->fetch_assoc();
-                $st->close();
-                if ($old) {
-                    $json(['ok' => true, 'token' => (string) $old['snap_token'], 'pembayaran_id' => (int) $old['id']]);
-                }
-            }
-
-            $gross = (int) round((float) $tg['jumlah']);
-            if ($gross < 1) {
-                throw new RuntimeException('Nominal tagihan tidak valid.');
-            }
-
-            $noBayar = nomor('PAY');
-            $jumlah = (float) $tg['jumlah'];
-            $awal = 'pending';
-            $metodeAwal = 'Midtrans';
-            $tglBayar = null;
-
-            $st = $conn->prepare("
-                INSERT INTO pembayaran
-                (id_customer, id_tagihan, nomor_pembayaran, jumlah, metode_pembayaran, status, transaction_status, tanggal_bayar, midtrans_order_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ");
-            $st->bind_param('iisdsssss', $cid, $tid, $noBayar, $jumlah, $metodeAwal, $awal, $awal, $tglBayar, $noBayar);
-            $st->execute();
-            $bayarId = (int) $conn->insert_id;
-            $st->close();
-
-            $pick = static function (array $a, array $keys): string {
-                foreach ($keys as $k) {
-                    if (!empty($a[$k])) {
-                        return trim((string) $a[$k]);
-                    }
-                }
-                return '';
-            };
-            $customer = ['first_name' => mb_substr($pick($cust, ['nama', 'nama_lengkap', 'name']) ?: 'Pelanggan', 0, 50)];
-            $email = $pick($cust, ['email']);
-            if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                $customer['email'] = $email;
-            }
-            $phone = preg_replace('/[^0-9+]/', '', $pick($cust, ['telepon', 'telephone', 'no_hp', 'phone']));
-            if ($phone !== '') {
-                $customer['phone'] = $phone;
-            }
-
-            try {
-                $token = midtransCreateSnapToken([
-                    'transaction_details' => ['order_id' => $noBayar, 'gross_amount' => $gross],
-                    'item_details' => [[
-                        'id'       => 'TG' . $tid,
-                        'price'    => $gross,
-                        'quantity' => 1,
-                        'name'     => mb_substr(trim(((string) ($tg['nama_paket'] ?: 'Paket Internet')) . ' - ' . (string) $tg['nomor_tagihan']), 0, 50),
-                    ]],
-                    'customer_details' => $customer,
-                    'expiry' => ['unit' => 'hours', 'duration' => 24],
-                ]);
-            } catch (Throwable $e) {
-                $st = $conn->prepare('DELETE FROM pembayaran WHERE id = ? LIMIT 1');
-                $st->bind_param('i', $bayarId);
-                $st->execute();
-                $st->close();
-                throw $e;
-            }
-
-            $st = $conn->prepare('UPDATE pembayaran SET snap_token = ? WHERE id = ? LIMIT 1');
-            $st->bind_param('si', $token, $bayarId);
-            $st->execute();
-            $st->close();
-
-            $json(['ok' => true, 'token' => $token, 'pembayaran_id' => $bayarId]);
-        }
-
-        // aksi === 'sync'
-        $pid = (int) ($_POST['pembayaran_id'] ?? 0);
-        $st = $conn->prepare('SELECT midtrans_order_id FROM pembayaran WHERE id = ? AND id_customer = ? LIMIT 1');
-        $st->bind_param('ii', $pid, $cid);
-        $st->execute();
-        $own = $st->get_result()->fetch_assoc();
-        $st->close();
-        if (!$own || empty($own['midtrans_order_id'])) {
-            $json(['ok' => false, 'pesan' => 'Pembayaran tidak ditemukan.'], 404);
-        }
-
-        $res = midtransFetchStatus((string) $own['midtrans_order_id']);
-        if ((string) ($res['status_code'] ?? '') === '404') {
-            $json(['ok' => true, 'status' => 'pending']); // belum ada transaksi di sisi Midtrans
-        }
-        if (!midtransSignatureOk($res)) {
-            throw new RuntimeException('Signature status Midtrans tidak valid.');
-        }
-        $json(['ok' => true, 'status' => midtransApply($conn, $res)]);
-
-    } catch (Throwable $e) {
-        error_log('Pembayaran ' . $aksi . ' gagal: ' . $e->getMessage());
-        $json(['ok' => false, 'pesan' => 'Pembayaran belum dapat diproses. Silakan coba lagi.'], 500);
-    }
+if ((int) flow('paket_id') !== (int) $p['id']) {
+    flowSet(['paket_id' => (int) $p['id'], 'verified' => false]);
 }
 
 /*
-|--------------------------------------------------------------------------
-| Mode demo (simulasi) — logika asli dipertahankan
-|--------------------------------------------------------------------------
+| Data tampilan: kecepatan paket ini dibandingkan dengan paket aktif tercepat
+| di tabel paket_wifi (untuk meter kecepatan). Gagal query tidak mengganggu halaman.
 */
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $pilih = (string) ($_POST['metode'] ?? '');
-    if (!csrf_ok()) {
-        $error = 'Sesi kedaluwarsa. Muat ulang halaman.';
-    } elseif ($mode !== 'demo') {
-        $error = 'Pembayaran online belum dikonfigurasi. Silakan hubungi tim YesNet.';
-    } elseif (!in_array($pilih, $metode, true)) {
-        $error = 'Pilih metode pembayaran.';
-    } elseif (!in_array($_POST['hasil'] ?? '', ['berhasil', 'gagal'], true)) {
-        $error = 'Hasil pembayaran tidak valid.';
-    } else {
-        $berhasil = $_POST['hasil'] === 'berhasil';
-        $statusBayar = $berhasil ? 'success' : 'failed';
-        $trx = $berhasil ? 'settlement' : 'deny';
-        $noBayar = nomor('PAY');
-        $jumlah = (float) $tg['jumlah'];
-        $tglBayar = $berhasil ? date('Y-m-d H:i:s') : null;
-
-        try {
-            $conn->begin_transaction();
-            $st = $conn->prepare("
-                INSERT INTO pembayaran
-                (id_customer, id_tagihan, nomor_pembayaran, jumlah, metode_pembayaran, status, transaction_status, tanggal_bayar)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ");
-            $st->bind_param('iisdssss', $cid, $tid, $noBayar, $jumlah, $pilih, $statusBayar, $trx, $tglBayar);
-            $st->execute();
-            $bayarId = (int) $conn->insert_id;
-            $st->close();
-
-            if ($berhasil) {
-                $st = $conn->prepare("UPDATE tagihan SET status = 'paid', paid_at = NOW() WHERE id = ? LIMIT 1");
-                $st->bind_param('i', $tid);
-                $st->execute();
-                $st->close();
-            }
-            $conn->commit();
-            redirect('hasil_pembayaran.php?id=' . $bayarId);
-        } catch (Throwable $e) {
-            $conn->rollback();
-            $error = 'Pembayaran gagal diproses. Silakan coba lagi.';
-        }
-    }
+$speed = max(0, (int) $p['speed_mbps']);
+$maxSpeed = $speed;
+try {
+    $res = $conn->query("
+        SELECT MAX(CAST(speed_mbps AS UNSIGNED))
+        FROM paket_wifi
+        WHERE status IS NULL
+           OR TRIM(status) = ''
+           OR LOWER(TRIM(status)) IN ('aktif', 'active', '1', 'tersedia', 'available')
+    ");
+    $row = $res ? $res->fetch_row() : null;
+    $maxSpeed = max($maxSpeed, (int) ($row[0] ?? 0));
+} catch (Throwable $ex) {
+    error_log('Detail paket: gagal membaca kecepatan tertinggi: ' . $ex->getMessage());
 }
+$speedPct = $maxSpeed > 0 ? max(8, min(100, (int) round($speed / $maxSpeed * 100))) : 100;
+$isFastest = $speed > 0 && $speed >= $maxSpeed;
+$screens = max(1, intdiv($speed, 5)); // perkiraan: ±5 Mbps per layar streaming HD
 
-/* Ada transaksi Midtrans yang belum selesai untuk tagihan ini? */
-$pendingId = 0;
-if ($mode === 'midtrans') {
-    $st = $conn->prepare("SELECT id FROM pembayaran WHERE id_tagihan = ? AND id_customer = ? AND status = 'pending' ORDER BY id DESC LIMIT 1");
-    $st->bind_param('ii', $tid, $cid);
-    $st->execute();
-    $pendingId = (int) ($st->get_result()->fetch_column() ?: 0);
-    $st->close();
-}
+$namaPaket = trim((string) preg_replace('/^Paket\s+/i', '', (string) $p['nama_paket']));
+$alamat = (string) flow('alamat');
+$deskripsi = trim((string) ($p['deskripsi'] ?? ''));
+$loggedIn = isCustomer();
+$ctaHref = $loggedIn ? 'verifikasi.php' : 'register.php?paket_id=' . (int) $p['id'];
+$ctaText = $loggedIn ? 'Lanjut verifikasi data' : 'Lanjut daftar customer';
 
-$pageTitle = 'Pembayaran';
-$step = 3;
-$narrow = true;
+$pageTitle = 'Detail Paket';
+$step = 1;
+$narrow = false; // layout dua kolom; ubah ke true untuk kembali ke tampilan sempit
 require __DIR__ . '/inc/header.php';
 ?>
-<div class="page-head enter"><h1>Pembayaran</h1><p>Selesaikan pembayaran untuk memulai proses pemasangan.</p></div>
-<div class="card enter">
-    <?php if ($error): ?><div class="alert err" role="alert"><?= e($error) ?></div><?php endif; ?>
-    <div class="sum"><span>No. tagihan</span><b><?= e($tg['nomor_tagihan']) ?></b></div>
-    <div class="sum"><span>Paket</span><b><?= e($tg['nama_paket']) ?> · <?= (int) $tg['speed_mbps'] ?> Mbps</b></div>
-    <div class="sum"><span>Jatuh tempo</span><b><?= e(date('d M Y', strtotime($tg['jatuh_tempo']))) ?></b></div>
-    <div class="sum"><span>Total</span><b style="font-size:18px;color:var(--blue)"><?= rupiah($tg['jumlah']) ?></b></div>
+<style>
+    .dp { --dp-ink: #0a1a33; --dp-brand: #1677ff; --dp-ok: #12b76a; --dp-line: #e3e9f2; --dp-paper: #f3f6fb; --dp-muted: #667085;
+          container-type: inline-size; width: 100%; max-width: 980px; margin: 0 auto; font-family: inherit; color: #1d2939; }
+    .dp *, .dp *::before, .dp *::after { box-sizing: border-box; }
+    .dp a:focus-visible, .dp button:focus-visible { outline: 3px solid rgba(22,119,255,.45); outline-offset: 2px; }
 
-    <?php if ($mode === 'midtrans'): ?>
-        <form id="snapForm" data-pending="<?= (int) $pendingId ?>" style="margin-top:22px">
-            <?= csrf_field() ?>
-            <?php if ($pendingId > 0): ?>
-                <div class="alert warn" role="status">Anda punya pembayaran yang belum selesai. Lanjutkan di bawah, atau periksa status jika sudah membayar.</div>
-            <?php endif; ?>
-            <p style="margin:0 0 14px;color:#667085;font-size:14px">
-                Metode pembayaran (QRIS, Virtual Account, e-wallet, atau kartu) dipilih di jendela berikutnya, sesuai yang diaktifkan pada akun pembayaran YesNet.
-            </p>
-            <div class="alert err" id="payMsg" role="alert" hidden></div>
-            <button class="btn btn-primary btn-block" type="submit" id="payBtn">
-                <?= $pendingId > 0 ? 'Lanjutkan pembayaran' : 'Bayar ' . rupiah($tg['jumlah']) ?>
-            </button>
-            <button class="btn btn-block" type="button" id="newBtn" hidden style="margin-top:10px">Buat transaksi pembayaran baru</button>
-            <?php if ($pendingId > 0): ?>
-                <button class="btn btn-block" type="button" id="checkBtn" style="margin-top:10px">Periksa status pembayaran</button>
-            <?php endif; ?>
-        </form>
+    .dp-grid { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+    .dp-card { background: #fff; border: 1px solid var(--dp-line); border-radius: 22px; overflow: hidden;
+               box-shadow: 0 1px 2px rgba(10,26,51,.04), 0 24px 48px -28px rgba(10,26,51,.3); }
 
-    <?php elseif ($mode === 'demo'): ?>
-        <form method="post" id="payForm">
-            <?= csrf_field() ?>
-            <label>Metode pembayaran</label>
-            <div class="pay-grid">
-                <?php foreach ($metode as $i => $m): ?>
-                    <label class="pay-opt"><input type="radio" name="metode" value="<?= e($m) ?>" <?= $i === 0 ? 'checked' : '' ?>><?= e($m) ?></label>
-                <?php endforeach; ?>
-            </div>
-            <label>Simulasi hasil (mode demo)</label>
-            <div class="pay-grid">
-                <label class="pay-opt"><input type="radio" name="hasil" value="berhasil" checked>Berhasil</label>
-                <label class="pay-opt"><input type="radio" name="hasil" value="gagal">Gagal</label>
-            </div>
-            <button class="btn btn-primary btn-block" type="submit" style="margin-top:22px">Bayar <?= rupiah($tg['jumlah']) ?></button>
-        </form>
-    <?php else: ?>
-        <div class="alert warn" role="status">Pembayaran online belum dikonfigurasi. Pembayaran tidak akan dicatat sebagai berhasil.</div>
-    <?php endif; ?>
+    /* ---- Panel utama paket ---- */
+    .dp-hero { position: relative; isolation: isolate; padding: 30px 28px 28px; color: #fff; background: var(--dp-ink); overflow: hidden; }
+    .dp-hero::before { content: ""; position: absolute; z-index: -1; right: -90px; top: -90px; width: 340px; height: 340px; border-radius: 50%;
+        background: repeating-radial-gradient(circle, rgba(90,162,255,.30) 0 1.5px, transparent 1.5px 30px); opacity: .55; }
+    .dp-hero::after { content: ""; position: absolute; z-index: -1; inset: 0;
+        background: radial-gradient(70% 120% at 0% 0%, rgba(22,119,255,.28), transparent 65%); }
+    .dp-name { margin: 0; font-size: 15px; font-weight: 700; color: #b9c8e2; }
+    .dp-speed { display: flex; align-items: baseline; gap: 10px; margin: 6px 0 0; }
+    .dp-speed strong { font-size: clamp(56px, 12cqw, 88px); line-height: .95; letter-spacing: -3px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .dp-speed span { font-size: 22px; font-weight: 700; color: #8fb7ff; }
+
+    .dp-meter { margin-top: 24px; max-width: 460px; }
+    .dp-track { position: relative; height: 10px; border-radius: 999px; background: rgba(255,255,255,.14); overflow: hidden; }
+    .dp-fill { position: absolute; inset: 0 auto 0 0; width: var(--pct); border-radius: inherit;
+               background: linear-gradient(90deg, #3b8bff, #5dd6a4); transform-origin: left; animation: dp-fill 1.1s cubic-bezier(.2,.7,.2,1) both; }
+    @keyframes dp-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+    .dp-meter p { margin: 9px 0 0; font-size: 13px; color: #b9c8e2; }
+    .dp-meter p b { color: #fff; }
+
+    .dp-body { padding: 26px 28px 28px; }
+    .dp-priceline { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; }
+    .dp-price { font-size: 32px; font-weight: 800; letter-spacing: -1px; color: var(--dp-ink); }
+    .dp-price small { font-size: 15px; font-weight: 600; color: var(--dp-muted); letter-spacing: 0; }
+    .dp-free { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; background: #ecfdf3; color: #067647; font-size: 13px; font-weight: 700; }
+    .dp-desc { margin: 12px 0 0; color: #475467; font-size: 15px; line-height: 1.65; max-width: 62ch; }
+
+    .dp-specs { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 22px 0 0; padding: 0; list-style: none; }
+    .dp-specs li { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 14px; background: var(--dp-paper); border: 1px solid var(--dp-line); }
+    .dp-ico { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: #fff; border: 1px solid var(--dp-line); color: var(--dp-brand); }
+    .dp-ico svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .dp-specs small { display: block; font-size: 12.5px; color: var(--dp-muted); font-weight: 600; }
+    .dp-specs b { font-size: 15px; color: var(--dp-ink); }
+
+    /* ---- Ringkasan & aksi ---- */
+    .dp-aside { padding: 24px 24px 26px; }
+    .dp-aside h2 { margin: 0 0 14px; font-size: 17px; letter-spacing: -.2px; color: var(--dp-ink); }
+    .dp-rows { margin: 0; }
+    .dp-rows div { display: flex; justify-content: space-between; gap: 14px; padding: 10px 0; border-bottom: 1px dashed var(--dp-line); font-size: 14.5px; }
+    .dp-rows dt { color: var(--dp-muted); }
+    .dp-rows dd { margin: 0; font-weight: 700; text-align: right; color: var(--dp-ink); }
+    .dp-rows .total { border-bottom: 0; padding-top: 14px; font-size: 16px; }
+    .dp-rows .total dd { font-size: 19px; color: var(--dp-brand); }
+
+    .dp-addr { display: flex; gap: 12px; margin-top: 16px; padding: 14px; border-radius: 14px; background: var(--dp-paper); border: 1px solid var(--dp-line); }
+    .dp-addr svg { flex: none; width: 20px; height: 20px; margin-top: 2px; fill: none; stroke: var(--dp-brand); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .dp-addr small { display: block; font-size: 12.5px; color: var(--dp-muted); font-weight: 600; }
+    .dp-addr p { margin: 2px 0 0; font-size: 14px; overflow-wrap: anywhere; }
+    .dp-addr a { display: inline-block; margin-top: 6px; font-size: 13px; font-weight: 700; color: var(--dp-brand); text-decoration: none; }
+    .dp-addr a:hover { text-decoration: underline; }
+
+    .dp-cta { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+    .dp-btn { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; padding: 0 20px; border-radius: 14px;
+              border: 1.5px solid var(--dp-line); background: #fff; color: var(--dp-ink); font: inherit; font-weight: 700; font-size: 15.5px; text-decoration: none;
+              transition: transform .12s, background .15s, box-shadow .15s; }
+    .dp-btn:hover { background: var(--dp-paper); }
+    .dp-btn:active { transform: translateY(1px); }
+    .dp-btn.primary { background: var(--dp-brand); border-color: var(--dp-brand); color: #fff; box-shadow: 0 12px 22px -12px rgba(22,119,255,.75); }
+    .dp-btn.primary:hover { background: #0f67e6; }
+    .dp-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+    .dp-login { margin: 14px 0 0; text-align: center; font-size: 13.5px; color: var(--dp-muted); }
+    .dp-login a { color: var(--dp-brand); font-weight: 700; text-decoration: none; }
+
+    .dp-next { margin: 22px 0 0; padding: 18px 0 0; border-top: 1px solid var(--dp-line); list-style: none; counter-reset: s; display: grid; gap: 12px; }
+    .dp-next li { counter-increment: s; display: flex; gap: 12px; align-items: flex-start; font-size: 14px; color: #475467; }
+    .dp-next li::before { content: counter(s); flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+                          font-size: 12px; font-weight: 800; color: var(--dp-brand); background: #eaf3ff; }
+    .dp-next b { color: var(--dp-ink); }
+
+    @container (min-width: 760px) {
+        .dp-grid { grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr); }
+        .dp-aside { position: sticky; top: 16px; }
+    }
+    @container (max-width: 480px) {
+        .dp-hero { padding: 24px 20px; }
+        .dp-body, .dp-aside { padding-left: 20px; padding-right: 20px; }
+    }
+    @media (prefers-reduced-motion: reduce) { .dp-fill { animation: none; } .dp-btn { transition: none; } }
+</style>
+
+<div class="page-head enter">
+    <h1>Detail Paket <?= e($namaPaket) ?></h1>
+    <p>Periksa paket dan alamat pemasangan sebelum melanjutkan.</p>
 </div>
 
-<?php if ($mode === 'midtrans'): ?>
-<script src="<?= e(midtransSnapJsUrl()) ?>" data-client-key="<?= e(MIDTRANS_CLIENT_KEY) ?>"></script>
-<script>
-(function () {
-  var form = document.getElementById('snapForm');
-  if (!form) { return; }
-  var btn = document.getElementById('payBtn'), newBtn = document.getElementById('newBtn'),
-      checkBtn = document.getElementById('checkBtn'), msg = document.getElementById('payMsg');
-  var label = btn.textContent.trim();
+<div class="dp enter">
+    <div class="dp-grid">
 
-  function show(t) { msg.textContent = t; msg.hidden = false; }
-  function reset() { btn.disabled = false; btn.textContent = label; if (checkBtn) { checkBtn.disabled = false; } }
-  function post(data) {
-    var fd = new FormData(form);
-    Object.keys(data).forEach(function (k) { fd.append(k, data[k]); });
-    return fetch(window.location.href, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
-      .then(function (r) { return r.json(); });
-  }
-  function toResult(id) { window.location.href = 'hasil_pembayaran.php?id=' + encodeURIComponent(id); }
-  function finish(id) {
-    // Sinkronkan status lebih dulu supaya hasil langsung benar, walau webhook belum masuk.
-    post({ aksi: 'sync', pembayaran_id: id }).catch(function () {}).then(function () { toResult(id); });
-  }
+        <section class="dp-card" aria-labelledby="dpTitle">
+            <div class="dp-hero">
+                <p class="dp-name" id="dpTitle"><?= e($p['nama_paket']) ?></p>
+                <div class="dp-speed"><strong><?= $speed ?></strong><span>Mbps</span></div>
 
-  function pay(baru) {
-    if (typeof window.snap === 'undefined') { show('Jendela pembayaran gagal dimuat. Periksa koneksi lalu muat ulang halaman.'); return; }
-    btn.disabled = true; btn.textContent = 'Menyiapkan pembayaran...'; msg.hidden = true;
-    post({ aksi: 'snap', baru: baru ? '1' : '' }).then(function (r) {
-      if (!r.ok) { throw new Error(r.pesan || 'Pembayaran belum dapat diproses.'); }
-      window.snap.pay(r.token, {
-        onSuccess: function () { finish(r.pembayaran_id); },
-        onPending: function () { finish(r.pembayaran_id); },
-        onError:   function () { reset(); newBtn.hidden = false; show('Pembayaran gagal diproses. Coba lagi atau buat transaksi baru.'); },
-        onClose:   function () { reset(); newBtn.hidden = false; show('Jendela pembayaran ditutup sebelum selesai. Anda dapat melanjutkannya kapan saja.'); }
-      });
-    }).catch(function (e) { reset(); show(e.message || 'Pembayaran belum dapat diproses.'); });
-  }
+                <div class="dp-meter">
+                    <div class="dp-track" role="img" aria-label="Kecepatan <?= $speed ?> Mbps dari maksimum <?= $maxSpeed ?> Mbps">
+                        <div class="dp-fill" style="--pct: <?= $speedPct ?>%"></div>
+                    </div>
+                    <p>
+                        <?php if ($isFastest): ?>
+                            <b>Paket tercepat</b> YesNet.
+                        <?php else: ?>
+                            <b><?= $speedPct ?>%</b> dari paket tercepat (<?= $maxSpeed ?> Mbps).
+                        <?php endif; ?>
+                        Cukup untuk sekitar <b><?= $screens ?></b> layar streaming HD sekaligus (perkiraan).
+                    </p>
+                </div>
+            </div>
 
-  form.addEventListener('submit', function (ev) { ev.preventDefault(); pay(false); });
-  newBtn.addEventListener('click', function () { pay(true); });
+            <div class="dp-body">
+                <div class="dp-priceline">
+                    <div class="dp-price"><?= e(rupiah($p['harga'])) ?> <small>/bulan</small></div>
+                    <span class="dp-free">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>
+                        Instalasi gratis
+                    </span>
+                </div>
 
-  if (checkBtn) {
-    checkBtn.addEventListener('click', function () {
-      checkBtn.disabled = true; msg.hidden = true;
-      var id = form.getAttribute('data-pending');
-      post({ aksi: 'sync', pembayaran_id: id }).then(function (r) {
-        if (r.ok && r.status === 'success') { toResult(id); return; }
-        checkBtn.disabled = false;
-        show(r.ok ? 'Pembayaran belum kami terima. Selesaikan pembayaran lalu periksa lagi.' : (r.pesan || 'Status belum dapat diperiksa.'));
-      }).catch(function () { checkBtn.disabled = false; show('Status belum dapat diperiksa.'); });
-    });
-  }
+                <?php if ($deskripsi !== ''): ?>
+                    <p class="dp-desc"><?= e($deskripsi) ?></p>
+                <?php endif; ?>
 
-  window.addEventListener('pageshow', function (ev) { if (ev.persisted) { reset(); } });
-})();
-</script>
-<?php elseif ($mode === 'demo'): ?>
-<script>
-var payForm = document.getElementById('payForm');
-if (payForm) {
-  payForm.addEventListener('submit', function () {
-    var b = this.querySelector('button[type=submit]');
-    setTimeout(function () { b.disabled = true; b.classList.add('loading'); }, 0);
-  });
-}
-</script>
-<?php endif; ?>
+                <ul class="dp-specs">
+                    <li>
+                        <span class="dp-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.4 6.6a8 8 0 1 0 0 10.8"/><path d="M8 12h8M16 12l-3-3M16 12l-3 3" transform="translate(-1 0)"/></svg></span>
+                        <div><small>Kuota</small><b>Unlimited</b></div>
+                    </li>
+                    <li>
+                        <span class="dp-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/></svg></span>
+                        <div><small>Perangkat</small><b>WiFi Router</b></div>
+                    </li>
+                    <li>
+                        <span class="dp-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.6-.6-.6-2.6z"/></svg></span>
+                        <div><small>Biaya instalasi</small><b>Gratis</b></div>
+                    </li>
+                    <li>
+                        <span class="dp-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
+                        <div><small>Jaringan</small><b>Tersedia di lokasi Anda</b></div>
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        <aside class="dp-card dp-aside" aria-labelledby="dpSum">
+            <h2 id="dpSum">Ringkasan pesanan</h2>
+
+            <dl class="dp-rows">
+                <div><dt>Paket</dt><dd><?= e($namaPaket) ?> · <?= $speed ?> Mbps</dd></div>
+                <div><dt>Biaya instalasi</dt><dd>Gratis</dd></div>
+                <div class="total"><dt>Biaya bulanan</dt><dd><?= e(rupiah($p['harga'])) ?></dd></div>
+            </dl>
+
+            <div class="dp-addr">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+                <div>
+                    <small>Alamat pemasangan</small>
+                    <p><?= e($alamat) ?></p>
+                    <a href="coverage.php?alamat=<?= e(rawurlencode($alamat)) ?>">Ganti alamat</a>
+                </div>
+            </div>
+
+            <div class="dp-cta">
+                <a class="dp-btn primary" href="<?= e($ctaHref) ?>">
+                    <?= e($ctaText) ?>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                </a>
+                <a class="dp-btn" href="paket.php?mode=coverage">Ganti paket</a>
+            </div>
+
+            <?php if (!$loggedIn): ?>
+                <p class="dp-login">Sudah punya akun? <a href="login.php">Login customer</a></p>
+            <?php endif; ?>
+
+            <ol class="dp-next" aria-label="Langkah berikutnya">
+                <li><span><b><?= $loggedIn ? 'Verifikasi data' : 'Daftar akun' ?></b><br>Lengkapi data diri untuk pemasangan.</span></li>
+                <li><span><b>Pembayaran</b><br>Bayar tagihan pertama secara online.</span></li>
+                <li><span><b>Pemasangan</b><br>Tim YesNet memasang jaringan di alamat Anda.</span></li>
+            </ol>
+        </aside>
+
+    </div>
+</div>
 <?php require __DIR__ . '/inc/footer.php'; ?>
