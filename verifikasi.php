@@ -31,30 +31,97 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $nik = (string) $cust['nik'];
 $nikMask = strlen($nik) > 8 ? substr($nik, 0, 4) . str_repeat('•', strlen($nik) - 8) . substr($nik, -4) : $nik;
 
+// Alamat pemasangan: pakai dari alur coverage, cadangan alamat saat daftar.
+$alamat = (string) (flow('alamat') ?: ($cust['alamat'] ?? ''));
+
+$cssFile = __DIR__ . '/assets/css/verifikasi.css';
+$cssVer  = is_file($cssFile) ? filemtime($cssFile) : 1;
+
 $pageTitle = 'Verifikasi Data';
 $step = 2;
 $narrow = true;
 require __DIR__ . '/inc/header.php';
 ?>
-<div class="page-head enter">
-    <h1>Verifikasi Data</h1>
-    <p>Periksa kembali data Anda sebelum membuat order.</p>
-</div>
-<div class="card enter">
-    <?php if ($error): ?><div class="alert err" role="alert"><?= e($error) ?></div><?php endif; ?>
-    <div class="sum"><span>Nama</span><b><?= e($cust['nama']) ?></b></div>
-    <div class="sum"><span>Email</span><b><?= e($cust['email']) ?></b></div>
-    <div class="sum"><span>WhatsApp</span><b><?= e($cust['telephone']) ?></b></div>
-    <div class="sum"><span>NIK</span><b><?= e($nikMask) ?></b></div>
-    <div class="sum"><span>Alamat pemasangan</span><b><?= e(flow('alamat')) ?></b></div>
-    <div class="sum"><span>Paket</span><b><?= e($p['nama_paket']) ?> · <?= (int) $p['speed_mbps'] ?> Mbps</b></div>
-    <form method="post">
-        <?= csrf_field() ?>
-        <label style="display:flex;gap:10px;align-items:flex-start;font-weight:500;margin-top:18px">
-            <input type="checkbox" name="benar" value="1" style="margin-top:4px">
-            Saya menyatakan data di atas sudah benar.
-        </label>
-        <button class="btn btn-primary btn-block" type="submit" style="margin-top:18px">Data Benar, Lanjutkan</button>
-    </form>
+<link rel="stylesheet" href="/assets/css/verifikasi.css?v=<?= (int) $cssVer ?>">
+
+<div class="verif">
+
+    <div class="page-head enter">
+        <span class="v-eyebrow"><i></i> Langkah 2 · Verifikasi</span>
+        <h1>Verifikasi Data</h1>
+        <p>Periksa kembali data Anda sebelum order dibuat.</p>
+    </div>
+
+    <div class="card enter">
+        <div class="v-body">
+
+            <?php if ($error): ?>
+                <div class="alert err" role="alert">⚠️ <span><?= e($error) ?></span></div>
+            <?php endif; ?>
+
+            <div class="v-title"><span>Data Pelanggan</span></div>
+
+            <div class="v-list">
+                <div class="v-row">
+                    <div class="v-ico">👤</div>
+                    <div class="v-txt"><small>Nama</small><b><?= e($cust['nama']) ?></b></div>
+                    <div class="v-ok">✓</div>
+                </div>
+                <div class="v-row">
+                    <div class="v-ico">✉️</div>
+                    <div class="v-txt"><small>Email</small><b><?= e($cust['email']) ?></b></div>
+                    <div class="v-ok">✓</div>
+                </div>
+                <div class="v-row">
+                    <div class="v-ico">💬</div>
+                    <div class="v-txt"><small>WhatsApp</small><b><?= e($cust['telephone']) ?></b></div>
+                    <div class="v-ok">✓</div>
+                </div>
+                <div class="v-row">
+                    <div class="v-ico">🪪</div>
+                    <div class="v-txt"><small>NIK</small><b class="v-mono"><?= e($nikMask) ?></b></div>
+                    <div class="v-ok">✓</div>
+                </div>
+                <div class="v-row">
+                    <div class="v-ico">📍</div>
+                    <div class="v-txt"><small>Alamat pemasangan</small><b><?= e($alamat) ?></b></div>
+                    <div class="v-ok">✓</div>
+                </div>
+            </div>
+
+            <div class="v-title"><span>Paket Dipilih</span></div>
+
+            <div class="v-plan">
+                <small>Paket internet</small>
+                <div class="v-plan-main">
+                    <div class="v-plan-name"><?= e($p['nama_paket']) ?></div>
+                    <div class="v-plan-speed"><b><?= (int) $p['speed_mbps'] ?></b><span>Mbps</span></div>
+                </div>
+            </div>
+
+            <div class="v-note">
+                <span>🔒</span>
+                <div>NIK ditampilkan sebagian demi keamanan. Data Anda hanya dipakai untuk proses pemasangan.</div>
+            </div>
+
+            <form method="post" class="v-form">
+                <?= csrf_field() ?>
+
+                <label class="v-check">
+                    <input type="checkbox" name="benar" value="1">
+                    <span class="v-box" aria-hidden="true"></span>
+                    <span>Saya menyatakan data di atas sudah benar.</span>
+                </label>
+
+                <button class="btn btn-primary btn-block btn-go" type="submit">
+                    Data Benar, Lanjutkan <span class="arr">→</span>
+                </button>
+
+                <a class="v-back" href="paket.php?mode=coverage">← Ganti paket</a>
+            </form>
+
+        </div>
+    </div>
+
 </div>
 <?php require __DIR__ . '/inc/footer.php'; ?>

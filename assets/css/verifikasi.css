@@ -1,0 +1,159 @@
+/* =========================================================
+   YESNET - VERIFIKASI DATA
+   Dimuat SETELAH yesnet.css. Semua aturan di-scope ke .verif
+   sehingga tidak mengubah halaman lain.
+========================================================= */
+
+.verif{position:relative}
+
+/* glow dekoratif di belakang halaman */
+.verif::before{
+  content:"";position:absolute;z-index:-1;inset:-40px -10vw auto;height:320px;
+  background:
+    radial-gradient(420px 220px at 18% 10%,rgba(31,98,255,.16),transparent 70%),
+    radial-gradient(380px 200px at 85% 0%,rgba(18,181,255,.18),transparent 70%);
+  pointer-events:none;
+}
+
+/* ---------- Header ---------- */
+.verif .v-eyebrow{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:5px 12px;border-radius:99px;
+  background:var(--soft);color:var(--blue);
+  font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+}
+.verif .v-eyebrow i{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(20,184,106,.5);animation:vping 1.8s infinite}
+.verif .page-head h1{
+  margin-top:12px;font-size:clamp(26px,5vw,34px);letter-spacing:-.02em;
+  background:linear-gradient(110deg,var(--navy),var(--blue) 70%,var(--sky));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+
+/* ---------- Kartu utama ---------- */
+.verif .card{
+  position:relative;overflow:hidden;padding:0;
+  border-color:var(--line);box-shadow:var(--shadow);
+}
+.verif .card::before{
+  content:"";display:block;height:5px;
+  background:linear-gradient(90deg,var(--blue),var(--sky),var(--blue));
+  background-size:200% 100%;animation:vflow 6s linear infinite;
+}
+.verif .v-body{padding:8px 26px 26px}
+
+.verif .v-title{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:20px 0 8px;font-size:12px;font-weight:800;color:var(--muted);
+  letter-spacing:.08em;text-transform:uppercase;
+}
+.verif .v-title::after{content:"";flex:1;height:1px;background:var(--line);order:1}
+.verif .v-title span{order:0}
+
+/* ---------- Baris data ---------- */
+.verif .v-list{display:grid;gap:4px}
+.verif .v-row{
+  display:flex;align-items:center;gap:14px;
+  padding:12px 12px;margin:0 -12px;border-radius:14px;
+  transition:background .2s,transform .2s;
+}
+.verif .v-row:hover{background:var(--bg);transform:translateX(3px)}
+.verif .v-ico{
+  flex:none;width:40px;height:40px;border-radius:12px;
+  display:grid;place-items:center;font-size:18px;
+  background:linear-gradient(145deg,var(--soft),#fff);
+  border:1px solid var(--line);
+}
+.verif .v-txt{min-width:0;flex:1}
+.verif .v-txt small{display:block;font-size:11.5px;font-weight:700;color:var(--muted);letter-spacing:.03em}
+.verif .v-txt b{display:block;color:var(--ink);font-size:15px;word-break:break-word}
+.verif .v-mono{font-family:ui-monospace,'JetBrains Mono','SFMono-Regular',Menlo,Consolas,monospace;letter-spacing:.06em}
+.verif .v-ok{
+  flex:none;width:22px;height:22px;border-radius:50%;
+  display:grid;place-items:center;font-size:11px;font-weight:800;
+  background:rgba(20,184,106,.14);color:var(--ok);
+}
+
+/* ---------- Kartu paket ---------- */
+.verif .v-plan{
+  position:relative;overflow:hidden;margin-top:14px;padding:20px;border-radius:16px;
+  color:#fff;
+  background:linear-gradient(135deg,var(--navy) 0%,#123a9c 55%,var(--blue) 100%);
+  box-shadow:0 16px 30px rgba(10,36,99,.25);
+}
+.verif .v-plan::after{
+  content:"";position:absolute;right:-50px;top:-60px;width:190px;height:190px;border-radius:50%;
+  background:radial-gradient(circle,rgba(18,181,255,.45),transparent 70%);
+}
+.verif .v-plan small{display:block;position:relative;z-index:1;font-size:11.5px;font-weight:700;opacity:.75;letter-spacing:.08em;text-transform:uppercase}
+.verif .v-plan-main{position:relative;z-index:1;display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-top:6px;flex-wrap:wrap}
+.verif .v-plan-name{font-size:22px;font-weight:800;line-height:1.1}
+.verif .v-plan-speed{
+  display:inline-flex;align-items:baseline;gap:5px;
+  padding:7px 14px;border-radius:99px;
+  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);
+  backdrop-filter:blur(6px);
+}
+.verif .v-plan-speed b{font-size:22px;font-weight:800;color:#fff}
+.verif .v-plan-speed span{font-size:12px;font-weight:700;opacity:.85}
+
+/* ---------- Catatan keamanan ---------- */
+.verif .v-note{
+  display:flex;gap:10px;align-items:flex-start;margin-top:16px;padding:12px 14px;
+  border-radius:12px;background:var(--bg);border:1px dashed var(--line);
+  font-size:12.5px;color:var(--muted);
+}
+.verif .v-note span{font-size:15px;line-height:1.2}
+
+/* ---------- Checkbox kustom ---------- */
+.verif .v-check{
+  display:flex;gap:12px;align-items:flex-start;margin:18px 0 0;
+  padding:14px 16px;border:1.5px solid var(--line);border-radius:14px;
+  font-size:14px;font-weight:600;color:var(--ink);cursor:pointer;
+  transition:border-color .2s,background .2s,box-shadow .2s;
+}
+.verif .v-check:hover{border-color:var(--blue)}
+.verif .v-check:has(input:checked){border-color:var(--blue);background:var(--soft)}
+.verif .v-check:has(input:focus-visible){outline:3px solid var(--sky);outline-offset:2px}
+.verif .v-check input{position:absolute;opacity:0;width:1px;height:1px}
+.verif .v-box{
+  flex:none;width:22px;height:22px;margin-top:1px;border-radius:7px;
+  border:2px solid var(--line);background:#fff;
+  display:grid;place-items:center;transition:.2s;
+}
+.verif .v-box::after{
+  content:"";width:10px;height:6px;margin-top:-2px;
+  border-left:2.5px solid #fff;border-bottom:2.5px solid #fff;
+  transform:rotate(-45deg) scale(0);transition:transform .2s cubic-bezier(.3,1.6,.5,1);
+}
+.verif .v-check input:checked + .v-box{background:var(--blue);border-color:var(--blue)}
+.verif .v-check input:checked + .v-box::after{transform:rotate(-45deg) scale(1)}
+
+/* ---------- Tombol ---------- */
+.verif .btn-go{margin-top:18px;padding:14px 24px;font-size:15px;transition:transform .2s,box-shadow .2s,opacity .25s,background-position .4s}
+.verif .btn-go .arr{transition:transform .2s}
+.verif .btn-go:hover .arr{transform:translateX(4px)}
+.verif .v-form:not(:has(input:checked)) .btn-go{opacity:.6;box-shadow:none}
+
+.verif .v-back{display:block;text-align:center;margin-top:14px;font-size:13px;font-weight:700;color:var(--muted);text-decoration:none}
+.verif .v-back:hover{color:var(--blue)}
+
+/* ---------- Alert ---------- */
+.verif .alert{margin:18px 0 0;display:flex;gap:10px;align-items:flex-start;animation:vshake .4s}
+
+/* ---------- Animasi ---------- */
+@keyframes vping{70%{box-shadow:0 0 0 8px rgba(20,184,106,0)}100%{box-shadow:0 0 0 0 rgba(20,184,106,0)}}
+@keyframes vflow{to{background-position:200% 0}}
+@keyframes vshake{20%{transform:translateX(-5px)}50%{transform:translateX(5px)}80%{transform:translateX(-3px)}}
+
+.verif .v-row{animation:rise .5s cubic-bezier(.2,.8,.2,1) both}
+.verif .v-row:nth-child(1){animation-delay:.05s}
+.verif .v-row:nth-child(2){animation-delay:.10s}
+.verif .v-row:nth-child(3){animation-delay:.15s}
+.verif .v-row:nth-child(4){animation-delay:.20s}
+.verif .v-row:nth-child(5){animation-delay:.25s}
+
+/* ---------- Responsif ---------- */
+@media(max-width:520px){
+  .verif .v-body{padding:4px 18px 20px}
+  .verif .v-plan-name{font-size:19px}
+}

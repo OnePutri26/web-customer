@@ -8,18 +8,39 @@ $step = $step ?? null;
 $stepLabel = ['Coverage', 'Paket', 'Daftar & Verifikasi', 'Order & Bayar', 'Instalasi', 'Aktif'];
 
 /*
-| URL stylesheet dihitung dari lokasi folder project terhadap document root,
-| bukan relatif terhadap halaman yang sedang dibuka, sehingga CSS tetap termuat
-| walau halaman diakses dari folder/URL yang berbeda (mis. /project/detail_paket.php).
+| Cari yesnet.css di beberapa lokasi umum, lalu buat URL dari posisinya terhadap
+| document root (bukan relatif terhadap halaman yang sedang dibuka).
 */
-$cssFile = realpath(__DIR__ . '/../assets/css/yesnet.css');
 $rootDir = str_replace('\\', '/', (string) realpath(__DIR__ . '/..'));
+$cssCandidates = [
+    $rootDir . '/assets/css/yesnet.css',
+    $rootDir . '/assets/yesnet.css',
+    $rootDir . '/css/yesnet.css',
+    $rootDir . '/public/assets/css/yesnet.css',
+    $rootDir . '/customer/assets/css/yesnet.css',
+];
+foreach (glob($rootDir . '/*/assets/css/yesnet.css') ?: [] as $g) {
+    $cssCandidates[] = str_replace('\\', '/', $g);
+}
+$cssFile = null;
+foreach ($cssCandidates as $c) {
+    if (is_file($c)) {
+        $cssFile = $c;
+        break;
+    }
+}
+
 $docRaw = (string) ($_SERVER['DOCUMENT_ROOT'] ?? '');
 $docRoot = $docRaw !== '' ? rtrim(str_replace('\\', '/', (string) realpath($docRaw)), '/') : '';
-$cssUrl = ($docRoot !== '' && stripos($rootDir, $docRoot) === 0)
-    ? substr($rootDir, strlen($docRoot)) . '/assets/css/yesnet.css'
-    : 'assets/css/yesnet.css';
-$cssVer = $cssFile ? (int) @filemtime($cssFile) : 0;
+$cssUrl = 'assets/css/yesnet.css';
+if ($cssFile !== null && $docRoot !== '' && stripos($cssFile, $docRoot) === 0) {
+    $cssUrl = substr($cssFile, strlen($docRoot));
+}
+$cssVer = $cssFile !== null ? (int) @filemtime($cssFile) : 0;
+
+/* Info diagnostik hanya untuk akses dari komputer lokal: tambahkan ?debugcss=1 di URL */
+$isLocal = in_array((string) ($_SERVER['REMOTE_ADDR'] ?? ''), ['127.0.0.1', '::1'], true);
+$debugCss = $isLocal && isset($_GET['debugcss']);
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -33,6 +54,27 @@ $cssVer = $cssFile ? (int) @filemtime($cssFile) : 0;
     <link rel="stylesheet" href="<?= e($cssUrl) ?><?= $cssVer ? '?v=' . $cssVer : '' ?>">
 </head>
 <body>
+<?php if ($cssFile === null): ?>
+    <div style="background:#fef3f2;border:1px solid #fecdca;color:#b42318;padding:12px 16px;font:14px/1.5 system-ui,sans-serif">
+        File CSS <b>yesnet.css</b> tidak ditemukan. Letakkan di folder <b>assets/css/</b> pada folder utama project.
+    </div>
+<?php endif; ?>
+<?php if ($debugCss): ?>
+    <pre style="background:#0a1a33;color:#d6e4ff;padding:14px 16px;margin:0;font:12.5px/1.6 monospace;white-space:pre-wrap">DIAGNOSTIK CSS
+folder project : <?= e($rootDir) ?>
+
+document root  : <?= e($docRoot) ?>
+
+URL CSS        : <?= e($cssUrl) ?>
+
+file CSS       : <?= e($cssFile ?? '(tidak ditemukan)') ?>
+
+Lokasi yang dicek:
+<?php foreach ($cssCandidates as $c): ?>
+ - <?= is_file($c) ? '[ADA]   ' : '[tidak] ' ?><?= e($c) ?>
+
+<?php endforeach; ?></pre>
+<?php endif; ?>
 <header class="navbar">
     <a href="index.php" class="brand"><?= logoHtml() ?></a>
     <nav class="nav-links">
