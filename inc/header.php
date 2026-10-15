@@ -1,99 +1,222 @@
 <?php
 /*
-| Layout publik. Variabel opsional sebelum include:
-| $pageTitle (string), $step (0-5, posisi di stepper alur berlangganan)
+|--------------------------------------------------------------------------
+| YESNET - HEADER PUBLIK
+|--------------------------------------------------------------------------
+| Variabel opsional sebelum include:
+| $pageTitle : judul halaman
+| $step      : langkah 0-5
+| $narrow    : true jika halaman memang perlu dibatasi lebarnya
+|--------------------------------------------------------------------------
 */
+
 $pageTitle = $pageTitle ?? 'YesNet';
-$step = $step ?? null;
-$stepLabel = ['Coverage', 'Paket', 'Daftar & Verifikasi', 'Order & Bayar', 'Instalasi', 'Aktif'];
+$step = isset($step) ? (int) $step : null;
+$narrow = $narrow ?? false;
+
+$stepLabel = [
+    'Coverage',
+    'Paket',
+    'Daftar & Verifikasi',
+    'Order & Bayar',
+    'Instalasi',
+    'Aktif',
+];
 
 /*
-| Cari yesnet.css di beberapa lokasi umum, lalu buat URL dari posisinya terhadap
-| document root (bukan relatif terhadap halaman yang sedang dibuka).
+|--------------------------------------------------------------------------
+| Cari file CSS utama
+|--------------------------------------------------------------------------
 */
-$rootDir = str_replace('\\', '/', (string) realpath(__DIR__ . '/..'));
-$cssCandidates = [
-    $rootDir . '/assets/css/yesnet.css',
-    $rootDir . '/assets/yesnet.css',
-    $rootDir . '/css/yesnet.css',
-    $rootDir . '/public/assets/css/yesnet.css',
-    $rootDir . '/customer/assets/css/yesnet.css',
-];
-foreach (glob($rootDir . '/*/assets/css/yesnet.css') ?: [] as $g) {
-    $cssCandidates[] = str_replace('\\', '/', $g);
-}
-$cssFile = null;
-foreach ($cssCandidates as $c) {
-    if (is_file($c)) {
-        $cssFile = $c;
-        break;
+
+$rootReal = realpath(__DIR__ . '/..');
+$rootDir = $rootReal !== false
+    ? str_replace('\\', '/', $rootReal)
+    : '';
+
+$cssCandidates = [];
+
+if ($rootDir !== '') {
+    $cssCandidates = [
+        $rootDir . '/assets/css/yesnet.css',
+        $rootDir . '/assets/yesnet.css',
+        $rootDir . '/css/yesnet.css',
+        $rootDir . '/yesnet.css',
+        $rootDir . '/public/assets/css/yesnet.css',
+        $rootDir . '/customer/assets/css/yesnet.css',
+    ];
+
+    foreach (glob($rootDir . '/*/assets/css/yesnet.css') ?: [] as $file) {
+        $cssCandidates[] = str_replace('\\', '/', $file);
     }
 }
 
-$docRaw = (string) ($_SERVER['DOCUMENT_ROOT'] ?? '');
-$docRoot = $docRaw !== '' ? rtrim(str_replace('\\', '/', (string) realpath($docRaw)), '/') : '';
-$cssUrl = 'assets/css/yesnet.css';
-if ($cssFile !== null && $docRoot !== '' && stripos($cssFile, $docRoot) === 0) {
-    $cssUrl = substr($cssFile, strlen($docRoot));
-}
-$cssVer = $cssFile !== null ? (int) @filemtime($cssFile) : 0;
+$cssFile = null;
 
-/* Info diagnostik hanya untuk akses dari komputer lokal: tambahkan ?debugcss=1 di URL */
-$isLocal = in_array((string) ($_SERVER['REMOTE_ADDR'] ?? ''), ['127.0.0.1', '::1'], true);
-$debugCss = $isLocal && isset($_GET['debugcss']);
+foreach (array_unique($cssCandidates) as $candidate) {
+    if (is_file($candidate) && is_readable($candidate)) {
+        $realFile = realpath($candidate);
+
+        if ($realFile !== false) {
+            $cssFile = str_replace('\\', '/', $realFile);
+            break;
+        }
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Ubah lokasi file menjadi URL
+|--------------------------------------------------------------------------
+| Jangan menganggap folder proyek selalu sama dengan document root.
+|--------------------------------------------------------------------------
+*/
+
+$docRootRaw = (string) ($_SERVER['DOCUMENT_ROOT'] ?? '');
+$docRootReal = $docRootRaw !== '' ? realpath($docRootRaw) : false;
+
+$docRoot = $docRootReal !== false
+    ? rtrim(str_replace('\\', '/', $docRootReal), '/')
+    : '';
+
+$cssUrl = null;
+
+if ($cssFile !== null && $docRoot !== '') {
+    $rootPrefix = $docRoot . '/';
+
+    if (stripos($cssFile, $rootPrefix) === 0) {
+        $relativeCss = substr($cssFile, strlen($rootPrefix));
+
+        $segments = array_map(
+            'rawurlencode',
+            explode('/', $relativeCss)
+        );
+
+        $cssUrl = '/' . implode('/', $segments);
+    } elseif (strcasecmp($cssFile, $docRoot) === 0) {
+        $cssUrl = '/';
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Versi CSS untuk menghindari cache lama
+|--------------------------------------------------------------------------
+*/
+
+$cssVersion = $cssFile !== null
+    ? (string) (@filemtime($cssFile) ?: time())
+    : '';
+
+/*
+|--------------------------------------------------------------------------
+| URL halaman publik
+|--------------------------------------------------------------------------
+| Gunakan URL relatif dari lokasi halaman yang memanggil header.
+|--------------------------------------------------------------------------
+*/
+
+$homeUrl = 'index.php';
+$coverageUrl = 'coverage.php';
+$packageUrl = 'paket.php?mode=direct';
+$loginUrl = 'login.php';
+$dashboardUrl = 'redirect.php';
+
+$isLoggedInCustomer = function_exists('isCustomer')
+    && isCustomer();
+
 ?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title><?= e($pageTitle) ?> - YesNet</title>
+
+    <meta name="theme-color" content="#f4f8ff">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap">
-    <link rel="stylesheet" href="<?= e($cssUrl) ?><?= $cssVer ? '?v=' . $cssVer : '' ?>">
+
+    <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    >
+
+    <?php if ($cssUrl !== null): ?>
+        <link
+            rel="stylesheet"
+            href="<?= e($cssUrl) ?>?v=<?= e($cssVersion) ?>"
+        >
+    <?php endif; ?>
 </head>
 <body>
-<?php if ($cssFile === null): ?>
-    <div style="background:#fef3f2;border:1px solid #fecdca;color:#b42318;padding:12px 16px;font:14px/1.5 system-ui,sans-serif">
-        File CSS <b>yesnet.css</b> tidak ditemukan. Letakkan di folder <b>assets/css/</b> pada folder utama project.
+
+<?php if ($cssUrl === null): ?>
+    <div style="
+        padding:12px 16px;
+        background:#fff0f0;
+        color:#a4262c;
+        border:1px solid #ffd0d2;
+        font:14px/1.5 system-ui,sans-serif
+    ">
+        <strong>CSS YesNet belum dapat dimuat.</strong>
+        Periksa lokasi file <code>yesnet.css</code> dan pastikan
+        file tersebut berada di dalam document root server web.
     </div>
 <?php endif; ?>
-<?php if ($debugCss): ?>
-    <pre style="background:#0a1a33;color:#d6e4ff;padding:14px 16px;margin:0;font:12.5px/1.6 monospace;white-space:pre-wrap">DIAGNOSTIK CSS
-folder project : <?= e($rootDir) ?>
 
-document root  : <?= e($docRoot) ?>
-
-URL CSS        : <?= e($cssUrl) ?>
-
-file CSS       : <?= e($cssFile ?? '(tidak ditemukan)') ?>
-
-Lokasi yang dicek:
-<?php foreach ($cssCandidates as $c): ?>
- - <?= is_file($c) ? '[ADA]   ' : '[tidak] ' ?><?= e($c) ?>
-
-<?php endforeach; ?></pre>
-<?php endif; ?>
 <header class="navbar">
-    <a href="index.php" class="brand"><?= logoHtml() ?></a>
-    <nav class="nav-links">
-        <a href="index.php">Beranda</a>
-        <a href="coverage.php">Cek Coverage</a>
-        <a href="paket.php?mode=direct">Paket</a>
+    <a href="<?= e($homeUrl) ?>" class="brand">
+        <?= logoHtml() ?>
+    </a>
+
+    <nav class="nav-links" aria-label="Navigasi utama">
+        <a href="<?= e($homeUrl) ?>">Beranda</a>
+        <a href="<?= e($coverageUrl) ?>">Cek Coverage</a>
+        <a href="<?= e($packageUrl) ?>">Paket</a>
     </nav>
-    <?php if (isCustomer()): ?>
-        <a href="redirect.php" class="btn btn-primary">Dashboard</a>
+
+    <?php if ($isLoggedInCustomer): ?>
+        <a href="<?= e($dashboardUrl) ?>" class="btn btn-primary">
+            Dashboard
+        </a>
     <?php else: ?>
-        <a href="login.php" class="btn btn-primary">Login Customer</a>
+        <a href="<?= e($loginUrl) ?>" class="btn btn-primary">
+            Login Customer
+        </a>
     <?php endif; ?>
 </header>
-<main class="wrap<?= !empty($narrow) ? ' narrow' : '' ?>">
-<?php if ($step !== null): ?>
-    <ol class="stepper" aria-hidden="true">
-        <?php foreach ($stepLabel as $i => $l): ?>
-            <li class="<?= $i < $step ? 'done' : ($i === $step ? 'now' : '') ?>"></li>
+
+<main class="wrap<?= $narrow ? ' narrow' : '' ?>">
+
+<?php if ($step !== null && $step >= 0 && $step < count($stepLabel)): ?>
+    <ol
+        class="stepper"
+        aria-label="Progres berlangganan"
+    >
+        <?php foreach ($stepLabel as $index => $label): ?>
+            <?php
+            $stepClass = '';
+
+            if ($index < $step) {
+                $stepClass = 'done';
+            } elseif ($index === $step) {
+                $stepClass = 'now';
+            }
+            ?>
+
+            <li
+                class="<?= e($stepClass) ?>"
+                aria-label="<?= e($label) ?>"
+                <?= $index === $step ? 'aria-current="step"' : '' ?>
+            ></li>
         <?php endforeach; ?>
     </ol>
-    <div class="stepper-label">Langkah <?= $step + 1 ?> dari 6: <?= e($stepLabel[$step]) ?></div>
+
+    <div class="stepper-label">
+        Langkah <?= $step + 1 ?> dari <?= count($stepLabel) ?>:
+        <?= e($stepLabel[$step]) ?>
+    </div>
 <?php endif; ?>

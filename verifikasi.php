@@ -1,331 +1,148 @@
 <?php
-declare(strict_types=1);
-
 require_once __DIR__ . '/config/app.php';
 
-/*
-|--------------------------------------------------------------------------
-| YESNET - VERIFIKASI DATA PELANGGAN
-|--------------------------------------------------------------------------
-| File       : verifikasi.php
-| CSS        : assets/css/yesnet.css
-|              assets/css/verifikasi.css
-| Berikutnya : order.php
-|--------------------------------------------------------------------------
-*/
-
-
-
-/*
-|--------------------------------------------------------------------------
-| 1. Validasi pelanggan
-|--------------------------------------------------------------------------
-*/
 if (!isCustomer()) {
     redirect(flow('paket_id') ? 'register.php' : 'login.php');
 }
-
-/*
-|--------------------------------------------------------------------------
-| 2. Validasi alur coverage dan paket
-|--------------------------------------------------------------------------
-*/
-$paketId = (int) flow('paket_id');
-
-if (!flow('tersedia') || $paketId <= 0) {
+if (!flow('tersedia') || !flow('paket_id')) {
     redirect('paket.php?mode=direct');
 }
-
-/*
-|--------------------------------------------------------------------------
-| 3. Ambil data pelanggan dan paket
-|--------------------------------------------------------------------------
-*/
 $cust = currentCustomer($conn);
-$p = getPaket($conn, $paketId);
-
+$p = getPaket($conn, (int) flow('paket_id'));
 if (!$cust || !$p) {
     redirect('paket.php?mode=coverage');
 }
-
-/*
-|--------------------------------------------------------------------------
-| 4. Pelanggan aktif tidak perlu mendaftar ulang
-|--------------------------------------------------------------------------
-*/
-if (isAktif($cust['status_langganan'] ?? '')) {
+if (isAktif($cust['status_langganan'])) {
     redirect('customer/dashboard.php');
 }
 
-/*
-|--------------------------------------------------------------------------
-| 5. Siapkan data tampilan
-|--------------------------------------------------------------------------
-*/
 $error = '';
-
-$nama = trim((string) ($cust['nama'] ?? ''));
-$email = trim((string) ($cust['email'] ?? ''));
-$telephone = trim((string) ($cust['telephone'] ?? ''));
-
-$nik = preg_replace(
-    '/\D/',
-    '',
-    (string) ($cust['nik'] ?? '')
-) ?? '';
-
-if (strlen($nik) >= 8) {
-    $nikMask = substr($nik, 0, 4)
-        . str_repeat('•', strlen($nik) - 8)
-        . substr($nik, -4);
-} elseif ($nik !== '') {
-    $nikMask = str_repeat('•', strlen($nik));
-} else {
-    $nikMask = 'Belum tersedia';
-}
-
-/*
- * Alamat dari alur coverage diprioritaskan.
- * Jika kosong, gunakan alamat dari data pelanggan.
- */
-$alamatFlow = trim((string) flow('alamat'));
-$alamatCustomer = trim((string) ($cust['alamat'] ?? ''));
-
-$alamat = $alamatFlow !== ''
-    ? $alamatFlow
-    : $alamatCustomer;
-
-/*
- * Deteksi sederhana jika nilai yang tersimpan adalah koordinat.
- */
-$isCoordinate = preg_match(
-    '/^\s*-?\d{1,3}(?:\.\d+)?\s*,?\s+-?\d{1,3}(?:\.\d+)?\s*$/',
-    $alamat
-) === 1;
-
-/*
-|--------------------------------------------------------------------------
-| 6. Validasi persetujuan
-|--------------------------------------------------------------------------
-*/
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_ok()) {
-        $error = 'Sesi kedaluwarsa. Muat ulang halaman, lalu coba lagi.';
-    } elseif (($_POST['benar'] ?? '') !== '1') {
+        $error = 'Sesi kedaluwarsa. Muat ulang halaman.';
+    } elseif (empty($_POST['benar'])) {
         $error = 'Centang pernyataan bahwa data sudah benar.';
-    } elseif (
-        $nama === '' ||
-        $nik === '' ||
-        $alamat === ''
-    ) {
-        $error = 'Data pelanggan belum lengkap. Periksa data Anda.';
-    } elseif ($paketId !== (int) flow('paket_id')) {
-        $error = 'Paket tidak valid. Silakan pilih paket kembali.';
     } else {
-        /*
-         * Status persetujuan disimpan di sesi alur.
-         * order.php wajib memeriksa ulang status ini
-         * sebelum membuat order.
-         */
         flowSet(['verified' => true]);
-
         redirect('order.php');
     }
 }
 
-/*
-|--------------------------------------------------------------------------
-| 7. Konfigurasi halaman
-|--------------------------------------------------------------------------
-*/
+$nik = (string) $cust['nik'];
+$nikMask = strlen($nik) > 8 ? substr($nik, 0, 4) . str_repeat('•', strlen($nik) - 8) . substr($nik, -4) : $nik;
+
+// Alamat pemasangan: pakai dari alur coverage, cadangan alamat saat daftar.
+$alamat = (string) (flow('alamat') ?: ($cust['alamat'] ?? ''));
+
 $pageTitle = 'Verifikasi Data';
-$step = 3;
+$step = 2;
 $narrow = true;
-
 require __DIR__ . '/inc/header.php';
-
+?>
+<?php
 /*
-|--------------------------------------------------------------------------
-| 8. Muat CSS dari file lokal
-|--------------------------------------------------------------------------
-| CSS tetap terpisah sehingga lebih mudah dikelola.
-| File tidak dibuat otomatis jika tidak ditemukan.
-|--------------------------------------------------------------------------
-*/
+ * CSS dibaca langsung dari disk lalu ditanam ke halaman, sehingga tampilan
+ * tidak bergantung pada URL /assets/..., .htaccess, atau cache.
+ * Kalau file tidak ada di server, muncul peringatan merah.
+ */
 $cssDir = __DIR__ . '/assets/css/';
-$cssFiles = ['yesnet.css', 'verifikasi.css'];
 $cssMissing = [];
-
-foreach ($cssFiles as $cssFile) {
-    $cssPath = $cssDir . $cssFile;
-
-    if (is_file($cssPath) && is_readable($cssPath)) {
-        echo '<style>' . "\n";
-
-        /*
-         * Baca file hanya dari direktori CSS yang ditentukan.
-         */
-        readfile($cssPath);
-
-        echo "\n</style>\n";
+echo "<style>\n";
+foreach (['yesnet.css', 'verifikasi.css'] as $cssName) {
+    if (is_file($cssDir . $cssName)) {
+        readfile($cssDir . $cssName);
+        echo "\n";
     } else {
-        $cssMissing[] = $cssFile;
+        $cssMissing[] = $cssName;
     }
 }
-
-if ($cssMissing !== []) {
-    echo '<div class="verif-css-warning" role="alert">';
-    echo '<strong>File CSS tidak ditemukan:</strong> ';
-    echo e(implode(', ', $cssMissing));
-    echo '<br>Periksa folder: <code>';
-    echo e($cssDir);
-    echo '</code></div>';
+echo "</style>\n";
+if ($cssMissing) {
+    echo '<div style="max-width:560px;margin:16px auto;padding:14px 16px;border-radius:12px;'
+       . 'background:#fff0f0;color:#a4262c;border:1px solid #ffd0d2;font:600 14px system-ui,sans-serif">'
+       . 'File CSS tidak ditemukan di server: <b>' . e(implode(', ', $cssMissing)) . '</b><br>'
+       . 'Seharusnya ada di: <code>' . e($cssDir) . '</code></div>';
 }
 ?>
 
-<main class="verif">
+<div class="verif">
 
-    <header class="page-head enter">
-        <span class="v-eyebrow">
-            <i aria-hidden="true"></i>
-            Langkah 3 dari 6 · Verifikasi
-        </span>
-
+    <div class="page-head enter">
+        <span class="v-eyebrow"><i></i> Langkah 2 · Verifikasi</span>
         <h1>Verifikasi Data</h1>
         <p>Periksa kembali data Anda sebelum order dibuat.</p>
-    </header>
+    </div>
 
-    <section class="card enter" aria-label="Verifikasi data pelanggan">
+    <div class="card enter">
         <div class="v-body">
 
-            <?php if ($error !== ''): ?>
-                <div class="alert err" role="alert">
-                    <span aria-hidden="true">⚠️</span>
-                    <span><?= e($error) ?></span>
-                </div>
+            <?php if ($error): ?>
+                <div class="alert err" role="alert">⚠️ <span><?= e($error) ?></span></div>
             <?php endif; ?>
 
-            <div class="v-title">
-                <span>Data Pelanggan</span>
-            </div>
+            <div class="v-title"><span>Data Pelanggan</span></div>
 
             <div class="v-list">
-
                 <div class="v-row">
-                    <div class="v-ico" aria-hidden="true">👤</div>
-                    <div class="v-txt">
-                        <small>Nama</small>
-                        <b><?= e($nama ?: 'Belum tersedia') ?></b>
-                    </div>
-                    <div class="v-ok" aria-hidden="true">✓</div>
+                    <div class="v-ico">👤</div>
+                    <div class="v-txt"><small>Nama</small><b><?= e($cust['nama']) ?></b></div>
+                    <div class="v-ok">✓</div>
                 </div>
-
                 <div class="v-row">
-                    <div class="v-ico" aria-hidden="true">✉️</div>
-                    <div class="v-txt">
-                        <small>Email</small>
-                        <b><?= e($email ?: 'Belum tersedia') ?></b>
-                    </div>
-                    <div class="v-ok" aria-hidden="true">✓</div>
+                    <div class="v-ico">✉️</div>
+                    <div class="v-txt"><small>Email</small><b><?= e($cust['email']) ?></b></div>
+                    <div class="v-ok">✓</div>
                 </div>
-
                 <div class="v-row">
-                    <div class="v-ico" aria-hidden="true">💬</div>
-                    <div class="v-txt">
-                        <small>WhatsApp</small>
-                        <b><?= e($telephone ?: 'Belum tersedia') ?></b>
-                    </div>
-                    <div class="v-ok" aria-hidden="true">✓</div>
+                    <div class="v-ico">💬</div>
+                    <div class="v-txt"><small>WhatsApp</small><b><?= e($cust['telephone']) ?></b></div>
+                    <div class="v-ok">✓</div>
                 </div>
-
                 <div class="v-row">
-                    <div class="v-ico" aria-hidden="true">🪪</div>
-                    <div class="v-txt">
-                        <small>NIK</small>
-                        <b class="v-mono"><?= e($nikMask) ?></b>
-                    </div>
-                    <div class="v-ok" aria-hidden="true">✓</div>
+                    <div class="v-ico">🪪</div>
+                    <div class="v-txt"><small>NIK</small><b class="v-mono"><?= e($nikMask) ?></b></div>
+                    <div class="v-ok">✓</div>
                 </div>
-
                 <div class="v-row">
-                    <div class="v-ico" aria-hidden="true">📍</div>
-                    <div class="v-txt">
-                        <small>
-                            <?= $isCoordinate
-                                ? 'Koordinat pemasangan'
-                                : 'Alamat pemasangan' ?>
-                        </small>
-                        <b><?= e($alamat ?: 'Belum tersedia') ?></b>
-                    </div>
-                    <div class="v-ok" aria-hidden="true">✓</div>
+                    <div class="v-ico">📍</div>
+                    <div class="v-txt"><small>Alamat pemasangan</small><b><?= e($alamat) ?></b></div>
+                    <div class="v-ok">✓</div>
                 </div>
-
             </div>
 
-            <div class="v-title">
-                <span>Paket Dipilih</span>
-            </div>
+            <div class="v-title"><span>Paket Dipilih</span></div>
 
             <div class="v-plan">
                 <small>Paket internet</small>
-
                 <div class="v-plan-main">
-                    <div class="v-plan-name">
-                        <?= e((string) ($p['nama_paket'] ?? 'Paket internet')) ?>
-                    </div>
-
-                    <div class="v-plan-speed">
-                        <b><?= (int) ($p['speed_mbps'] ?? 0) ?></b>
-                        <span>Mbps</span>
-                    </div>
+                    <div class="v-plan-name"><?= e($p['nama_paket']) ?></div>
+                    <div class="v-plan-speed"><b><?= (int) $p['speed_mbps'] ?></b><span>Mbps</span></div>
                 </div>
             </div>
 
             <div class="v-note">
-                <span aria-hidden="true">🔒</span>
-                <div>
-                    NIK ditampilkan sebagian demi keamanan.
-                    Data Anda hanya digunakan untuk proses pemasangan.
-                </div>
+                <span>🔒</span>
+                <div>NIK ditampilkan sebagian demi keamanan. Data Anda hanya dipakai untuk proses pemasangan.</div>
             </div>
 
-            <form method="post" action="" class="v-form">
+            <form method="post" class="v-form">
                 <?= csrf_field() ?>
 
                 <label class="v-check">
-                    <input
-                        type="checkbox"
-                        name="benar"
-                        value="1"
-                        required
-                    >
-
+                    <input type="checkbox" name="benar" value="1">
                     <span class="v-box" aria-hidden="true"></span>
-
-                    <span>
-                        Saya menyatakan data di atas sudah benar.
-                    </span>
+                    <span>Saya menyatakan data di atas sudah benar.</span>
                 </label>
 
-                <button
-                    class="btn btn-primary btn-block btn-go"
-                    type="submit"
-                >
-                    Data Benar, Lanjutkan
-                    <span class="arr" aria-hidden="true">→</span>
+                <button class="btn btn-primary btn-block btn-go" type="submit">
+                    Data Benar, Lanjutkan <span class="arr">→</span>
                 </button>
 
-                <a
-                    class="v-back"
-                    href="paket.php?mode=coverage"
-                >
-                    ← Ganti paket
-                </a>
+                <a class="v-back" href="paket.php?mode=coverage">← Ganti paket</a>
             </form>
 
         </div>
-    </section>
+    </div>
 
-</main>
-
+</div>
 <?php require __DIR__ . '/inc/footer.php'; ?>

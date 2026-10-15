@@ -1,627 +1,159 @@
-
 /* =========================================================
    YESNET - VERIFIKASI DATA
-   File: assets/css/verifikasi.css
-   Seluruh komponen khusus dibatasi pada halaman .verif
+   Dimuat SETELAH yesnet.css. Semua aturan di-scope ke .verif
+   sehingga tidak mengubah halaman lain.
 ========================================================= */
 
-.verif {
-    position: relative;
-    width: 100%;
-    max-width: 760px;
-    margin: 0 auto;
-    padding: 12px 18px 40px;
-    color: var(--ink, #172033);
+.verif{position:relative}
+
+/* glow dekoratif di belakang halaman */
+.verif::before{
+  content:"";position:absolute;z-index:-1;inset:-40px -10vw auto;height:320px;
+  background:
+    radial-gradient(420px 220px at 18% 10%,rgba(31,98,255,.16),transparent 70%),
+    radial-gradient(380px 200px at 85% 0%,rgba(18,181,255,.18),transparent 70%);
+  pointer-events:none;
 }
 
-.verif *,
-.verif *::before,
-.verif *::after {
-    box-sizing: border-box;
+/* ---------- Header ---------- */
+.verif .v-eyebrow{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:5px 12px;border-radius:99px;
+  background:var(--soft);color:var(--blue);
+  font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+}
+.verif .v-eyebrow i{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(20,184,106,.5);animation:vping 1.8s infinite}
+.verif .page-head h1{
+  margin-top:12px;font-size:clamp(26px,5vw,34px);letter-spacing:-.02em;
+  background:linear-gradient(110deg,var(--navy),var(--blue) 70%,var(--sky));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
 }
 
-.verif::before {
-    content: "";
-    position: absolute;
-    z-index: -1;
-    inset: -40px -10vw auto;
-    height: 320px;
-    background:
-        radial-gradient(
-            420px 220px at 18% 10%,
-            rgba(31, 98, 255, .16),
-            transparent 70%
-        ),
-        radial-gradient(
-            380px 200px at 85% 0%,
-            rgba(18, 181, 255, .18),
-            transparent 70%
-        );
-    pointer-events: none;
+/* ---------- Kartu utama ---------- */
+.verif .card{
+  position:relative;overflow:hidden;padding:0;
+  border-color:var(--line);box-shadow:var(--shadow);
+}
+.verif .card::before{
+  content:"";display:block;height:5px;
+  background:linear-gradient(90deg,var(--blue),var(--sky),var(--blue));
+  background-size:200% 100%;animation:vflow 6s linear infinite;
+}
+.verif .v-body{padding:8px 26px 26px}
+
+.verif .v-title{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:20px 0 8px;font-size:12px;font-weight:800;color:var(--muted);
+  letter-spacing:.08em;text-transform:uppercase;
+}
+.verif .v-title::after{content:"";flex:1;height:1px;background:var(--line);order:1}
+.verif .v-title span{order:0}
+
+/* ---------- Baris data ---------- */
+.verif .v-list{display:grid;gap:4px}
+.verif .v-row{
+  display:flex;align-items:center;gap:14px;
+  padding:12px 12px;margin:0 -12px;border-radius:14px;
+  transition:background .2s,transform .2s;
+}
+.verif .v-row:hover{background:var(--bg);transform:translateX(3px)}
+.verif .v-ico{
+  flex:none;width:40px;height:40px;border-radius:12px;
+  display:grid;place-items:center;font-size:18px;
+  background:linear-gradient(145deg,var(--soft),#fff);
+  border:1px solid var(--line);
+}
+.verif .v-txt{min-width:0;flex:1}
+.verif .v-txt small{display:block;font-size:11.5px;font-weight:700;color:var(--muted);letter-spacing:.03em}
+.verif .v-txt b{display:block;color:var(--ink);font-size:15px;word-break:break-word}
+.verif .v-mono{font-family:ui-monospace,'JetBrains Mono','SFMono-Regular',Menlo,Consolas,monospace;letter-spacing:.06em}
+.verif .v-ok{
+  flex:none;width:22px;height:22px;border-radius:50%;
+  display:grid;place-items:center;font-size:11px;font-weight:800;
+  background:rgba(20,184,106,.14);color:var(--ok);
 }
 
-/* Header halaman */
-
-.verif .page-head {
-    margin: 0 0 22px;
-    text-align: center;
+/* ---------- Kartu paket ---------- */
+.verif .v-plan{
+  position:relative;overflow:hidden;margin-top:14px;padding:20px;border-radius:16px;
+  color:#fff;
+  background:linear-gradient(135deg,var(--navy) 0%,#123a9c 55%,var(--blue) 100%);
+  box-shadow:0 16px 30px rgba(10,36,99,.25);
 }
-
-.verif .v-eyebrow {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    border-radius: 99px;
-    background: var(--soft, #edf3ff);
-    color: var(--blue, #2463eb);
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: .04em;
-    text-transform: uppercase;
+.verif .v-plan::after{
+  content:"";position:absolute;right:-50px;top:-60px;width:190px;height:190px;border-radius:50%;
+  background:radial-gradient(circle,rgba(18,181,255,.45),transparent 70%);
 }
-
-.verif .v-eyebrow i {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--ok, #14b86a);
-    animation: vping 1.8s infinite;
+.verif .v-plan small{display:block;position:relative;z-index:1;font-size:11.5px;font-weight:700;opacity:.75;letter-spacing:.08em;text-transform:uppercase}
+.verif .v-plan-main{position:relative;z-index:1;display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-top:6px;flex-wrap:wrap}
+.verif .v-plan-name{font-size:22px;font-weight:800;line-height:1.1}
+.verif .v-plan-speed{
+  display:inline-flex;align-items:baseline;gap:5px;
+  padding:7px 14px;border-radius:99px;
+  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);
+  backdrop-filter:blur(6px);
 }
+.verif .v-plan-speed b{font-size:22px;font-weight:800;color:#fff}
+.verif .v-plan-speed span{font-size:12px;font-weight:700;opacity:.85}
 
-.verif .page-head h1 {
-    margin: 12px 0 8px;
-    font-size: clamp(26px, 5vw, 34px);
-    line-height: 1.2;
-    letter-spacing: -.02em;
-    color: var(--blue, #2463eb);
-    background: linear-gradient(
-        110deg,
-        var(--navy, #102451),
-        var(--blue, #2463eb) 70%,
-        var(--sky, #12b5ff)
-    );
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+/* ---------- Catatan keamanan ---------- */
+.verif .v-note{
+  display:flex;gap:10px;align-items:flex-start;margin-top:16px;padding:12px 14px;
+  border-radius:12px;background:var(--bg);border:1px dashed var(--line);
+  font-size:12.5px;color:var(--muted);
 }
+.verif .v-note span{font-size:15px;line-height:1.2}
 
-.verif .page-head p {
-    margin: 0;
-    color: var(--muted, #697386);
-    font-size: 14px;
-    line-height: 1.7;
+/* ---------- Checkbox kustom ---------- */
+.verif .v-check{
+  display:flex;gap:12px;align-items:flex-start;margin:18px 0 0;
+  padding:14px 16px;border:1.5px solid var(--line);border-radius:14px;
+  font-size:14px;font-weight:600;color:var(--ink);cursor:pointer;
+  transition:border-color .2s,background .2s,box-shadow .2s;
 }
-
-/* Kartu utama */
-
-.verif .card {
-    position: relative;
-    overflow: hidden;
-    padding: 0;
-    border: 1px solid var(--line, #e4e9f2);
-    border-radius: 22px;
-    background: var(--card, #fff);
-    box-shadow: var(
-        --shadow,
-        0 18px 50px rgba(16, 36, 81, .09)
-    );
+.verif .v-check:hover{border-color:var(--blue)}
+.verif .v-check:has(input:checked){border-color:var(--blue);background:var(--soft)}
+.verif .v-check:has(input:focus-visible){outline:3px solid var(--sky);outline-offset:2px}
+.verif .v-check input{position:absolute;opacity:0;width:1px;height:1px}
+.verif .v-box{
+  flex:none;width:22px;height:22px;margin-top:1px;border-radius:7px;
+  border:2px solid var(--line);background:#fff;
+  display:grid;place-items:center;transition:.2s;
 }
-
-.verif .card::before {
-    content: "";
-    display: block;
-    height: 5px;
-    background: linear-gradient(
-        90deg,
-        var(--blue, #2463eb),
-        var(--sky, #12b5ff),
-        var(--blue, #2463eb)
-    );
-    background-size: 200% 100%;
-    animation: vflow 6s linear infinite;
+.verif .v-box::after{
+  content:"";width:10px;height:6px;margin-top:-2px;
+  border-left:2.5px solid #fff;border-bottom:2.5px solid #fff;
+  transform:rotate(-45deg) scale(0);transition:transform .2s cubic-bezier(.3,1.6,.5,1);
 }
-
-.verif .v-body {
-    padding: 8px 26px 26px;
-}
-
-/* Judul bagian */
-
-.verif .v-title {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 20px 0 8px;
-    color: var(--muted, #697386);
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-}
-
-.verif .v-title::after {
-    content: "";
-    flex: 1;
-    height: 1px;
-    background: var(--line, #e4e9f2);
-}
-
-/* Baris data pelanggan */
-
-.verif .v-list {
-    display: grid;
-    gap: 4px;
-}
-
-.verif .v-row {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    min-width: 0;
-    margin: 0 -12px;
-    padding: 12px;
-    border-radius: 14px;
-    transition: background .2s, transform .2s;
-    animation: vrise .5s cubic-bezier(.2, .8, .2, 1) both;
-}
-
-.verif .v-row:nth-child(1) {
-    animation-delay: .05s;
-}
-
-.verif .v-row:nth-child(2) {
-    animation-delay: .10s;
-}
-
-.verif .v-row:nth-child(3) {
-    animation-delay: .15s;
-}
-
-.verif .v-row:nth-child(4) {
-    animation-delay: .20s;
-}
-
-.verif .v-row:nth-child(5) {
-    animation-delay: .25s;
-}
-
-.verif .v-row:hover {
-    background: var(--bg, #f5f7fb);
-    transform: translateX(3px);
-}
-
-.verif .v-ico {
-    display: grid;
-    flex: 0 0 40px;
-    width: 40px;
-    height: 40px;
-    place-items: center;
-    border: 1px solid var(--line, #e4e9f2);
-    border-radius: 12px;
-    background: linear-gradient(
-        145deg,
-        var(--soft, #edf3ff),
-        #fff
-    );
-    font-size: 18px;
-}
-
-.verif .v-txt {
-    flex: 1;
-    min-width: 0;
-}
-
-.verif .v-txt small {
-    display: block;
-    margin-bottom: 3px;
-    color: var(--muted, #697386);
-    font-size: 11.5px;
-    font-weight: 700;
-    letter-spacing: .03em;
-}
-
-.verif .v-txt b {
-    display: block;
-    overflow-wrap: anywhere;
-    color: var(--ink, #172033);
-    font-size: 15px;
-    font-weight: 700;
-    line-height: 1.55;
-}
-
-.verif .v-mono {
-    font-family:
-        ui-monospace,
-        "SFMono-Regular",
-        Menlo,
-        Consolas,
-        monospace;
-    letter-spacing: .06em;
-}
-
-.verif .v-ok {
-    display: grid;
-    flex: 0 0 22px;
-    width: 22px;
-    height: 22px;
-    place-items: center;
-    border-radius: 50%;
-    background: rgba(20, 184, 106, .14);
-    color: var(--ok, #14b86a);
-    font-size: 11px;
-    font-weight: 800;
-}
-
-/* Paket internet */
-
-.verif .v-plan {
-    position: relative;
-    overflow: hidden;
-    margin-top: 14px;
-    padding: 20px;
-    border-radius: 16px;
-    background: linear-gradient(
-        135deg,
-        var(--navy, #102451) 0%,
-        #123a9c 55%,
-        var(--blue, #2463eb) 100%
-    );
-    box-shadow: 0 16px 30px rgba(10, 36, 99, .25);
-    color: #fff;
-}
-
-.verif .v-plan::after {
-    content: "";
-    position: absolute;
-    top: -60px;
-    right: -50px;
-    width: 190px;
-    height: 190px;
-    border-radius: 50%;
-    background: radial-gradient(
-        circle,
-        rgba(18, 181, 255, .45),
-        transparent 70%
-    );
-    pointer-events: none;
-}
-
-.verif .v-plan small {
-    position: relative;
-    z-index: 1;
-    display: block;
-    font-size: 11.5px;
-    font-weight: 700;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    opacity: .8;
-}
-
-.verif .v-plan-main {
-    position: relative;
-    z-index: 1;
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 14px;
-    margin-top: 8px;
-}
-
-.verif .v-plan-name {
-    font-size: 22px;
-    font-weight: 800;
-    line-height: 1.25;
-    overflow-wrap: anywhere;
-}
-
-.verif .v-plan-speed {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 5px;
-    padding: 7px 14px;
-    border: 1px solid rgba(255, 255, 255, .22);
-    border-radius: 99px;
-    background: rgba(255, 255, 255, .14);
-}
-
-.verif .v-plan-speed b {
-    color: #fff;
-    font-size: 22px;
-    font-weight: 800;
-}
-
-.verif .v-plan-speed span {
-    font-size: 12px;
-    font-weight: 700;
-    opacity: .9;
-}
-
-/* Catatan keamanan */
-
-.verif .v-note {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    margin-top: 16px;
-    padding: 12px 14px;
-    border: 1px dashed var(--line, #e4e9f2);
-    border-radius: 12px;
-    background: var(--bg, #f5f7fb);
-    color: var(--muted, #697386);
-    font-size: 12.5px;
-    line-height: 1.7;
-}
-
-.verif .v-note > span {
-    flex: none;
-    font-size: 15px;
-    line-height: 1.5;
-}
-
-/* Checkbox persetujuan */
-
-.verif .v-form {
-    margin-top: 0;
-}
-
-.verif .v-check {
-    position: relative;
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    margin: 18px 0 0;
-    padding: 14px 16px;
-    border: 1.5px solid var(--line, #e4e9f2);
-    border-radius: 14px;
-    color: var(--ink, #172033);
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 1.6;
-    cursor: pointer;
-    transition:
-        border-color .2s,
-        background .2s,
-        box-shadow .2s;
-}
-
-.verif .v-check:hover {
-    border-color: var(--blue, #2463eb);
-}
-
-.verif .v-check:has(input:checked) {
-    border-color: var(--blue, #2463eb);
-    background: var(--soft, #edf3ff);
-}
-
-.verif .v-check:has(input:focus-visible) {
-    outline: 3px solid var(--sky, #12b5ff);
-    outline-offset: 2px;
-}
-
-.verif .v-check input {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    opacity: 0;
-}
-
-.verif .v-box {
-    display: grid;
-    flex: 0 0 22px;
-    width: 22px;
-    height: 22px;
-    place-items: center;
-    margin-top: 1px;
-    border: 2px solid var(--line, #d7deeb);
-    border-radius: 7px;
-    background: #fff;
-    transition: .2s;
-}
-
-.verif .v-box::after {
-    content: "";
-    width: 10px;
-    height: 6px;
-    margin-top: -2px;
-    border-bottom: 2.5px solid #fff;
-    border-left: 2.5px solid #fff;
-    transform: rotate(-45deg) scale(0);
-    transition: transform .2s;
-}
-
-.verif .v-check input:checked + .v-box {
-    border-color: var(--blue, #2463eb);
-    background: var(--blue, #2463eb);
-}
-
-.verif .v-check input:checked + .v-box::after {
-    transform: rotate(-45deg) scale(1);
-}
-
-/* Tombol utama */
-
-.verif .btn-go {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 9px;
-    width: 100%;
-    margin-top: 18px;
-    padding: 14px 24px;
-    border: 0;
-    border-radius: 12px;
-    font-size: 15px;
-    font-weight: 800;
-    cursor: pointer;
-    transition:
-        transform .2s,
-        box-shadow .2s,
-        opacity .25s;
-}
-
-.verif .btn-go .arr {
-    display: inline-block;
-    transition: transform .2s;
-}
-
-.verif .btn-go:hover .arr {
-    transform: translateX(4px);
-}
-
-.verif .v-form:not(:has(input:checked)) .btn-go {
-    opacity: .65;
-    box-shadow: none;
-}
-
-/* Tautan kembali */
-
-.verif .v-back {
-    display: block;
-    margin-top: 14px;
-    padding: 8px;
-    color: var(--muted, #697386);
-    font-size: 13px;
-    font-weight: 700;
-    text-align: center;
-    text-decoration: none;
-}
-
-.verif .v-back:hover {
-    color: var(--blue, #2463eb);
-}
-
-/* Peringatan CSS */
-
-.verif-css-warning {
-    max-width: 760px;
-    margin: 16px auto;
-    padding: 14px 16px;
-    border: 1px solid #ffd0d2;
-    border-radius: 12px;
-    background: #fff0f0;
-    color: #a4262c;
-    font: 600 14px/1.7 system-ui, sans-serif;
-    overflow-wrap: anywhere;
-}
-
-.verif-css-warning code {
-    overflow-wrap: anywhere;
-}
-
-/* Pesan kesalahan */
-
-.verif .alert {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    margin: 18px 0 0;
-    padding: 12px 14px;
-    border-radius: 12px;
-    font-size: 13px;
-    line-height: 1.6;
-    animation: vshake .4s;
-}
-
-.verif .alert.err {
-    border: 1px solid #fecaca;
-    background: #fef2f2;
-    color: #b42318;
-}
-
-/* Animasi */
-
-@keyframes vping {
-    70% {
-        box-shadow: 0 0 0 8px rgba(20, 184, 106, 0);
-    }
-
-    100% {
-        box-shadow: 0 0 0 0 rgba(20, 184, 106, 0);
-    }
-}
-
-@keyframes vflow {
-    to {
-        background-position: 200% 0;
-    }
-}
-
-@keyframes vrise {
-    from {
-        opacity: 0;
-        transform: translateY(8px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes vshake {
-    20% {
-        transform: translateX(-5px);
-    }
-
-    50% {
-        transform: translateX(5px);
-    }
-
-    80% {
-        transform: translateX(-3px);
-    }
-}
-
-/* Responsif */
-
-@media (max-width: 520px) {
-    .verif {
-        padding: 8px 12px 28px;
-    }
-
-    .verif .v-body {
-        padding: 4px 18px 20px;
-    }
-
-    .verif .v-row {
-        gap: 10px;
-    }
-
-    .verif .v-ico {
-        flex-basis: 36px;
-        width: 36px;
-        height: 36px;
-        font-size: 16px;
-    }
-
-    .verif .v-txt b {
-        font-size: 14px;
-    }
-
-    .verif .v-plan {
-        padding: 17px;
-    }
-
-    .verif .v-plan-name {
-        font-size: 19px;
-    }
-
-    .verif .v-check {
-        padding: 12px;
-        font-size: 13px;
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .verif *,
-    .verif *::before,
-    .verif *::after {
-        animation-duration: .01ms !important;
-        animation-iteration-count: 1 !important;
-        scroll-behavior: auto !important;
-        transition-duration: .01ms !important;
-    }
+.verif .v-check input:checked + .v-box{background:var(--blue);border-color:var(--blue)}
+.verif .v-check input:checked + .v-box::after{transform:rotate(-45deg) scale(1)}
+
+/* ---------- Tombol ---------- */
+.verif .btn-go{margin-top:18px;padding:14px 24px;font-size:15px;transition:transform .2s,box-shadow .2s,opacity .25s,background-position .4s}
+.verif .btn-go .arr{transition:transform .2s}
+.verif .btn-go:hover .arr{transform:translateX(4px)}
+.verif .v-form:not(:has(input:checked)) .btn-go{opacity:.6;box-shadow:none}
+
+.verif .v-back{display:block;text-align:center;margin-top:14px;font-size:13px;font-weight:700;color:var(--muted);text-decoration:none}
+.verif .v-back:hover{color:var(--blue)}
+
+/* ---------- Alert ---------- */
+.verif .alert{margin:18px 0 0;display:flex;gap:10px;align-items:flex-start;animation:vshake .4s}
+
+/* ---------- Animasi ---------- */
+@keyframes vping{70%{box-shadow:0 0 0 8px rgba(20,184,106,0)}100%{box-shadow:0 0 0 0 rgba(20,184,106,0)}}
+@keyframes vflow{to{background-position:200% 0}}
+@keyframes vshake{20%{transform:translateX(-5px)}50%{transform:translateX(5px)}80%{transform:translateX(-3px)}}
+
+.verif .v-row{animation:rise .5s cubic-bezier(.2,.8,.2,1) both}
+.verif .v-row:nth-child(1){animation-delay:.05s}
+.verif .v-row:nth-child(2){animation-delay:.10s}
+.verif .v-row:nth-child(3){animation-delay:.15s}
+.verif .v-row:nth-child(4){animation-delay:.20s}
+.verif .v-row:nth-child(5){animation-delay:.25s}
+
+/* ---------- Responsif ---------- */
+@media(max-width:520px){
+  .verif .v-body{padding:4px 18px 20px}
+  .verif .v-plan-name{font-size:19px}
 }

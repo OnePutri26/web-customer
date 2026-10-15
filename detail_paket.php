@@ -50,11 +50,20 @@ $loggedIn = isCustomer();
 $ctaHref = $loggedIn ? 'verifikasi.php' : 'register.php?paket_id=' . (int) $p['id'];
 $ctaText = $loggedIn ? 'Lanjut verifikasi data' : 'Lanjut daftar customer';
 
+
 $pageTitle = 'Detail Paket';
 $step = 1;
-$narrow = true; // tetap true seperti file asli: header/CSS alur pendaftaran bergantung pada nilai ini
+
+/*
+ * Halaman detail paket membutuhkan ruang lebih lebar
+ * agar kartu utama dan ringkasan dapat berdampingan.
+ */
+$narrow = false;
+
 require __DIR__ . '/inc/header.php';
 ?>
+
+
 <style>
     .dp { --dp-ink: #0a1a33; --dp-brand: #1677ff; --dp-ok: #12b76a; --dp-line: #e3e9f2; --dp-paper: #f3f6fb; --dp-muted: #667085;
           container-type: inline-size; width: 100%; max-width: 980px; margin: 0 auto; font-family: inherit; color: #1d2939; }
