@@ -6,6 +6,20 @@
 $pageTitle = $pageTitle ?? 'YesNet';
 $step = $step ?? null;
 $stepLabel = ['Coverage', 'Paket', 'Daftar & Verifikasi', 'Order & Bayar', 'Instalasi', 'Aktif'];
+
+/*
+| URL stylesheet dihitung dari lokasi folder project terhadap document root,
+| bukan relatif terhadap halaman yang sedang dibuka, sehingga CSS tetap termuat
+| walau halaman diakses dari folder/URL yang berbeda (mis. /project/detail_paket.php).
+*/
+$cssFile = realpath(__DIR__ . '/../assets/css/yesnet.css');
+$rootDir = str_replace('\\', '/', (string) realpath(__DIR__ . '/..'));
+$docRaw = (string) ($_SERVER['DOCUMENT_ROOT'] ?? '');
+$docRoot = $docRaw !== '' ? rtrim(str_replace('\\', '/', (string) realpath($docRaw)), '/') : '';
+$cssUrl = ($docRoot !== '' && stripos($rootDir, $docRoot) === 0)
+    ? substr($rootDir, strlen($docRoot)) . '/assets/css/yesnet.css'
+    : 'assets/css/yesnet.css';
+$cssVer = $cssFile ? (int) @filemtime($cssFile) : 0;
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -16,7 +30,7 @@ $stepLabel = ['Coverage', 'Paket', 'Daftar & Verifikasi', 'Order & Bayar', 'Inst
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap">
-    <link rel="stylesheet" href="assets/css/yesnet.css?v=<?= @filemtime(__DIR__ . '/../assets/css/yesnet.css') ?>">
+    <link rel="stylesheet" href="<?= e($cssUrl) ?><?= $cssVer ? '?v=' . $cssVer : '' ?>">
 </head>
 <body>
 <header class="navbar">
