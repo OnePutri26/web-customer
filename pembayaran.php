@@ -1,11 +1,14 @@
 <?php
 require_once __DIR__ . '/config/app.php';
-requireRole('customer');
 
 /*
 | Masuk lewat:
 |   pembayaran.php?tagihan=ID  -> alur coverage (order sudah dibuat) atau "Bayar Lagi"
 |   pembayaran.php?paket=ID    -> alur "Lihat Paket" (order dibuat otomatis di sini)
+|
+| Catatan: requireRole('customer') dihapus karena akan me-redirect tamu ke login
+| sebelum flowSet() sempat menyimpan paket yang dipilih. Guard manual di bawah
+| sudah menangani kasus tersebut.
 */
 if (!isCustomer()) {
     if (isset($_GET['paket'])) {
@@ -142,9 +145,12 @@ require __DIR__ . '/inc/header.php';
     <?php endif; ?>
 </div>
 <script>
-document.getElementById('payForm').addEventListener('submit',function(){
-  var b=this.querySelector('button[type=submit]');
-  setTimeout(function(){b.disabled=true;b.classList.add('loading');},0);
-});
+var payForm = document.getElementById('payForm');
+if (payForm) {
+  payForm.addEventListener('submit', function () {
+    var b = this.querySelector('button[type=submit]');
+    setTimeout(function () { b.disabled = true; b.classList.add('loading'); }, 0);
+  });
+}
 </script>
 <?php require __DIR__ . '/inc/footer.php'; ?>

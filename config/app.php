@@ -122,58 +122,92 @@ function hitungJarakKm(float $lat1, float $lon1, float $lat2, float $lon2): floa
     return 2 * 6371 * asin(min(1, sqrt($a)));
 }
 
+
 function cekCoverage(mysqli $conn, string $alamat, ?float $lat, ?float $lng): array
 {
-    $hasil = ['tersedia' => false, 'odp_id' => null, 'odp' => null, 'jarak' => null];
+    $hasil = [
+        'tersedia' => false,
+        'odp_id'   => null,
+        'odp'      => null,
+        'jarak'    => null,
+    ];
 
-    if ($lat !== null && $lng !== null) {
-        $best = null;
-        $res = $conn->query('SELECT * FROM odp');
+    // Koordinat wajib valid untuk pemeriksaan berdasarkan ODP.
+    if (
+        $lat === null ||
+        $lng === null ||
+        !is_finite($lat) ||
+        !is_finite($lng) ||
+        $lat < -90 || $lat > 90 ||
+        $lng < -180 || $lng > 180
+    ) {
+        return $hasil;
+    }
+
+    // Periksa ODP yang tersedia.
+    $sql = "SELECT id, nama_odp, latitude, longitude, radius FROM odp";
+
+    try {
+        $res = $conn->query($sql);
+
         while ($o = $res->fetch_assoc()) {
-            if (array_key_exists('status', $o)) {
-                $odpStatus = strtolower(trim((string) $o['status']));
-                if ($odpStatus !== '' && !in_array($odpStatus, ['aktif', 'active', '1', 'tersedia', 'available'], true)) {
-                    continue;
-                }
-            }
-
             if (
-                !isset($o['id'], $o['nama_odp'], $o['latitude'], $o['longitude'], $o['radius'])
-                || !is_numeric($o['latitude'])
-                || !is_numeric($o['longitude'])
-                || !is_numeric($o['radius'])
+                !isset($o['id'], $o['nama_odp'], $o['latitude'], $o['longitude'], $o['radius']) ||
+                !is_numeric($o['latitude']) ||
+                !is_numeric($o['longitude']) ||
+                !is_numeric($o['radius'])
             ) {
                 continue;
             }
 
-            $j = hitungJarakKm($lat, $lng, (float) $o['latitude'], (float) $o['longitude']);
-            if ($j <= (float) $o['radius'] && ($best === null || $j < $best['jarak'])) {
-                $best = ['odp_id' => (int) $o['id'], 'odp' => $o['nama_odp'], 'jarak' => round($j, 3)];
+            $odpLat = (float) $o['latitude'];
+            $odpLng = (float) $o['longitude'];
+            $radius = (float) $o['radius'];
+
+            if (
+                $odpLat < -90 || $odpLat > 90 ||
+                $odpLng < -180 || $odpLng > 180 ||
+                $radius <= 0
+            ) {
+                continue;
+            }
+
+            $jarak = hitungJarakKm(
+                $lat,
+                $lng,
+                $odpLat,
+                $odpLng
+            );
+
+            if (
+                $jarak <= $radius &&
+                ($hasil['jarak'] === null || $jarak < $hasil['jarak'])
+            ) {
+                $hasil = [
+                    'tersedia' => true,
+                    'odp_id'   => (int) $o['id'],
+                    'odp'      => $o['nama_odp'],
+                    'jarak'    => round($jarak, 3),
+                ];
             }
         }
-        if ($best) {
-            return array_merge($hasil, $best, ['tersedia' => true]);
-        }
+
+        $res->free();
+    } catch (Throwable $e) {
+        error_log('Pemeriksaan coverage gagal: ' . $e->getMessage());
+
+        return [
+            'tersedia' => false,
+            'odp_id'   => null,
+            'odp'      => null,
+            'jarak'    => null,
+            'error'    => true,
+        ];
     }
 
-    // Cadangan: alamat memuat nama area jaringan yang aktif
-    $st = $conn->prepare("
-        SELECT nama_area
-        FROM network_areas
-        WHERE LOWER(TRIM(status)) NOT IN ('maintenance', 'inactive', 'nonaktif', 'non-aktif', 'disabled', '0')
-          AND ? LIKE CONCAT('%', nama_area, '%')
-        LIMIT 1
-    ");
-    $st->bind_param('s', $alamat);
-    $st->execute();
-    $area = $st->get_result()->fetch_assoc();
-    $st->close();
-    if ($area) {
-        $hasil['tersedia'] = true;
-        $hasil['odp'] = 'Area ' . $area['nama_area'];
-    }
     return $hasil;
 }
+
 
 /* ---------- ORDER: subscription + pengajuan_pemasangan + tagihan (idempotent) ---------- */
 function ensureOrder(mysqli $conn, array $cust, array $paket, string $alamat): int
