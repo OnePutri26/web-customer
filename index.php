@@ -29,10 +29,11 @@ $loginUrl   = appUrl($loggedIn ? 'redirect.php' : 'login.php');
 $loginLabel = $loggedIn ? 'Dashboard Saya' : 'Login Customer';
 
 /* Kontak: ganti dengan nomor asli. Format WhatsApp memakai kode negara tanpa "+" atau "0" di depan. */
-$telp      = '081234567890';
-$waNumber  = '6281234567890';
+$telp      = '6285604145030';
+$waNumber  = '6285604145030';
 $email     = 'cs@yesnet.my.id';
-$alamat    = 'Jl. Merdeka No. 123, Kota Anda';
+$alamat    = 'Gedung Cyber 1, Lantai 10, Jl. Kuningan Barat No. 8, Jakarta Selatan, 12710';
+$alamat    = 'Jl. Nginden Intan Timur V/1A Kav. 26, Nginden Jangkungan, Sukolilo, Surabaya, Jawa Timur, 60118';
 $waUrl     = 'https://wa.me/' . $waNumber . '?text=' . rawurlencode('Halo YesNet, saya ingin berlangganan internet. Mohon info paket yang tersedia untuk alamat saya.');
 
 $cssVer = @filemtime(__DIR__ . '/landing.css') ?: 1;
@@ -493,7 +494,9 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
         <a href="mailto:<?= e($email) ?>"><?= ic('mail') ?><?= e($email) ?></a>
         <a href="<?= e(appUrl('coverage.php')) ?>"><?= ic('pin') ?><?= e($alamat) ?></a></div>
       <div class="footer-column"><h4>Ikuti Kami</h4>
-        <div class="social-links"><a href="#" aria-label="Facebook">f</a><a href="#" aria-label="Instagram">ig</a><a href="#" aria-label="YouTube">yt</a><a href="<?= e($waUrl) ?>" aria-label="WhatsApp" target="_blank" rel="noopener">wa</a></div></div>
+        <div class="social-links"><a href="#" aria-label="Facebook">f</a>
+<a href="https://www.instagram.com/yesnet.id/" target="_blank" rel="noopener noreferrer" aria-label="Instagram YesNet">ig</a>
+<a href="#" aria-label="YouTube">yt</a><a href="<?= e($waUrl) ?>" aria-label="WhatsApp" target="_blank" rel="noopener">wa</a></div></div>
     </div>
     <div class="footer-bottom"><span>© <?= date('Y') ?> YesNet. All rights reserved.</span><span>Internet Cepat &amp; Stabil</span></div>
   </div>
