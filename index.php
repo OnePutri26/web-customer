@@ -31,7 +31,7 @@ $loginLabel = $loggedIn ? 'Dashboard Saya' : 'Login Customer';
 /* Kontak: ganti dengan nomor asli. Format WhatsApp memakai kode negara tanpa "+" atau "0" di depan. */
 $telp      = '6285604145030';
 $waNumber  = '6285604145030';
-$email     = 'cs@yesnet.my.id';
+$email     = 'yesnet_official@yesnet.net.id';
 $alamat    = 'Gedung Cyber 1, Lantai 10, Jl. Kuningan Barat No. 8, Jakarta Selatan, 12710';
 $alamat    = 'Jl. Nginden Intan Timur V/1A Kav. 26, Nginden Jangkungan, Sukolilo, Surabaya, Jawa Timur, 60118';
 $waUrl     = 'https://wa.me/' . $waNumber . '?text=' . rawurlencode('Halo YesNet, saya ingin berlangganan internet. Mohon info paket yang tersedia untuk alamat saya.');
