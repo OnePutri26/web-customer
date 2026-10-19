@@ -735,15 +735,27 @@ $pageTitle = 'Cek Coverage';
 
     /* ---------- ODP dari database (lewat endpoint ?odp=1) ---------- */
     var odpTimer = null, odpCtl = null;
-    function drawOdp(o) {
-        var dot = L.circleMarker([o.lat, o.lng], { radius: 6, color: '#fff', weight: 2, fillColor: '#1677ff', fillOpacity: 1 });
-        var pop = document.createElement('div');
-        var b = document.createElement('strong'); b.textContent = o.nama || ('ODP ' + o.id);
-        pop.appendChild(b);
-        dot.bindPopup(pop);
-        dot.addTo(odpLayer);
-        L.circle([o.lat, o.lng], { radius: radiusM, color: '#12b76a', weight: 1.5, fillColor: '#12b76a', fillOpacity: 0.12, interactive: false }).addTo(odpLayer);
-    }
+   
+        function drawOdp(o) {
+            // Tampilkan titik ODP saja, tanpa lingkaran radius.
+            var dot = L.circleMarker([o.lat, o.lng], {
+                radius: 6,
+                color: '#ffffff',
+                weight: 2,
+                fillColor: '#1677ff',
+                fillOpacity: 1
+            });
+
+            var pop = document.createElement('div');
+            var b = document.createElement('strong');
+
+            b.textContent = o.nama || ('ODP ' + o.id);
+
+            pop.appendChild(b);
+            dot.bindPopup(pop);
+            dot.addTo(odpLayer);
+        }
+
     function loadOdp() {
         clearTimeout(odpTimer);
         odpTimer = setTimeout(function () {
