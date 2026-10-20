@@ -113,7 +113,7 @@ if (!defined('COV_ODP')) {
     define('COV_ODP', [
         'table'            => 'odp',
         'id'               => 'id',
-        'nama'             => 'nama_odp',
+        'nama'             => 'odp_id',
         'lat'              => 'latitude',
         'lng'              => 'longitude',
         'status_kolom'     => null,
@@ -244,6 +244,34 @@ function covCekOdp(mysqli $conn, ?float $lat, ?float $lng): array
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && isset($_GET['odp'])) {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: private, max-age=60');
+
+    // Mode peta penuh: ambil seluruh koordinat ODP agar peta dapat menyesuaikan
+    // zoom ke seluruh titik yang ada di database.
+    if ((string) $_GET['odp'] === 'all') {
+        try {
+            $c = COV_ODP;
+            [$fSql, $fTypes, $fParams] = covOdpFilter();
+            $sql = 'SELECT ' . covIdent($c['id']) . ' AS id, ' . covIdent($c['nama']) . ' AS nama, '
+                 . covIdent($c['lat']) . ' AS lat, ' . covIdent($c['lng']) . ' AS lng
+                    FROM ' . covIdent($c['table']) . '
+                    WHERE ' . covIdent($c['lat']) . ' BETWEEN -90 AND 90
+                      AND ' . covIdent($c['lng']) . ' BETWEEN -180 AND 180' . $fSql . '
+                    LIMIT 5000';
+            $rows = covFetchAll($conn, $sql, $fTypes, $fParams);
+            $out = [];
+            foreach ($rows as $r) {
+                if (!is_numeric($r['lat']) || !is_numeric($r['lng'])) continue;
+                $out[] = ['id' => (string) $r['id'], 'nama' => (string) ($r['nama'] ?? ''),
+                          'lat' => (float) $r['lat'], 'lng' => (float) $r['lng']];
+            }
+            echo json_encode(['odp' => $out], JSON_UNESCAPED_UNICODE);
+        } catch (Throwable $e) {
+            error_log('Coverage ODP all error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['odp' => [], 'error' => true]);
+        }
+        exit;
+    }
 
     $s = filter_var($_GET['s'] ?? null, FILTER_VALIDATE_FLOAT);
     $n = filter_var($_GET['n'] ?? null, FILTER_VALIDATE_FLOAT);
@@ -440,7 +468,7 @@ $pageTitle = 'Cek Coverage';
         .cv-footer p { margin: 0; }
 
         .cv-main { padding: 32px 16px 48px; }
-        .cv-wrap { max-width: 760px; margin: 0 auto; }
+        .cv-wrap { max-width: 1440px; margin: 0 auto; }
         .cv-head { margin: 0 0 18px; }
         .cv-head h1 { margin: 0 0 6px; font-size: clamp(26px, 4.6vw, 34px); letter-spacing: -.9px; line-height: 1.15; font-weight: 800; color: var(--ink); }
         .cv-head p { margin: 0; color: #475467; max-width: 56ch; }
@@ -480,7 +508,14 @@ $pageTitle = 'Cek Coverage';
         .cv-seg { display: inline-flex; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 3px; }
         .cv-seg button { font: inherit; font-size: 13px; font-weight: 700; border: 0; background: transparent; color: var(--muted); padding: 7px 14px; border-radius: 9px; cursor: pointer; }
         .cv-seg button[aria-pressed="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(10,26,51,.15); }
-        .cv-map { height: 360px; border-radius: 16px; border: 1px solid var(--line); overflow: hidden; isolation: isolate; background: #e8eef7; }
+        .cv-map { height: min(66vh, 620px); min-height: 420px; border-radius: 10px; border: 1px solid #cbd5e1; overflow: hidden; isolation: isolate; background: #e8eef7; }
+        .cv-card { padding: 20px; }
+        .cv-legend { gap: 8px 26px; font-size: 14px; color: #344054; }
+        .cv-legend i { width: 14px; height: 14px; }
+        .cv-legend .l-odp { background: #16e34b; border: 1px solid #111827; box-shadow: none; }
+        .cv-legend .l-build { background: #ef4444; border: 1px solid #111827; }
+        .cv-legend .l-route { background: #8b159b; border: 1px solid #111827; }
+        .cv-legend .l-pin { background: #ef4444; }
         .cv-map .leaflet-container { font-family: var(--font); }
         .cv-pin { filter: drop-shadow(0 4px 6px rgba(10,26,51,.4)); }
         .cv-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--muted); }
@@ -504,7 +539,7 @@ $pageTitle = 'Cek Coverage';
         @media (max-width: 600px) {
             .cv-main { padding: 20px 12px 36px; }
             .cv-card { padding: 18px; }
-            .cv-map { height: 320px; }
+            .cv-map { height: 380px; min-height: 320px; }
             .cv-tools .cv-btn { flex: 1 1 100%; }
         }
         @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -588,6 +623,8 @@ $pageTitle = 'Cek Coverage';
                 <ul class="cv-legend">
                     <li><i class="l-pin"></i>Lokasi rumah (geser untuk menyesuaikan)</li>
                     <li><i class="l-odp"></i>ODP YesNet</li>
+                    <li><i class="l-build"></i>Lokasi rumah / pembangunan</li>
+                    <li><i class="l-route"></i>Rute perencanaan (jika data rute tersedia)</li>
                     <li><i class="l-ring"></i>Jangkauan <span id="covRadiusTxt"></span></li>
                 </ul>
 
@@ -740,9 +777,9 @@ $pageTitle = 'Cek Coverage';
             // Tampilkan titik ODP saja, tanpa lingkaran radius.
             var dot = L.circleMarker([o.lat, o.lng], {
                 radius: 6,
-                color: '#ffffff',
-                weight: 2,
-                fillColor: '#1677ff',
+                color: '#111827',
+                weight: 1.2,
+                fillColor: '#16e34b',
                 fillOpacity: 1
             });
 
@@ -759,10 +796,8 @@ $pageTitle = 'Cek Coverage';
     function loadOdp() {
         clearTimeout(odpTimer);
         odpTimer = setTimeout(function () {
-            if (map.getZoom() < 14) { return; }
             var b = map.getBounds();
-            var url = actionUrl + '?odp=1&s=' + b.getSouth().toFixed(5) + '&n=' + b.getNorth().toFixed(5) +
-                      '&w=' + b.getWest().toFixed(5) + '&e=' + b.getEast().toFixed(5);
+            var url = actionUrl + '?odp=all';
             if (odpCtl && odpCtl.abort) { odpCtl.abort(); }
             odpCtl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
             fetch(url, { credentials: 'same-origin', signal: odpCtl ? odpCtl.signal : undefined })
@@ -772,6 +807,15 @@ $pageTitle = 'Cek Coverage';
                     (data.odp || []).forEach(function (o) {
                         if (!odpCache[o.id]) { odpCache[o.id] = o; drawOdp(o); changed = true; }
                     });
+                    if (changed && !hasPoint()) {
+                        var points = Object.keys(odpCache).map(function (k) {
+                            return [odpCache[k].lat, odpCache[k].lng];
+                        });
+                        if (points.length) {
+                            if (points.length === 1) map.setView(points[0], 16);
+                            else map.fitBounds(points, { padding: [28, 28], maxZoom: 15 });
+                        }
+                    }
                     if (changed || hasPoint()) { renderInfo(); }
                 })
                 .catch(function () {});
