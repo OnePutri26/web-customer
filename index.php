@@ -32,8 +32,13 @@ $loginLabel = $loggedIn ? 'Dashboard Saya' : 'Login Customer';
 $telp      = '6285604145030';
 $waNumber  = '6285604145030';
 $email     = 'yesnet_official@yesnet.net.id';
-$alamat    = 'Gedung Cyber 1, Lantai 10, Jl. Kuningan Barat No. 8, Jakarta Selatan, 12710';
-$alamat    = 'Jl. Nginden Intan Timur V/1A Kav. 26, Nginden Jangkungan, Sukolilo, Surabaya, Jawa Timur, 60118';
+$alamatJakarta = 'Gedung Cyber 1, Lantai 10, Jl. Kuningan Barat No. 8, Jakarta Selatan, 12710';
+$alamatSurabaya = 'Jl. Nginden Intan Timur V/1A Kav. 26, Nginden Jangkungan, Sukolilo, Surabaya, Jawa Timur, 60118';
+$alamat = $alamatJakarta;
+$wilayahDipilih = strtolower(trim((string)($_GET['wilayah'] ?? 'jakarta')));
+if (!in_array($wilayahDipilih, ['jakarta', 'surabaya'], true)) { $wilayahDipilih = 'jakarta'; }
+$namaWilayah = $wilayahDipilih === 'surabaya' ? 'Surabaya' : 'Jakarta';
+$alamat = $wilayahDipilih === 'surabaya' ? $alamatSurabaya : $alamatJakarta;
 $waUrl     = 'https://wa.me/' . $waNumber . '?text=' . rawurlencode('Halo YesNet, saya ingin berlangganan internet. Mohon info paket yang tersedia untuk alamat saya.');
 
 $cssVer = @filemtime(__DIR__ . '/landing.css') ?: 1;
@@ -68,6 +73,44 @@ try {
     error_log('Landing paket: ' . $e->getMessage());
 }
 
+/*
+ * Harga per wilayah: jika tabel paket_harga_wifi tersedia, deteksi nama kolom umum.
+ * Kolom yang didukung: paket_id/id_paket, wilayah/region/kota, harga/harga_bulanan/price.
+ * Jika skema tabel Anda memakai nama lain, sesuaikan bagian ini.
+ */
+$hargaWilayah = [];
+$adaTabelHargaWilayah = false;
+try {
+    if (isset($conn) && $conn instanceof mysqli) {
+        $tables = $conn->query("SHOW TABLES LIKE 'paket_harga_wifi'");
+        if ($tables && $tables->num_rows > 0) {
+            $adaTabelHargaWilayah = true;
+            $cols = [];
+            $cr = $conn->query('SHOW COLUMNS FROM paket_harga_wifi');
+            while ($cr && ($c = $cr->fetch_assoc())) $cols[] = $c['Field'];
+            $findCol = static function(array $candidates) use ($cols) {
+                foreach ($candidates as $candidate) if (in_array($candidate, $cols, true)) return $candidate;
+                return null;
+            };
+            $idCol = $findCol(['paket_id', 'id_paket', 'wifi_id', 'id_wifi']);
+            $regionCol = $findCol(['wilayah', 'region', 'kota', 'lokasi', 'area']);
+            $priceCol = $findCol(['harga', 'harga_bulanan', 'price', 'tarif', 'biaya']);
+            $activeCol = $findCol(['status', 'aktif', 'is_active']);
+            if ($idCol && $regionCol && $priceCol) {
+                $sql = 'SELECT `' . $idCol . '` AS pid, `' . $regionCol . '` AS wilayah, `' . $priceCol . '` AS harga FROM paket_harga_wifi';
+                if ($activeCol) $sql .= " WHERE (`$activeCol` IS NULL OR LOWER(CAST(`$activeCol` AS CHAR)) NOT IN ('0','nonaktif','non-aktif','inactive','disabled'))";
+                $pr = $conn->query($sql);
+                while ($pr && ($hr = $pr->fetch_assoc())) {
+                    $reg = strtolower(trim((string)$hr['wilayah']));
+                    if (in_array($reg, ['jakarta','dki jakarta'], true)) $reg = 'jakarta';
+                    if (in_array($reg, ['surabaya','kota surabaya'], true)) $reg = 'surabaya';
+                    if (is_numeric($hr['harga'])) $hargaWilayah[(int)$hr['pid']][$reg] = (float)$hr['harga'];
+                }
+            }
+        }
+    }
+} catch (Throwable $e) { error_log('Landing harga wilayah: ' . $e->getMessage()); }
+
 /* Cadangan jika tabel tidak terbaca (harga tidak ditampilkan, tombol tetap mengarah ke ID yang benar) */
 if (!$daftarPaket) {
     $daftarPaket = [
@@ -95,6 +138,12 @@ foreach ($daftarPaket as $i => $row) {
             $harga = number_format((float) $v, 0, ',', '.');
             break;
         }
+    }
+    if (isset($hargaWilayah[(int)($row['id'] ?? 0)][$wilayahDipilih])) {
+        $harga = number_format($hargaWilayah[(int)$row['id']][$wilayahDipilih], 0, ',', '.');
+    } elseif ($adaTabelHargaWilayah) {
+        // Jika harga diatur per wilayah, jangan tampilkan harga dari wilayah lain.
+        $harga = null;
     }
     $desc = '';
     foreach (['deskripsi', 'keterangan', 'deskripsi_paket'] as $k) {
@@ -345,9 +394,14 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
       <p class="picker-result" id="pick-result" aria-live="polite"></p>
     </div>
 
+    <div class="region-picker reveal" role="group" aria-label="Pilih wilayah paket">
+      <a class="region-btn <?= $wilayahDipilih === 'jakarta' ? 'active' : '' ?>" href="?wilayah=jakarta#paket" aria-pressed="<?= $wilayahDipilih === 'jakarta' ? 'true' : 'false' ?>">Jakarta</a>
+      <a class="region-btn <?= $wilayahDipilih === 'surabaya' ? 'active' : '' ?>" href="?wilayah=surabaya#paket" aria-pressed="<?= $wilayahDipilih === 'surabaya' ? 'true' : 'false' ?>">Surabaya</a>
+      <p class="region-caption">Menampilkan paket untuk wilayah <strong><?= e($namaWilayah) ?></strong>. Harga mengikuti data wilayah di database.</p>
+    </div>
     <div class="packages-grid">
       <?php foreach ($paket as $p): ?>
-      <article class="package-card reveal tilt <?= e($p['kelas']) ?>" data-id="<?= e($p['id']) ?>" data-name="<?= e($p['nama']) ?>" data-speed="<?= (int)$p['mbps'] ?>" data-price="<?= e($p['harga'] ?? '') ?>">
+      <article class="package-card reveal tilt <?= e($p['kelas']) ?>" data-id="<?= e($p['id']) ?>" data-name="<?= e($p['nama']) ?>" data-speed="<?= (int)$p['mbps'] ?>" data-price="<?= e($p['harga'] ?? '') ?>" data-region="<?= e($wilayahDipilih) ?>">
         <?php if ($p['kelas'] === 'popular'): ?><div class="popular-label">Paling Populer</div><?php endif; ?>
         <div class="package-top">
           <div class="package-icon"><?= ic($p['icon']) ?></div>
@@ -361,7 +415,7 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
           <li><?= ic('check') ?>WiFi Router</li>
           <li><?= ic('check') ?>Instalasi Gratis</li>
         </ul>
-        <a href="<?= e(appUrl('pembayaran.php')) ?>?paket=<?= e($p['id']) ?>" class="package-button" aria-label="Pilih paket <?= e($p['nama']) ?>">Pilih Paket <?= ic('arrow') ?></a>
+        <a href="<?= e(appUrl('pilih_paket.php')) ?>?paket=<?= (int)$p['id'] ?>&amp;wilayah=<?= e($wilayahDipilih) ?>" class="package-button" aria-label="Pilih paket <?= e($p['nama']) ?> wilayah <?= e($namaWilayah) ?>">Pilih Paket <?= ic('arrow') ?></a>
       </article>
       <?php endforeach; ?>
     </div>
