@@ -566,3 +566,4 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
 <script src="landing.js?v=<?= $jsVer ?>" defer></script>
 </body>
 </html>
+ 
