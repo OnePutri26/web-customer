@@ -1,8 +1,8 @@
 /*!
- * YesNet - Landing page v3
- * Tanpa library. Semua gaya ada di landing.css, file ini hanya
- * mengatur perilaku: intro, reveal, menu mobile, pemilih paket,
- * cek coverage, serta efek hero (partikel, aurora, parallax 3D).
+ * YesNet - Landing page v4
+ * Tanpa library. Semua gaya ada di landing.css, file ini hanya mengatur perilaku:
+ * intro, reveal, menu mobile, filter wilayah (Jakarta/Surabaya), pemilih paket,
+ * simulasi promo, cek coverage, serta efek hero (partikel, aurora, parallax 3D).
  * Menghormati prefers-reduced-motion.
  */
 (function () {
@@ -15,15 +15,22 @@
   var fine = !!(w.matchMedia && w.matchMedia('(hover: hover) and (pointer: fine)').matches);
   var HAS_IO = 'IntersectionObserver' in w;
   var LOADER_MIN = 1000;
-  var SVGNS = 'http://www.w3.org/2000/svg';
+  var REGION_NAMES = { jakarta: 'Jakarta', surabaya: 'Surabaya' };
+
+  /* penghubung antar modul (diisi saat init) */
+  var hooks = { pick: null, calc: null };
+  var region = 'jakarta';
 
   function $(s, r) { return (r || d).querySelector(s); }
   function $$(s, r) { return Array.prototype.slice.call((r || d).querySelectorAll(s)); }
   function on(el, ev, fn, opt) { el.addEventListener(ev, fn, opt || false); }
   function safe(fn) { try { fn(); } catch (e) { if (w.console) console.warn('[yesnet]', e); } }
-  function svgEl(name, attrs) {
-    var el = d.createElementNS(SVGNS, name);
-    for (var k in attrs) { if (Object.prototype.hasOwnProperty.call(attrs, k)) el.setAttribute(k, attrs[k]); }
+  function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+  function txt(s) { return d.createTextNode(s); }
+  function mk(tag, cls, text) {
+    var el = d.createElement(tag);
+    if (cls) el.className = cls;
+    if (text !== undefined) el.textContent = text;
     return el;
   }
 
@@ -64,7 +71,7 @@
         setTimeout(function () {
           root.classList.remove('loading');
           if (el.parentNode) el.parentNode.removeChild(el);
-        }, 1000);
+        }, 800);
       }, 160);
     }
     timer = setInterval(function () {
@@ -91,8 +98,7 @@
   }
 
   function progressBar() {
-    var b = d.createElement('div');
-    b.className = 'yn-progress';
+    var b = mk('div', 'yn-progress');
     b.setAttribute('aria-hidden', 'true');
     d.body.appendChild(b);
     onScrollRaf(function () {
@@ -151,8 +157,7 @@
     if (!fine || reduce || el._yt || !el.classList.contains('tilt')) return;
     el._yt = 1;
     if (w.getComputedStyle(el).position === 'static') el.style.position = 'relative';
-    var glow = d.createElement('span');
-    glow.className = 'yn-glow';
+    var glow = mk('span', 'yn-glow');
     glow.setAttribute('aria-hidden', 'true');
     el.appendChild(glow);
     on(el, 'mouseenter', function () { el.classList.add('yn-hov'); });
@@ -175,7 +180,7 @@
     if (el.classList.contains('is-visible')) return;
     el.classList.add('is-visible');
     var delay = el._d || 0;
-    setTimeout(function () { el.classList.add('done'); attachTilt(el); }, 1000 + delay);
+    setTimeout(function () { el.classList.add('done'); attachTilt(el); }, 900 + delay);
   }
 
   function startReveal() {
@@ -204,12 +209,10 @@
         var frag = d.createDocumentFragment();
         n.nodeValue.split(/(\s+)/).forEach(function (p) {
           if (!p) return;
-          if (/^\s+$/.test(p)) { frag.appendChild(d.createTextNode(' ')); return; }
-          var s = d.createElement('span');
-          s.className = 'yn-w';
+          if (/^\s+$/.test(p)) { frag.appendChild(txt(' ')); return; }
+          var s = mk('span', 'yn-w', p);
           s.style.setProperty('--wi', c.n++);
           s.setAttribute('aria-hidden', 'true');
-          s.textContent = p;
           frag.appendChild(s);
         });
         node.replaceChild(frag, n);
@@ -282,64 +285,27 @@
     counters.forEach(function (el) { io.observe(el); });
   }
 
-  /* ===================================================== HERO */
-  function scene() {
-    var svg = $('.scene');
-    if (!svg || reduce) return;
-
-    var house = $('.house', svg), i;
-    if (house && house.parentNode) {
-      var g = svgEl('g', {});
-      for (i = 0; i < 18; i++) {
-        var s = svgEl('circle', {
-          cx: (Math.random() * 540 + 10).toFixed(0), cy: (Math.random() * 110 + 8).toFixed(0),
-          r: (Math.random() * 1.4 + 0.6).toFixed(1), fill: '#fff', 'class': 'yn-star'
-        });
-        s.style.animationDelay = (Math.random() * 4).toFixed(2) + 's';
-        g.appendChild(s);
-      }
-      for (i = 0; i < 2; i++) {
-        var wrap = svgEl('g', { transform: 'translate(' + (80 + i * 260 + Math.random() * 60).toFixed(0) + ',' + (10 + Math.random() * 30).toFixed(0) + ')' });
-        var ln = svgEl('line', { x1: '0', y1: '0', x2: '-44', y2: '-19', 'class': 'yn-shoot' });
-        ln.style.animationDelay = (i * 3.6 + 1.2) + 's';
-        wrap.appendChild(ln);
-        g.appendChild(wrap);
-      }
-      house.parentNode.insertBefore(g, house);
+  /* Animasi angka umum (untuk simulasi promo) */
+  function tweenNum(el, to, fmt) {
+    var from = typeof el._v === 'number' ? el._v : 0;
+    el._v = to;
+    if (reduce || from === to) { el.textContent = fmt(to); return; }
+    var t0 = null, dur = 650;
+    function step(ts) {
+      if (t0 === null) t0 = ts;
+      var t = Math.min(1, (ts - t0) / dur), e = 1 - Math.pow(1 - t, 3);
+      el.textContent = fmt(from + (to - from) * e);
+      if (t < 1 && el._v === to) requestAnimationFrame(step); else el.textContent = fmt(el._v);
     }
-
-    var pulse = $('.pulse', svg);
-    if (pulse && pulse.parentNode) {
-      [0, 0.8, 1.6].forEach(function (dl) {
-        var r = svgEl('circle', { cx: pulse.getAttribute('cx'), cy: pulse.getAttribute('cy'), r: '6', 'class': 'yn-ring' });
-        r.style.animationDelay = dl + 's';
-        pulse.parentNode.insertBefore(r, pulse);
-      });
-    }
-
-    var trail = $('.trail', svg);
-    if (trail && trail.parentNode) {
-      if (!trail.id) trail.id = 'ynTrail';
-      [0, 1.3, 2.6, 3.9].forEach(function (begin) {
-        var dur = '5.2s', b = begin + 's';
-        var c = svgEl('circle', { r: '4.5', fill: '#fff', opacity: '0', 'class': 'yn-packet' });
-        var am = svgEl('animateMotion', { dur: dur, begin: b, repeatCount: 'indefinite' });
-        var mp = svgEl('mpath', {});
-        mp.setAttribute('href', '#' + trail.id);
-        mp.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '#' + trail.id);
-        am.appendChild(mp);
-        c.appendChild(am);
-        c.appendChild(svgEl('animate', { attributeName: 'opacity', values: '0;1;1;0', keyTimes: '0;.08;.92;1', dur: dur, begin: b, repeatCount: 'indefinite' }));
-        trail.parentNode.insertBefore(c, trail.nextSibling);
-      });
-    }
+    requestAnimationFrame(step);
   }
+  function rupiah(v) { return 'Rp ' + fmtNum(Math.round(v), 0); }
 
+  /* ===================================================== HERO */
   function aurora(hero) {
     if (reduce) return;
     ['b1', 'b2', 'b3'].forEach(function (c) {
-      var b = d.createElement('div');
-      b.className = 'yn-blob ' + c;
+      var b = mk('div', 'yn-blob ' + c);
       b.setAttribute('aria-hidden', 'true');
       hero.insertBefore(b, hero.firstChild);
     });
@@ -373,8 +339,7 @@
   // Jaringan partikel + paket data berjalan
   function network(hero) {
     if (reduce) return;
-    var cv = d.createElement('canvas');
-    cv.className = 'yn-canvas';
+    var cv = mk('canvas', 'yn-canvas');
     cv.setAttribute('aria-hidden', 'true');
     hero.insertBefore(cv, hero.firstChild);
     var ctx = cv.getContext('2d');
@@ -458,46 +423,270 @@
     start();
   }
 
-  /* ===================================================== FUNGSI UTAMA: PAKET & COVERAGE */
-  // Pemilih kebutuhan -> menyorot paket yang disarankan
-  function picker() {
-    var chips = $$('.chip[data-pick]'), out = $('#pick-result');
-    if (!chips.length || !out) return;
-    chips.forEach(function (ch) {
-      on(ch, 'click', function () {
-        var id = ch.getAttribute('data-pick');
-        var card = $('.package-card[data-id="' + id + '"]');
-        if (!card) return;
-        chips.forEach(function (c) {
-          var act = c === ch;
-          c.classList.toggle('active', act);
-          c.setAttribute('aria-pressed', act ? 'true' : 'false');
-        });
-        $$('.package-card.recommended').forEach(function (c) { c.classList.remove('recommended'); });
-        card.classList.add('recommended');
+  /* ===================================================== FILTER WILAYAH (JAKARTA / SURABAYA) */
+  function regionFilter() {
+    var btns = $$('.region-btn[data-region]'), grid = $('.packages-grid');
+    if (!btns.length || !grid) return;
+    var cards = $$('.package-card', grid), cap = $('#region-caption'), empty = $('#packages-empty');
+    var footerAddr = $('#footer-alamat'), addrText = footerAddr && $('.addr-text', footerAddr);
+    region = d.body.getAttribute('data-region') || 'jakarta';
 
-        out.textContent = '';
-        out.appendChild(d.createTextNode('Kami sarankan paket '));
-        var b = d.createElement('strong');
-        var pr = card.getAttribute('data-price');
-        b.textContent = card.getAttribute('data-name') + ' (' + card.getAttribute('data-speed') + ' Mbps' + (pr ? ', Rp ' + pr + '/bulan' : '') + ')';
-        out.appendChild(b);
-        var btn = $('.package-button', card);
-        if (btn) {
-          var a = d.createElement('a');
-          a.className = 'picker-go';
-          a.href = btn.getAttribute('href');
-          a.textContent = 'Pilih paket ini →';
-          out.appendChild(a);
+    function renderPrice(card, price, animate) {
+      var box = $('.package-price', card);
+      if (!box) return;
+      function build() {
+        clear(box);
+        if (price) {
+          box.appendChild(mk('span', 'cur', 'Rp'));
+          box.appendChild(txt(price));
+          box.appendChild(mk('small', '', '/bulan'));
+        } else {
+          box.appendChild(mk('span', 'cur', 'Hubungi kami'));
         }
-        out.classList.add('show');
+      }
+      if (!animate || reduce) { build(); return; }
+      box.classList.remove('swap-in');
+      box.classList.add('swap-out');
+      setTimeout(function () {
+        build();
+        box.classList.remove('swap-out');
+        box.classList.add('swap-in');
+        setTimeout(function () { box.classList.remove('swap-in'); }, 450);
+      }, 170);
+    }
 
-        var r = card.getBoundingClientRect();
-        if (r.top < 90 || r.bottom > w.innerHeight - 20) card.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+    function setCaption(r, n) {
+      if (!cap) return;
+      clear(cap);
+      cap.appendChild(txt('Menampilkan '));
+      cap.appendChild(mk('strong', '', n + ' paket'));
+      cap.appendChild(txt(' untuk wilayah '));
+      cap.appendChild(mk('strong', '', REGION_NAMES[r] || r));
+      cap.appendChild(txt('.'));
+    }
+
+    function apply(r, animate) {
+      region = r;
+      d.body.setAttribute('data-region', r);
+      btns.forEach(function (b) {
+        var act = b.getAttribute('data-region') === r;
+        b.classList.toggle('active', act);
+        b.setAttribute('aria-pressed', act ? 'true' : 'false');
+      });
+
+      var shown = 0;
+      cards.forEach(function (card) {
+        var ok = (card.getAttribute('data-avail') || '').split(' ').indexOf(r) > -1;
+        card.hidden = !ok;
+        if (!ok) return;
+        shown++;
+        card.setAttribute('data-region', r);
+        var price = card.getAttribute('data-price-' + r) || '';
+        card.setAttribute('data-price', price);
+        renderPrice(card, price, animate);
+
+        var a = $('.package-button', card);
+        if (a) {
+          a.setAttribute('href', a.getAttribute('href').replace(/wilayah=[a-z]+/i, 'wilayah=' + r));
+          a.setAttribute('aria-label', 'Pilih paket ' + card.getAttribute('data-name') + ' wilayah ' + (REGION_NAMES[r] || r));
+        }
+        showEl(card);
+        if (animate && !reduce) {
+          card.classList.remove('region-in');
+          void card.offsetWidth;
+          card.style.setProperty('--k', shown - 1);
+          card.classList.add('region-in');
+        }
+      });
+
+      if (empty) empty.hidden = shown > 0;
+      setCaption(r, shown);
+
+      if (addrText && footerAddr) {
+        var nextAddr = footerAddr.getAttribute('data-alamat-' + r);
+        if (nextAddr && addrText.textContent !== nextAddr) {
+          addrText.style.opacity = '0';
+          setTimeout(function () { addrText.textContent = nextAddr; addrText.style.opacity = '1'; }, reduce ? 0 : 220);
+        }
+      }
+
+      try { history.replaceState(null, '', '?wilayah=' + r + '#paket'); } catch (e) {}
+      if (hooks.pick) hooks.pick();
+      if (hooks.calc) hooks.calc(true);
+    }
+
+    btns.forEach(function (b) {
+      on(b, 'click', function (e) {
+        e.preventDefault();
+        var r = b.getAttribute('data-region');
+        if (r === region) return;
+        apply(r, true);
       });
     });
   }
 
+  /* ===================================================== PEMILIH KEBUTUHAN */
+  function picker() {
+    var chips = $$('.chip[data-pick]'), out = $('#pick-result');
+    if (!chips.length || !out) return;
+
+    function show(ch, scroll) {
+      var id = ch.getAttribute('data-pick');
+      var card = $('.package-card[data-id="' + id + '"]');
+      if (!card) return;
+      chips.forEach(function (c) {
+        var act = c === ch;
+        c.classList.toggle('active', act);
+        c.setAttribute('aria-pressed', act ? 'true' : 'false');
+      });
+      $$('.package-card.recommended').forEach(function (c) { c.classList.remove('recommended'); });
+      clear(out);
+
+      if (card.hidden) {
+        out.appendChild(txt('Paket yang cocok belum tersedia di wilayah ' + (REGION_NAMES[region] || region) + '. Coba pilih wilayah lain atau hubungi kami.'));
+        out.classList.add('show');
+        return;
+      }
+      card.classList.add('recommended');
+      out.appendChild(txt('Kami sarankan paket '));
+      var b = mk('strong');
+      var pr = card.getAttribute('data-price-' + region);
+      b.textContent = card.getAttribute('data-name') + ' (' + card.getAttribute('data-speed') + ' Mbps' + (pr ? ', Rp ' + pr + '/bulan' : '') + ')';
+      out.appendChild(b);
+      var btn = $('.package-button', card);
+      if (btn) {
+        var a = mk('a', 'picker-go', 'Pilih paket ini →');
+        a.href = btn.getAttribute('href');
+        out.appendChild(a);
+      }
+      out.classList.add('show');
+
+      if (scroll) {
+        var r = card.getBoundingClientRect();
+        if (r.top < 90 || r.bottom > w.innerHeight - 20) card.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+      }
+    }
+
+    chips.forEach(function (ch) { on(ch, 'click', function () { show(ch, true); }); });
+    hooks.pick = function () { var act = $('.chip.active'); if (act) show(act, false); };
+  }
+
+  /* ===================================================== PROMO + SIMULASI HEMAT */
+  function promoCalc() {
+    var box = $('#promo-calc');
+    if (!box) return;
+    var data;
+    try { data = JSON.parse(box.getAttribute('data-promos') || '{}'); } catch (e) { return; }
+    var keys = Object.keys(data);
+    if (!keys.length) return;
+
+    var selPromo = $('#calc-promo'), selTier = $('#calc-tier'), selPaket = $('#calc-paket');
+    var res = $('#calc-result'), note = $('#calc-note'), go = $('#calc-go'), wa = $('#calc-wa');
+    var regionLbl = $('.calc-region', box);
+    var base = {
+      bayar: $('#rs-bayar'), bayarBln: $('#rs-bayar-bln'),
+      dapat: $('#rs-dapat'), gratis: $('#rs-gratis'),
+      hemat: $('#rs-hemat'), eff: $('#rs-eff')
+    };
+    var NOTE_DEFAULT = note ? note.textContent : '';
+
+    function opt(value, label) { var o = d.createElement('option'); o.value = value; o.textContent = label; return o; }
+
+    keys.forEach(function (k) { selPromo.appendChild(opt(k, data[k].nama)); });
+
+    function fillTiers(keep) {
+      var cur = keep ? selTier.value : '0';
+      clear(selTier);
+      data[selPromo.value].tiers.forEach(function (t, i) { selTier.appendChild(opt(String(i), t.label + ' (total ' + t.total + ' bulan)')); });
+      selTier.value = (+cur < data[selPromo.value].tiers.length) ? cur : '0';
+    }
+
+    function fillPaket() {
+      var cur = selPaket.value;
+      clear(selPaket);
+      $$('.package-card').forEach(function (card) {
+        if (card.hidden) return;
+        selPaket.appendChild(opt(card.getAttribute('data-id'), card.getAttribute('data-name') + ' - ' + card.getAttribute('data-speed') + ' Mbps'));
+      });
+      if (cur && $('option[value="' + cur + '"]', selPaket)) selPaket.value = cur;
+    }
+
+    function markTier() {
+      $$('.tier').forEach(function (b) {
+        b.classList.toggle('on', b.getAttribute('data-promo') === selPromo.value && b.getAttribute('data-tier') === selTier.value);
+      });
+    }
+
+    function dash() {
+      ['bayar', 'hemat'].forEach(function (k) { base[k]._v = undefined; base[k].textContent = '-'; });
+      base.bayarBln.textContent = ''; base.eff.textContent = '';
+    }
+
+    function calc(bump) {
+      if (regionLbl) regionLbl.textContent = REGION_NAMES[region] || region;
+      var pr = data[selPromo.value], t = pr && pr.tiers[+selTier.value];
+      var card = selPaket.value ? $('.package-card[data-id="' + selPaket.value + '"]') : null;
+      if (!t || !card) {
+        dash();
+        base.dapat.textContent = '-'; base.gratis.textContent = '';
+        if (note) note.textContent = 'Paket belum tersedia di wilayah ini. Pilih wilayah lain atau hubungi kami.';
+        return;
+      }
+      var gratis = t.total - t.bayar;
+      base.dapat.textContent = t.total + ' bulan';
+      base.gratis.textContent = 'Gratis ' + gratis + ' bulan';
+      base.bayarBln.textContent = 'untuk ' + t.bayar + ' bulan';
+
+      var raw = parseFloat(card.getAttribute('data-raw-' + region));
+      if (isNaN(raw) || raw <= 0) {
+        dash();
+        base.bayarBln.textContent = 'untuk ' + t.bayar + ' bulan';
+        if (note) note.textContent = 'Harga paket ini belum tampil. Hubungi kami untuk total biaya promo.';
+      } else {
+        var total = raw * t.bayar, normal = raw * t.total;
+        tweenNum(base.bayar, total, rupiah);
+        tweenNum(base.hemat, normal - total, rupiah);
+        base.eff.textContent = 'Setara ' + rupiah(total / t.total) + ' per bulan';
+        if (note) note.textContent = NOTE_DEFAULT;
+      }
+
+      var name = card.getAttribute('data-name');
+      var href = box.getAttribute('data-pilih') + '?paket=' + encodeURIComponent(card.getAttribute('data-id')) +
+        '&wilayah=' + encodeURIComponent(region) + '&promo=' + encodeURIComponent(selPromo.value) + '&bayar=' + t.bayar;
+      if (go) go.setAttribute('href', href);
+      if (wa) {
+        var msg = 'Halo YesNet, saya tertarik promo ' + pr.nama + ' (' + t.label + ') untuk ' + name + ' wilayah ' + (REGION_NAMES[region] || region) + '. Mohon info pendaftarannya.';
+        wa.setAttribute('href', box.getAttribute('data-wa') + '?text=' + encodeURIComponent(msg));
+      }
+      markTier();
+      if (bump && !reduce) { res.classList.remove('bump'); void res.offsetWidth; res.classList.add('bump'); }
+    }
+
+    fillTiers(false);
+    fillPaket();
+    calc(false);
+
+    on(selPromo, 'change', function () { fillTiers(false); calc(true); });
+    on(selTier, 'change', function () { calc(true); });
+    on(selPaket, 'change', function () { calc(true); });
+
+    // klik skema pada kartu promo -> isi simulasi + sorot kotak simulasi
+    $$('.tier').forEach(function (b) {
+      on(b, 'click', function () {
+        selPromo.value = b.getAttribute('data-promo');
+        fillTiers(false);
+        selTier.value = b.getAttribute('data-tier');
+        calc(true);
+        box.classList.remove('flash'); void box.offsetWidth; box.classList.add('flash');
+        var r = box.getBoundingClientRect();
+        if (r.top < 80 || r.bottom > w.innerHeight) box.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+      });
+    });
+
+    hooks.calc = function () { fillPaket(); calc(true); };
+  }
+
+  /* ===================================================== COVERAGE */
   // Form coverage: validasi ringan + indikator loading agar tidak klik dua kali
   function coverageForms() {
     $$('form[data-coverage]').forEach(function (form) {
@@ -522,11 +711,11 @@
   /* ===================================================== INTERAKSI TOMBOL */
   function buttons() {
     on(d, 'click', function (e) {
-      var b = e.target.closest && e.target.closest('.btn,.package-button,.nav-login');
+      var b = e.target.closest && e.target.closest('.btn,.package-button,.nav-login,.region-btn');
       if (!b || reduce) return;
       var r = b.getBoundingClientRect(), s = Math.max(r.width, r.height) * 2;
-      var sp = d.createElement('span');
-      var light = /btn-primary|btn-wa/.test(b.className) || (b.classList.contains('package-button') && b.closest('.popular, .recommended'));
+      var sp = mk('span');
+      var light = /btn-primary|btn-wa|btn-promo/.test(b.className) || b.classList.contains('active') || (b.classList.contains('package-button') && b.closest('.popular, .recommended'));
       sp.className = 'yn-ripple' + (light ? ' light' : '');
       sp.style.cssText = 'width:' + s + 'px;height:' + s + 'px;left:' + (e.clientX - r.left - s / 2) + 'px;top:' + (e.clientY - r.top - s / 2) + 'px';
       b.appendChild(sp);
@@ -534,30 +723,13 @@
     });
 
     if (!fine || reduce) return;
-    $$('.hero .btn-primary,.hero .btn-outline,.cta-actions .btn').forEach(function (b) {
+    $$('.hero .btn-primary,.hero .btn-outline,.hero .btn-promo,.cta-actions .btn').forEach(function (b) {
       on(b, 'mousemove', function (e) {
         var r = b.getBoundingClientRect();
         b.style.setProperty('--bx', ((e.clientX - r.left - r.width / 2) * 0.16).toFixed(1) + 'px');
         b.style.setProperty('--by', ((e.clientY - r.top - r.height / 2) * 0.22).toFixed(1) + 'px');
       });
       on(b, 'mouseleave', function () { b.style.setProperty('--bx', '0px'); b.style.setProperty('--by', '0px'); });
-    });
-  }
-
-  // Alur layanan: langkah menyala berurutan (aktif saat panel detail terbuka)
-  function flowLanes() {
-    $$('.flow-lane').forEach(function (lane) {
-      var steps = $$('.flow-track li', lane);
-      if (!steps.length) return;
-      if (reduce || !HAS_IO) { steps.forEach(function (s) { s.classList.add('on'); }); return; }
-      var i = 0, active = false;
-      new IntersectionObserver(function (es) { active = es[0].isIntersecting; }, { threshold: 0.25 }).observe(lane);
-      setInterval(function () {
-        if (!active) return;
-        if (i >= steps.length + 2) { steps.forEach(function (s) { s.classList.remove('on'); }); i = 0; }
-        if (steps[i]) steps[i].classList.add('on');
-        i++;
-      }, 650);
     });
   }
 
@@ -568,12 +740,12 @@
     safe(navbar);
     safe(mobileBar);
     safe(buttons);
+    safe(regionFilter);
     safe(picker);
+    safe(promoCalc);
     safe(coverageForms);
     safe(prepareSplit);
     safe(prepareCounters);
-    safe(scene);
-    safe(flowLanes);
     if (hero) {
       safe(function () { aurora(hero); });
       safe(function () { network(hero); });

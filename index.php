@@ -32,21 +32,70 @@ $loginLabel = $loggedIn ? 'Dashboard Saya' : 'Login Customer';
 $telp      = '6285604145030';
 $waNumber  = '6285604145030';
 $email     = 'yesnet_official@yesnet.net.id';
-$alamatJakarta = 'Gedung Cyber 1, Lantai 10, Jl. Kuningan Barat No. 8, Jakarta Selatan, 12710';
+$alamatJakarta  = 'Gedung Cyber 1, Lantai 10, Jl. Kuningan Barat No. 8, Jakarta Selatan, 12710';
 $alamatSurabaya = 'Jl. Nginden Intan Timur V/1A Kav. 26, Nginden Jangkungan, Sukolilo, Surabaya, Jawa Timur, 60118';
-$alamat = $alamatJakarta;
+
+/* Wilayah yang tersedia. Tambahkan kota baru di sini jika perlu (juga di tabel paket_harga_wifi). */
+$wilayahList = ['jakarta' => 'Jakarta', 'surabaya' => 'Surabaya'];
 $wilayahDipilih = strtolower(trim((string)($_GET['wilayah'] ?? 'jakarta')));
-if (!in_array($wilayahDipilih, ['jakarta', 'surabaya'], true)) { $wilayahDipilih = 'jakarta'; }
-$namaWilayah = $wilayahDipilih === 'surabaya' ? 'Surabaya' : 'Jakarta';
+if (!isset($wilayahList[$wilayahDipilih])) { $wilayahDipilih = 'jakarta'; }
+$namaWilayah = $wilayahList[$wilayahDipilih];
 $alamat = $wilayahDipilih === 'surabaya' ? $alamatSurabaya : $alamatJakarta;
+
 $waUrl     = 'https://wa.me/' . $waNumber . '?text=' . rawurlencode('Halo YesNet, saya ingin berlangganan internet. Mohon info paket yang tersedia untuk alamat saya.');
 
 $cssVer = @filemtime(__DIR__ . '/landing.css') ?: 1;
 $jsVer  = @filemtime(__DIR__ . '/landing.js') ?: 1;
 
 /*
+ * PROMO
+ * Edit di sini jika promo berubah. Tiap skema: [bayar (bulan), total layanan (bulan), label tampilan].
+ * Asumsi: "Buy 5 Get 1" = bayar 5 bulan + gratis 1 bulan (total 6 bulan);
+ *         "Buy 10 Get 12" = bayar 10 bulan, total layanan 12 bulan;
+ *         "Buy 1 Get 1"  = bayar 1 bulan + gratis 1 bulan (total 2 bulan).
+ */
+$promo = [
+    'umum' => [
+        'nama'  => 'Promo Umum',
+        'sub'   => 'Untuk pelanggan baru YesNet',
+        'ikon'  => 'gift',
+        'warna' => 'blue',
+        'tiers' => [
+            [3, 4,  'Bayar 3 Dapat 4'],
+            [5, 7,  'Bayar 5 Dapat 7'],
+            [8, 12, 'Bayar 8 Dapat 12'],
+        ],
+    ],
+    'nest' => [
+        'nama'  => 'Apartemen The Nest & Satu8',
+        'sub'   => 'Khusus apartemen The Nest dan Satu8',
+        'ikon'  => 'building',
+        'warna' => 'violet',
+        'tiers' => [
+            [5, 6,   'Buy 5 Get 1'],
+            [10, 12, 'Buy 10 Get 12'],
+        ],
+    ],
+    'garden' => [
+        'nama'  => 'Apartemen City Garden',
+        'sub'   => 'Khusus apartemen City Garden',
+        'ikon'  => 'building',
+        'warna' => 'green',
+        'tiers' => [
+            [1, 2, 'Buy 1 Get 1'],
+        ],
+    ],
+];
+$promoJs = [];
+foreach ($promo as $key => $pr) {
+    $promoJs[$key] = ['nama' => $pr['nama'], 'tiers' => array_map(static function ($t) {
+        return ['bayar' => $t[0], 'total' => $t[1], 'label' => $t[2]];
+    }, $pr['tiers'])];
+}
+
+/*
  * Paket diambil langsung dari tabel paket_wifi, sehingga ID, nama, kecepatan dan harga
- * SELALU sama dengan halaman pembayaran (pembayaran.php?paket=ID memakai ID angka ini).
+ * SELALU sama dengan halaman pembayaran.
  */
 $daftarPaket = [];
 try {
@@ -76,25 +125,23 @@ try {
 /*
  * Harga per wilayah: jika tabel paket_harga_wifi tersedia, deteksi nama kolom umum.
  * Kolom yang didukung: paket_id/id_paket, wilayah/region/kota, harga/harga_bulanan/price.
- * Jika skema tabel Anda memakai nama lain, sesuaikan bagian ini.
+ * Jika tabel ini berisi data, paket hanya tampil di wilayah yang punya harganya (filter).
  */
 $hargaWilayah = [];
-$adaTabelHargaWilayah = false;
 try {
     if (isset($conn) && $conn instanceof mysqli) {
         $tables = $conn->query("SHOW TABLES LIKE 'paket_harga_wifi'");
         if ($tables && $tables->num_rows > 0) {
-            $adaTabelHargaWilayah = true;
             $cols = [];
             $cr = $conn->query('SHOW COLUMNS FROM paket_harga_wifi');
             while ($cr && ($c = $cr->fetch_assoc())) $cols[] = $c['Field'];
-            $findCol = static function(array $candidates) use ($cols) {
+            $findCol = static function (array $candidates) use ($cols) {
                 foreach ($candidates as $candidate) if (in_array($candidate, $cols, true)) return $candidate;
                 return null;
             };
-            $idCol = $findCol(['paket_id', 'id_paket', 'wifi_id', 'id_wifi']);
+            $idCol     = $findCol(['paket_id', 'id_paket', 'wifi_id', 'id_wifi']);
             $regionCol = $findCol(['wilayah', 'region', 'kota', 'lokasi', 'area']);
-            $priceCol = $findCol(['harga', 'harga_bulanan', 'price', 'tarif', 'biaya']);
+            $priceCol  = $findCol(['harga', 'harga_bulanan', 'price', 'tarif', 'biaya']);
             $activeCol = $findCol(['status', 'aktif', 'is_active']);
             if ($idCol && $regionCol && $priceCol) {
                 $sql = 'SELECT `' . $idCol . '` AS pid, `' . $regionCol . '` AS wilayah, `' . $priceCol . '` AS harga FROM paket_harga_wifi';
@@ -102,14 +149,15 @@ try {
                 $pr = $conn->query($sql);
                 while ($pr && ($hr = $pr->fetch_assoc())) {
                     $reg = strtolower(trim((string)$hr['wilayah']));
-                    if (in_array($reg, ['jakarta','dki jakarta'], true)) $reg = 'jakarta';
-                    if (in_array($reg, ['surabaya','kota surabaya'], true)) $reg = 'surabaya';
+                    if (in_array($reg, ['jakarta', 'dki jakarta'], true)) $reg = 'jakarta';
+                    if (in_array($reg, ['surabaya', 'kota surabaya'], true)) $reg = 'surabaya';
                     if (is_numeric($hr['harga'])) $hargaWilayah[(int)$hr['pid']][$reg] = (float)$hr['harga'];
                 }
             }
         }
     }
 } catch (Throwable $e) { error_log('Landing harga wilayah: ' . $e->getMessage()); }
+$filterWilayahAktif = !empty($hargaWilayah);
 
 /* Cadangan jika tabel tidak terbaca (harga tidak ditampilkan, tombol tetap mengarah ke ID yang benar) */
 if (!$daftarPaket) {
@@ -132,19 +180,26 @@ $ikonRank = ['box', 'users', 'gem', 'tool'];
 $paket = [];
 $maxMbps = 1;
 foreach ($daftarPaket as $i => $row) {
-    $harga = null;
+    $pid = (int) ($row['id'] ?? 0);
+
+    /* harga dasar (kolom harga di tabel paket_wifi) */
+    $baseRaw = null;
     foreach ($row as $k => $v) {
         if (preg_match('/^(harga|price|tarif|biaya)/i', (string) $k) && is_numeric($v) && (float) $v > 0) {
-            $harga = number_format((float) $v, 0, ',', '.');
+            $baseRaw = (float) $v;
             break;
         }
     }
-    if (isset($hargaWilayah[(int)($row['id'] ?? 0)][$wilayahDipilih])) {
-        $harga = number_format($hargaWilayah[(int)$row['id']][$wilayahDipilih], 0, ',', '.');
-    } elseif ($adaTabelHargaWilayah) {
-        // Jika harga diatur per wilayah, jangan tampilkan harga dari wilayah lain.
-        $harga = null;
+
+    /* harga + ketersediaan untuk setiap wilayah */
+    $harga = []; $raw = []; $avail = [];
+    foreach (array_keys($wilayahList) as $wl) {
+        $val = $hargaWilayah[$pid][$wl] ?? ($filterWilayahAktif ? null : $baseRaw);
+        $raw[$wl]   = $val;
+        $harga[$wl] = $val !== null ? number_format($val, 0, ',', '.') : null;
+        $avail[$wl] = !$filterWilayahAktif || $val !== null;
     }
+
     $desc = '';
     foreach (['deskripsi', 'keterangan', 'deskripsi_paket'] as $k) {
         if (!empty($row[$k]) && is_string($row[$k])) {
@@ -155,15 +210,20 @@ foreach ($daftarPaket as $i => $row) {
     $mbps = (int) ($row['speed_mbps'] ?? 0);
     $maxMbps = max($maxMbps, $mbps);
     $paket[] = [
-        'id'    => (int) $row['id'],
+        'id'    => $pid,
         'nama'  => (string) ($row['nama_paket'] ?? ('Paket ' . ($i + 1))),
         'desc'  => $desc !== '' ? $desc : $descDefault[min($i, 3)],
         'mbps'  => $mbps,
         'harga' => $harga,
+        'raw'   => $raw,
+        'avail' => $avail,
         'icon'  => $ikonRank[min($i, 3)],
         'kelas' => $i === 1 ? 'popular' : ($i === 2 ? 'premium' : ($i >= 3 ? 'business' : '')),
     ];
 }
+
+$jumlahTampil = 0;
+foreach ($paket as $p) { if ($p['avail'][$wilayahDipilih]) $jumlahTampil++; }
 
 /* Pemilih kebutuhan -> paket menurut urutan kecepatan (terendah ke tertinggi) */
 $pickId = static function (int $rank) use ($paket): int {
@@ -184,15 +244,25 @@ $fitur = [
     ['headset', 'Layanan Pelanggan', 'Siap membantu kapan saja saat Anda membutuhkan.'],
 ];
 
-$alur = [
-    ['Cek Coverage', appUrl('coverage.php'), 'pin', ['Masukkan alamat','Cek ketersediaan','Tersedia / tidak tersedia','Pilih paket / form request','Detail paket','Register customer','Verifikasi data','Order berlangganan','Pembayaran','Berhasil / gagal','Order diproses / bayar lagi','Survey / validasi','Jadwal instalasi','Teknisi datang','Instalasi selesai','Aktivasi customer','Customer aktif','Dashboard']],
-    ['Lihat Paket', appUrl('paket.php'), 'box', ['Pilih paket','Pembayaran']],
-    [$loginLabel, $loginUrl, 'user', ['Login','Dashboard']],
+/* Alur versi customer: singkat, 5 langkah. who: you = dilakukan customer, us = dilakukan tim YesNet */
+$langkah = [
+    ['pin',    'Cek alamat',         'you', 'Ketik alamat pemasangan di kolom Cek Coverage. Hasilnya langsung terlihat. Jika belum terjangkau, kirim form request dan kami pertimbangkan area Anda.'],
+    ['box',    'Pilih paket',        'you', 'Pilih wilayah, paket, dan promo hemat yang Anda mau.'],
+    ['card',   'Daftar dan bayar',   'you', 'Isi data diri, lalu bayar online. Data Anda kami verifikasi setelah pembayaran.'],
+    ['tool',   'Survei dan jadwal',  'us',  'Tim kami mensurvei lokasi lalu menghubungi Anda untuk jadwal pemasangan.'],
+    ['check',  'Internet aktif',     'us',  'Teknisi memasang dan mengaktifkan layanan. Pantau semuanya lewat dashboard.'],
+];
+$pintas = [
+    ['Cek Coverage', appUrl('coverage.php'), 'pin'],
+    ['Lihat Paket', '#paket', 'box'],
+    [$loginLabel, $loginUrl, 'user'],
 ];
 
 $faq = [
     ['Bagaimana cara berlangganan YesNet?', 'Cek coverage dengan memasukkan alamat Anda, pilih paket, daftar sebagai customer, lalu lakukan pembayaran. Setelah data diverifikasi, tim kami melakukan survei dan menjadwalkan instalasi.'],
     ['Apakah ada biaya instalasi?', 'Semua paket sudah termasuk instalasi gratis dan WiFi router.'],
+    ['Apakah harga paket sama di Jakarta dan Surabaya?', 'Harga dan ketersediaan paket mengikuti wilayah. Pilih Jakarta atau Surabaya di bagian Paket untuk melihat daftar yang berlaku.'],
+    ['Bagaimana cara mendapat promo bayar beberapa bulan dapat lebih lama?', 'Lihat bagian Promo, pilih skema yang Anda mau, lalu gunakan simulasi hemat untuk melihat total bayar. Sebutkan promo yang dipilih saat mendaftar atau menghubungi kami. Promo apartemen berlaku untuk lokasi apartemen yang tertera. Syarat dan ketentuan berlaku.'],
     ['Bagaimana jika alamat saya belum terjangkau?', 'Anda dapat mengirim form request melalui halaman Cek Coverage agar area Anda dapat kami pertimbangkan.'],
     ['Paket mana yang cocok untuk saya?', 'Untuk browsing dan sosmed, paket dengan kecepatan lebih rendah sudah cukup. Untuk keluarga, streaming, dan gaming, pilih kecepatan yang lebih tinggi. Gunakan pemilih kebutuhan di bagian Paket untuk rekomendasi cepat.'],
     ['Bagaimana memantau layanan setelah aktif?', 'Masuk melalui menu Login Customer untuk membuka dashboard Anda.'],
@@ -208,7 +278,7 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>YesNet - Internet Cepat &amp; Stabil untuk Rumah dan Bisnis</title>
-<meta name="description" content="YesNet - Internet fiber optic cepat, stabil dan terjangkau untuk rumah, keluarga dan bisnis. Cek coverage dan berlangganan online.">
+<meta name="description" content="YesNet - Internet fiber optic cepat, stabil dan terjangkau untuk rumah, keluarga dan bisnis. Cek coverage, pilih paket Jakarta atau Surabaya, dan nikmati promo berlangganan.">
 <meta name="theme-color" content="#1f62ff">
 <meta property="og:type" content="website">
 <meta property="og:title" content="YesNet - Internet Cepat &amp; Stabil">
@@ -227,7 +297,7 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
 })(document.documentElement);
 </script>
 </head>
-<body>
+<body data-region="<?= e($wilayahDipilih) ?>">
 
 <a class="skip-link" href="#paket">Lewati ke paket</a>
 
@@ -271,6 +341,10 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
 <symbol id="i-laptop" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 20h20"/></symbol>
 <symbol id="i-mobile" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></symbol>
 <symbol id="i-game" viewBox="0 0 24 24"><path d="M7 8h10a4.500 4.500 0 0 1 4.400 5.400l-.7 3.200a2.500 2.500 0 0 1-4.300 1.100L14.500 16h-5l-1.900 1.700a2.500 2.500 0 0 1-4.300-1.100l-.7-3.200A4.500 4.500 0 0 1 7 8z"/><path d="M8 10.500v3M6.500 12h3"/><circle cx="15.500" cy="11" r=".6"/><circle cx="17.500" cy="13" r=".6"/></symbol>
+<symbol id="i-gift" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M5 12v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8M7.500 8a2.500 2.500 0 1 1 0-5C10 3 12 8 12 8s2-5 4.500-5a2.500 2.500 0 1 1 0 5"/></symbol>
+<symbol id="i-building" viewBox="0 0 24 24"><path d="M4 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v17M15 9h4a1 1 0 0 1 1 1v11M2 21h20M8 7h3M8 11h3M8 15h3"/></symbol>
+<symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
+<symbol id="i-card" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></symbol>
 </svg>
 
 <!-- NAVBAR -->
@@ -282,6 +356,7 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
       <a href="#home" class="active">Home</a>
       <a href="#keunggulan">Keunggulan</a>
       <a href="#paket">Paket</a>
+      <a href="#promo">Promo</a>
       <a href="#alur">Cara Daftar</a>
       <a href="#faq">FAQ</a>
       <a href="#kontak">Kontak</a>
@@ -317,6 +392,7 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
 
       <div class="hero-actions" data-in style="--i:4">
         <a href="#paket" class="btn btn-outline"><?= ic('box') ?>Lihat Paket</a>
+        <a href="#promo" class="btn btn-promo"><?= ic('gift') ?>Lihat Promo</a>
         <a href="<?= e($loginUrl) ?>" class="btn-link">Sudah jadi pelanggan? <?= e($loginLabel) ?> <?= ic('arrow') ?></a>
       </div>
 
@@ -356,6 +432,19 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
   </div>
 </section>
 
+<!-- PITA PROMO BERJALAN -->
+<a class="promo-strip" href="#promo" aria-label="Lihat promo berlangganan">
+  <div class="strip-track">
+    <?php for ($copy = 0; $copy < 2; $copy++): ?>
+    <div class="strip-group"<?= $copy ? ' aria-hidden="true"' : '' ?>>
+      <?php foreach ($promo as $pr): foreach ($pr['tiers'] as $t): ?>
+      <span class="strip-item"><?= ic('gift') ?><?= $pr['nama'] === 'Promo Umum' ? '' : '<em>' . e($pr['nama']) . '</em>' ?><?= e($t[2]) ?></span>
+      <?php endforeach; endforeach; ?>
+    </div>
+    <?php endfor; ?>
+  </div>
+</a>
+
 <!-- KEUNGGULAN -->
 <section id="keunggulan" class="section advantages">
   <div class="container">
@@ -384,6 +473,17 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
       <p>Semua paket sudah termasuk Internet Unlimited, WiFi Router, dan Instalasi Gratis.</p>
     </div>
 
+    <!-- Filter wilayah: langsung berubah tanpa memuat ulang halaman (tautan tetap berfungsi tanpa JavaScript) -->
+    <div class="region-picker reveal" role="group" aria-label="Pilih wilayah paket">
+      <div class="region-picker-title"><?= ic('pin') ?>Pilih wilayah pemasangan</div>
+      <div class="region-picker-options">
+        <?php foreach ($wilayahList as $kode => $nama): ?>
+        <a class="region-btn<?= $wilayahDipilih === $kode ? ' active' : '' ?>" href="?wilayah=<?= e($kode) ?>#paket" data-region="<?= e($kode) ?>" aria-pressed="<?= $wilayahDipilih === $kode ? 'true' : 'false' ?>"><?= ic('pin') ?><?= e($nama) ?></a>
+        <?php endforeach; ?>
+      </div>
+      <p class="region-caption" id="region-caption" aria-live="polite">Menampilkan <strong><?= (int) $jumlahTampil ?> paket</strong> untuk wilayah <strong><?= e($namaWilayah) ?></strong>.</p>
+    </div>
+
     <div class="picker reveal">
       <div class="picker-title"><?= ic('sparkle') ?>Bingung memilih? Pilih kebutuhan Anda:</div>
       <div class="chips" role="group" aria-label="Kebutuhan internet">
@@ -394,14 +494,14 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
       <p class="picker-result" id="pick-result" aria-live="polite"></p>
     </div>
 
-    <div class="region-picker reveal" role="group" aria-label="Pilih wilayah paket">
-      <a class="region-btn <?= $wilayahDipilih === 'jakarta' ? 'active' : '' ?>" href="?wilayah=jakarta#paket" aria-pressed="<?= $wilayahDipilih === 'jakarta' ? 'true' : 'false' ?>">Jakarta</a>
-      <a class="region-btn <?= $wilayahDipilih === 'surabaya' ? 'active' : '' ?>" href="?wilayah=surabaya#paket" aria-pressed="<?= $wilayahDipilih === 'surabaya' ? 'true' : 'false' ?>">Surabaya</a>
-      <p class="region-caption">Menampilkan paket untuk wilayah <strong><?= e($namaWilayah) ?></strong>. Harga mengikuti data wilayah di database.</p>
-    </div>
     <div class="packages-grid">
       <?php foreach ($paket as $p): ?>
-      <article class="package-card reveal tilt <?= e($p['kelas']) ?>" data-id="<?= e($p['id']) ?>" data-name="<?= e($p['nama']) ?>" data-speed="<?= (int)$p['mbps'] ?>" data-price="<?= e($p['harga'] ?? '') ?>" data-region="<?= e($wilayahDipilih) ?>">
+      <article class="package-card reveal tilt <?= e($p['kelas']) ?>"
+        data-id="<?= e($p['id']) ?>" data-name="<?= e($p['nama']) ?>" data-speed="<?= (int)$p['mbps'] ?>"
+        data-price="<?= e($p['harga'][$wilayahDipilih] ?? '') ?>" data-region="<?= e($wilayahDipilih) ?>"
+        data-avail="<?= e(implode(' ', array_keys(array_filter($p['avail'])))) ?>"
+        <?php foreach ($wilayahList as $kode => $nama): ?>data-price-<?= e($kode) ?>="<?= e($p['harga'][$kode] ?? '') ?>" data-raw-<?= e($kode) ?>="<?= e($p['raw'][$kode] ?? '') ?>" <?php endforeach; ?>
+        <?= $p['avail'][$wilayahDipilih] ? '' : 'hidden' ?>>
         <?php if ($p['kelas'] === 'popular'): ?><div class="popular-label">Paling Populer</div><?php endif; ?>
         <div class="package-top">
           <div class="package-icon"><?= ic($p['icon']) ?></div>
@@ -409,7 +509,8 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
         </div>
         <div class="package-speed"><?= ic('wifi') ?><span><b data-count="<?= (int)$p['mbps'] ?>"><?= (int)$p['mbps'] ?></b> Mbps</span></div>
         <div class="speed-bar" aria-hidden="true"><i style="--w:<?= round($p['mbps'] / $maxMbps * 100) ?>%"></i></div>
-        <div class="package-price"><?php if ($p['harga'] !== null): ?><span class="cur">Rp</span><?= e($p['harga']) ?><small>/bulan</small><?php else: ?><span class="cur">Hubungi kami</span><?php endif; ?></div>
+        <div class="package-price"><?php $hg = $p['harga'][$wilayahDipilih] ?? null; if ($hg !== null): ?><span class="cur">Rp</span><?= e($hg) ?><small>/bulan</small><?php else: ?><span class="cur">Hubungi kami</span><?php endif; ?></div>
+        <a class="package-promo" href="#promo"><?= ic('gift') ?>Promo hingga Bayar 8 Dapat 12</a>
         <ul>
           <li><?= ic('check') ?>Internet Unlimited</li>
           <li><?= ic('check') ?>WiFi Router</li>
@@ -420,7 +521,71 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
       <?php endforeach; ?>
     </div>
 
+    <div class="packages-empty" id="packages-empty"<?= $jumlahTampil ? ' hidden' : '' ?>>
+      <?= ic('pin') ?>
+      <h3>Paket untuk wilayah ini belum tersedia</h3>
+      <p>Hubungi tim kami untuk info paket dan jadwal pemasangan di wilayah Anda.</p>
+      <a href="<?= e($waUrl) ?>" class="btn btn-wa btn-sm" target="_blank" rel="noopener"><?= ic('chat') ?>Tanya lewat WhatsApp</a>
+    </div>
+
     <p class="packages-note reveal">Butuh bantuan memilih? <a href="<?= e($waUrl) ?>" target="_blank" rel="noopener">Chat kami lewat WhatsApp</a></p>
+  </div>
+</section>
+
+<!-- PROMO -->
+<section id="promo" class="section promo-section">
+  <div class="container">
+    <div class="section-heading reveal">
+      <span class="section-label">Promo Berlangganan</span>
+      <h2>Bayar Lebih Sedikit, <span class="grad">Internet Lebih Lama</span></h2>
+      <p>Pilih skema promo, lalu klik untuk menghitung berapa yang Anda hemat.</p>
+    </div>
+
+    <div class="promo-grid">
+      <?php foreach ($promo as $key => $pr): ?>
+      <article class="promo-card reveal tilt p-<?= e($pr['warna']) ?>">
+        <div class="promo-head">
+          <div class="promo-icon"><?= ic($pr['ikon']) ?></div>
+          <div><h3><?= e($pr['nama']) ?></h3><small><?= e($pr['sub']) ?></small></div>
+        </div>
+        <ul class="promo-tiers">
+          <?php foreach ($pr['tiers'] as $ti => $t): $gratis = $t[1] - $t[0]; ?>
+          <li>
+            <button type="button" class="tier" data-promo="<?= e($key) ?>" data-tier="<?= (int) $ti ?>">
+              <span><b><?= e($t[2]) ?></b><small>Total <?= (int) $t[1] ?> bulan layanan</small></span>
+              <span class="badge">Gratis <?= (int) $gratis ?> bulan</span>
+            </button>
+          </li>
+          <?php endforeach; ?>
+        </ul>
+        <p class="promo-hint">Klik skema untuk simulasi hemat</p>
+      </article>
+      <?php endforeach; ?>
+    </div>
+
+    <div class="promo-calc reveal" id="promo-calc"
+         data-promos="<?= e(json_encode($promoJs, JSON_UNESCAPED_UNICODE)) ?>"
+         data-pilih="<?= e(appUrl('pilih_paket.php')) ?>"
+         data-wa="https://wa.me/<?= e($waNumber) ?>">
+      <div class="calc-title"><?= ic('calendar') ?>Simulasi hemat <span class="calc-chip">Wilayah <strong class="calc-region"><?= e($namaWilayah) ?></strong></span></div>
+
+      <div class="calc-row">
+        <label>Promo<select id="calc-promo"></select></label>
+        <label>Skema<select id="calc-tier"></select></label>
+        <label>Paket<select id="calc-paket"></select></label>
+      </div>
+
+      <div class="calc-result" id="calc-result" aria-live="polite">
+        <div class="stat"><small>Anda bayar</small><b id="rs-bayar">-</b><span id="rs-bayar-bln"></span></div>
+        <div class="stat"><small>Anda dapat</small><b id="rs-dapat">-</b><span id="rs-gratis"></span></div>
+        <div class="stat hl"><small>Total hemat</small><b id="rs-hemat">-</b><span id="rs-eff"></span></div>
+      </div>
+      <p class="calc-note" id="calc-note">Harga normal dihitung dari harga bulanan paket di wilayah terpilih. Syarat dan ketentuan berlaku.</p>
+      <div class="calc-actions">
+        <a href="#" class="btn btn-primary btn-sm" id="calc-go">Pakai promo ini <?= ic('arrow') ?></a>
+        <a href="#" class="btn btn-outline btn-sm" id="calc-wa" target="_blank" rel="noopener"><?= ic('chat') ?>Tanya via WhatsApp</a>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -459,15 +624,24 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
 
     <details class="flow-details reveal">
       <summary>Lihat detail alur lengkap <?= ic('chev', 'chev') ?></summary>
-      <div class="flow-lanes">
-        <?php foreach ($alur as $a): ?>
-        <div class="flow-lane">
-          <a href="<?= e($a[1]) ?>" class="flow-start"><?= ic($a[2]) ?><?= e($a[0]) ?><?= ic('arrow') ?></a>
-          <ol class="flow-track">
-            <?php foreach ($a[3] as $s): ?><li><?= e($s) ?></li><?php endforeach; ?>
-          </ol>
+      <div class="flow-body">
+        <p class="flow-legend"><span class="who you">Anda</span> yang melakukan &nbsp; <span class="who us">Tim YesNet</span> yang mengurus</p>
+        <ol class="timeline">
+          <?php foreach ($langkah as $n => $s): ?>
+          <li class="tl-item" style="--k:<?= (int) $n ?>">
+            <span class="tl-dot"><?= $s[2] === 'us' && $n === count($langkah) - 1 ? ic('check') : (int) ($n + 1) ?></span>
+            <div class="tl-card">
+              <div class="tl-head"><h4><?= e($s[1]) ?></h4><span class="who <?= e($s[2]) ?>"><?= $s[2] === 'you' ? 'Anda' : 'Tim YesNet' ?></span></div>
+              <p><?= e($s[3]) ?></p>
+            </div>
+          </li>
+          <?php endforeach; ?>
+        </ol>
+        <div class="flow-quick">
+          <?php foreach ($pintas as $q): ?>
+          <a href="<?= e($q[1]) ?>" class="btn btn-outline btn-sm"><?= ic($q[2]) ?><?= e($q[0]) ?></a>
+          <?php endforeach; ?>
         </div>
-        <?php endforeach; ?>
       </div>
     </details>
   </div>
@@ -542,11 +716,11 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
         <a href="<?= e($waUrl) ?>" class="btn btn-wa btn-sm" target="_blank" rel="noopener"><?= ic('chat') ?>Chat WhatsApp</a>
       </div>
       <div class="footer-column"><h4>Tautan Cepat</h4>
-        <a href="#home">Home</a><a href="#keunggulan">Keunggulan</a><a href="#paket">Paket</a><a href="#alur">Cara Daftar</a><a href="#faq">FAQ</a></div>
+        <a href="#home">Home</a><a href="#keunggulan">Keunggulan</a><a href="#paket">Paket</a><a href="#promo">Promo</a><a href="#alur">Cara Daftar</a><a href="#faq">FAQ</a></div>
       <div class="footer-column"><h4>Hubungi Kami</h4>
         <a href="tel:<?= e($telp) ?>"><?= ic('phone') ?><?= e($telp) ?></a>
         <a href="mailto:<?= e($email) ?>"><?= ic('mail') ?><?= e($email) ?></a>
-        <a href="<?= e(appUrl('coverage.php')) ?>"><?= ic('pin') ?><?= e($alamat) ?></a></div>
+        <a href="<?= e(appUrl('coverage.php')) ?>" id="footer-alamat" data-alamat-jakarta="<?= e($alamatJakarta) ?>" data-alamat-surabaya="<?= e($alamatSurabaya) ?>"><?= ic('pin') ?><span class="addr-text"><?= e($alamat) ?></span></a></div>
       <div class="footer-column"><h4>Ikuti Kami</h4>
         <div class="social-links"><a href="#" aria-label="Facebook">f</a>
 <a href="https://www.instagram.com/yesnet.id/" target="_blank" rel="noopener noreferrer" aria-label="Instagram YesNet">ig</a>
@@ -566,4 +740,3 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
 <script src="landing.js?v=<?= $jsVer ?>" defer></script>
 </body>
 </html>
- 
