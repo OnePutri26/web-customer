@@ -203,12 +203,26 @@ if (!$tersedia && $_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['aks
                 }
             }
             $note = $old['catatan'] !== '' ? $old['catatan'] : null;
+
+            // Periksa struktur tabel agar kolom opsional yang belum tersedia tidak menggagalkan pengajuan.
+            $tableResult = $conn->query('SHOW COLUMNS FROM `coverage_expansion_requests`');
+            $dbColumns = [];
+            while ($column = $tableResult->fetch_assoc()) {
+                $dbColumns[(string) $column['Field']] = true;
+            }
+            $tableResult->free();
+
+            foreach (['id', 'nomor_pengajuan', 'nama', 'telepon', 'alamat', 'status'] as $requiredColumn) {
+                if (!isset($dbColumns[$requiredColumn])) {
+                    throw new RuntimeException('Kolom wajib coverage_expansion_requests tidak ditemukan: ' . $requiredColumn);
+                }
+            }
+
             $stmt = $conn->prepare("
-                SELECT id
-                FROM coverage_expansion_requests
+                SELECT id FROM coverage_expansion_requests
                 WHERE telepon = ? AND alamat = ? AND status <> 'ditolak'
                 ORDER BY id DESC LIMIT 1
-            ");
+            " );
             $stmt->bind_param('ss', $tel, $address);
             $stmt->execute();
             $existingRequest = $stmt->get_result()->fetch_assoc();
@@ -220,28 +234,49 @@ if (!$tersedia && $_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['aks
             } else {
                 $number = 'REQ' . date('ymd') . strtoupper(bin2hex(random_bytes(4)));
                 $userId = !empty($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
-                $name = $old['nama'];
-                $stmt = $conn->prepare("
-                    INSERT INTO coverage_expansion_requests
-                    (nomor_pengajuan, user_id, nama, telepon, alamat, kelurahan, kecamatan,
-                     patokan, latitude, longitude, maps_url, catatan, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'menunggu')
-                ");
-                $stmt->bind_param(
-                    'sissssssddss',
-                    $number,
-                    $userId,
-                    $name,
-                    $tel,
-                    $address,
-                    $neighborhood,
-                    $district,
-                    $landmark,
-                    $latitude,
-                    $longitude,
-                    $mapUrl,
-                    $note
-                );
+                $insertData = [
+                    'nomor_pengajuan' => $number,
+                    'user_id' => $userId,
+                    'nama' => $old['nama'],
+                    'telepon' => $tel,
+                    'alamat' => $address,
+                    'kelurahan' => $neighborhood,
+                    'kecamatan' => $district,
+                    'patokan' => $landmark,
+                    'latitude' => $latitude,
+                    'longitude' => $longitude,
+                    'maps_url' => $mapUrl !== '' ? $mapUrl : null,
+                    'catatan' => $note,
+                    'status' => 'menunggu',
+                ];
+                $typeMap = [
+                    'nomor_pengajuan' => 's', 'user_id' => 'i', 'nama' => 's',
+                    'telepon' => 's', 'alamat' => 's', 'kelurahan' => 's',
+                    'kecamatan' => 's', 'patokan' => 's', 'latitude' => 'd',
+                    'longitude' => 'd', 'maps_url' => 's', 'catatan' => 's', 'status' => 's',
+                ];
+                foreach (array_keys($insertData) as $columnName) {
+                    if (!isset($dbColumns[$columnName])) {
+                        unset($insertData[$columnName]);
+                    }
+                }
+                $insertColumns = array_keys($insertData);
+                $quotedColumns = array_map(static fn($columnName) => '`' . $columnName . '`', $insertColumns);
+                $placeholders = implode(', ', array_fill(0, count($insertColumns), '?'));
+                $sql = 'INSERT INTO `coverage_expansion_requests` (' . implode(', ', $quotedColumns) . ') VALUES (' . $placeholders . ')';
+                $stmt = $conn->prepare($sql);
+                $types = '';
+                $bindValues = [];
+                foreach ($insertData as $columnName => $value) {
+                    $types .= $typeMap[$columnName];
+                    $bindValues[] = $value;
+                }
+                $bindArgs = [$types];
+                foreach ($bindValues as &$bindValue) {
+                    $bindArgs[] = &$bindValue;
+                }
+                unset($bindValue);
+                call_user_func_array([$stmt, 'bind_param'], $bindArgs);
                 $stmt->execute();
                 $requestId = (int) $conn->insert_id;
                 $stmt->close();
@@ -255,7 +290,7 @@ if (!$tersedia && $_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['aks
             header('Location: ' . COV_SELF_URL, true, 303);
             exit;
         } catch (Throwable $e) {
-            error_log('Coverage expansion request failed: ' . $e->getMessage());
+            error_log('Coverage expansion request failed [' . get_class($e) . ']: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine());
             $serviceError = true;
             $requestSaveError = true;
             $errors[] = 'Permintaan belum dapat disimpan karena layanan sedang mengalami gangguan. Silakan coba lagi.';
