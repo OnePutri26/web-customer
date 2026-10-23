@@ -36,11 +36,11 @@ $alamatJakarta  = 'Gedung Cyber 1, Lantai 10, Jl. Kuningan Barat No. 8, Jakarta 
 $alamatSurabaya = 'Wilayah layanan Sidoarjo dan sekitarnya, Jawa Timur';
 
 /* Wilayah yang tersedia. Tambahkan kota baru di sini jika perlu (juga di tabel paket_harga_wifi). */
-$wilayahList = ['jakarta' => 'Jakarta', 'sidoarjo' => 'Surabaya'];
+$wilayahList = ['jakarta' => 'Jakarta', 'surabaya' => 'Surabaya'];
 $wilayahDipilih = strtolower(trim((string)($_GET['wilayah'] ?? 'jakarta')));
 if (!isset($wilayahList[$wilayahDipilih])) { $wilayahDipilih = 'jakarta'; }
 $namaWilayah = $wilayahList[$wilayahDipilih];
-$alamat = $wilayahDipilih === 'sidoarjo' ? $alamatSurabaya : $alamatJakarta;
+$alamat = $wilayahDipilih === 'surabaya' ? $alamatSurabaya : $alamatJakarta;
 
 $waUrl     = 'https://wa.me/' . $waNumber . '?text=' . rawurlencode('Halo YesNet, saya ingin berlangganan internet. Mohon info paket yang tersedia untuk alamat saya.');
 
@@ -161,7 +161,7 @@ try {
                 while ($pr && ($hr = $pr->fetch_assoc())) {
                     $reg = strtolower(trim((string)$hr['wilayah']));
                     if (in_array($reg, ['jakarta', 'dki jakarta'], true)) $reg = 'jakarta';
-                    if (in_array($reg, ['jatim', 'sidoarjo', 'surabaya', 'kota surabaya', 'jawa timur'], true)) $reg = 'sidoarjo';
+                    if (in_array($reg, ['jatim', 'surabaya', 'surabaya', 'kota surabaya', 'jawa timur'], true)) $reg = 'surabaya';
                     if (is_numeric($hr['harga'])) $hargaWilayah[(int)$hr['pid']][$reg] = (float)$hr['harga'];
                 }
             }
@@ -194,7 +194,7 @@ $ikonRank = ['box', 'users', 'gem', 'tool'];
  * Sidoarjo menggunakan kode wilayah JATIM di tabel database.
  */
 $paketWilayahResmi = [
-    'sidoarjo' => [
+    'surabaya' => [
         'yeslite'   => ['mbps' => 10,   'harga' => 125000],
         'yeseco'    => ['mbps' => 20,   'harga' => 150000],
         'yeshome'   => ['mbps' => 30,   'harga' => 175000],
@@ -249,7 +249,7 @@ foreach ($daftarPaket as $i => $row) {
      */
     $rowRegion = strtoupper(trim((string)($row['wilayah'] ?? '')));
     if (in_array($rowRegion, ['JATIM', 'JAWA TIMUR', 'SIDOARJO', 'SURABAYA'], true)) {
-        $rowRegion = 'sidoarjo';
+        $rowRegion = 'surabaya';
     } elseif (in_array($rowRegion, ['JAKARTA', 'DKI JAKARTA'], true)) {
         $rowRegion = 'jakarta';
     } else {
