@@ -41,26 +41,47 @@ if (!function_exists('rupiah')) {
 |--------------------------------------------------------------------------
 */
 
+/*
+ * Filter wilayah dari database.
+ * Pilihan tampilan: JAKARTA atau SURABAYA; data Surabaya berada di wilayah JATIM.
+ * Menerima alias URL: jakarta, jatim, sidoarjo, surabaya.
+ */
+$wilayahParam = strtolower(trim((string)($_GET['wilayah'] ?? 'jakarta')));
+if (in_array($wilayahParam, ['jatim', 'sidoarjo', 'surabaya', 'jawa-timur', 'jawa timur'], true)) {
+    $wilayahDb = 'JATIM';
+    $wilayahLabel = 'Surabaya';
+    $wilayahUrl = 'surabaya';
+} else {
+    $wilayahDb = 'JAKARTA';
+    $wilayahLabel = 'Jakarta';
+    $wilayahUrl = 'jakarta';
+}
+
 $packages = [];
 $loadError = false;
 
 $sql = "
     SELECT *
     FROM paket_wifi
-    WHERE
+    WHERE UPPER(TRIM(COALESCE(wilayah, ''))) = ?
+      AND (
         status IS NULL
         OR TRIM(status) = ''
         OR LOWER(TRIM(status)) IN ('aktif', 'active', '1', 'tersedia', 'available')
-    ORDER BY
-        CAST(harga AS DECIMAL(15,2)) ASC,
-        CAST(speed_mbps AS DECIMAL(15,2)) ASC
+      )
+    ORDER BY CAST(harga AS DECIMAL(15,2)) ASC,
+             CAST(speed_mbps AS DECIMAL(15,2)) ASC
 ";
 
 try {
-    $result = $conn->query($sql);
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param('s', $wilayahDb);
+    $stmt->execute();
+    $result = $stmt->get_result();
     while ($row = $result->fetch_assoc()) {
         $packages[] = $row;
     }
+    $stmt->close();
 } catch (Throwable $ex) {
     error_log('Paket gagal dimuat: ' . $ex->getMessage());
     $loadError = true;
@@ -133,6 +154,15 @@ $defaultFeatures = ['Internet cepat & stabil', 'Customer Support', 'Customer Por
         .cov-banner.warn { background: #fffaf0; border-color: #fedf89; color: #93370d; }
         .cov-banner.warn span { color: #b54708; }
         .cov-banner.warn a { color: #93370d; border-color: #fedf89; }
+
+        /* PILIH WILAYAH */
+        .region-picker { max-width: 760px; margin: 0 auto 34px; padding: 24px; text-align: center; background: #fff; border: 1px solid #dbeafe; border-radius: 22px; box-shadow: 0 12px 35px rgba(15,23,42,.05); }
+        .region-picker h2 { font-size: 17px; margin-bottom: 16px; }
+        .region-options { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+        .region-option { min-width: 165px; padding: 13px 22px; border: 1px solid #cbd5e1; border-radius: 999px; color: #334155; background: #fff; font-weight: 800; transition: .2s; }
+        .region-option:hover { border-color: #2563eb; color: #2563eb; }
+        .region-option.active { color: #fff; border-color: #2563eb; background: linear-gradient(100deg,#2563eb,#0ea5e9); box-shadow: 0 8px 20px rgba(37,99,235,.2); }
+        .region-hint { margin-top: 13px; color: #64748b; font-size: 13px; }
 
         /* PACKAGE */
         .package-section { max-width: 1200px; margin: auto; padding: 30px 20px 100px; }
@@ -211,7 +241,20 @@ $defaultFeatures = ['Internet cepat & stabil', 'Customer Support', 'Customer Por
     </p>
 </section>
 
-<section class="package-section">
+<section class="package-section" id="paket">
+
+    <div class="region-picker">
+        <h2><i class="bi bi-geo-alt"></i> Pilih wilayah pemasangan</h2>
+        <div class="region-options">
+            <a class="region-option <?= $wilayahDb === 'JAKARTA' ? 'active' : '' ?>" href="paket.php?wilayah=jakarta<?= $modeCoverage ? '&mode=coverage' : '' ?>#paket">
+                <i class="bi bi-geo-alt"></i> Jakarta
+            </a>
+            <a class="region-option <?= $wilayahDb === 'JATIM' ? 'active' : '' ?>" href="paket.php?wilayah=surabaya<?= $modeCoverage ? '&mode=coverage' : '' ?>#paket">
+                <i class="bi bi-geo-alt"></i> Surabaya
+            </a>
+        </div>
+        <p class="region-hint">Menampilkan paket khusus wilayah <strong><?= e($wilayahLabel) ?></strong>.</p>
+    </div>
 
     <?php if ($coverageFlow): ?>
         <div class="cov-banner" role="status">
@@ -244,13 +287,13 @@ $defaultFeatures = ['Internet cepat & stabil', 'Customer Support', 'Customer Por
             <i class="bi bi-exclamation-circle"></i>
             <h2>Paket Belum Dapat Dimuat</h2>
             <p>Terjadi gangguan saat mengambil daftar paket. Ini bukan berarti paket tidak tersedia.</p>
-            <a class="choose-btn" href="paket.php<?= $modeCoverage ? '?mode=coverage' : '' ?>">Muat Ulang</a>
+            <a class="choose-btn" href="paket.php?wilayah=<?= e(strtolower($wilayahDb)) ?><?= $modeCoverage ? '&mode=coverage' : '' ?>">Muat Ulang</a>
         </div>
 
     <?php elseif ($totalPackages > 0): ?>
 
         <div class="package-count">
-            Menampilkan <strong><?= $totalPackages ?></strong> paket internet tersedia.
+            Menampilkan <strong><?= $totalPackages ?></strong> paket internet untuk wilayah <strong><?= e($wilayahLabel) ?></strong>.
         </div>
 
         <div class="package-grid">
@@ -316,7 +359,7 @@ $defaultFeatures = ['Internet cepat & stabil', 'Customer Support', 'Customer Por
                         <?php endforeach; ?>
                     </div>
 
-                    <a href="detail_paket.php?id=<?= $packageId ?>" class="choose-btn">
+                    <a href="detail_paket.php?id=<?= $packageId ?>&wilayah=<?= e($wilayahUrl) ?>" class="choose-btn">
                         Pilih Paket Ini <i class="bi bi-arrow-right"></i>
                     </a>
 

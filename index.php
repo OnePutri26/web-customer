@@ -36,7 +36,7 @@ $alamatJakarta  = 'Gedung Cyber 1, Lantai 10, Jl. Kuningan Barat No. 8, Jakarta 
 $alamatSurabaya = 'Wilayah layanan Sidoarjo dan sekitarnya, Jawa Timur';
 
 /* Wilayah yang tersedia. Tambahkan kota baru di sini jika perlu (juga di tabel paket_harga_wifi). */
-$wilayahList = ['jakarta' => 'Jakarta', 'sidoarjo' => 'Sidoarjo'];
+$wilayahList = ['jakarta' => 'Jakarta', 'sidoarjo' => 'Surabaya'];
 $wilayahDipilih = strtolower(trim((string)($_GET['wilayah'] ?? 'jakarta')));
 if (!isset($wilayahList[$wilayahDipilih])) { $wilayahDipilih = 'jakarta'; }
 $namaWilayah = $wilayahList[$wilayahDipilih];
