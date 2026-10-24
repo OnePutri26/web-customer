@@ -289,7 +289,176 @@ $fe = static function (string $k) use ($errors): string {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="css/biodata.css?v=<?= $cssVer ?>">
+<style>
+/* ===== YesNet - Halaman Biodata ===== */
+:root {
+  --navy: #0a1d4d;
+  --blue: #1f62ff;
+  --blue-d: #154fd6;
+  --blue-soft: #e8f0ff;
+  --ink: #0f1f3d;
+  --muted: #5b6b8c;
+  --line: #d9e3f4;
+  --bg: #f2f6fd;
+  --ok: #12a150;
+  --err: #d92d3a;
+  --err-soft: #fdecee;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  line-height: 1.5;
+}
+a { color: var(--blue); }
+.ic { width: 1em; height: 1em; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+:focus-visible { outline: 3px solid rgba(31, 98, 255, .45); outline-offset: 2px; }
+
+/* ----- Header & footer ----- */
+.bd-header { background: var(--navy); color: #fff; }
+.bd-header-in, .bd-footer-in { max-width: 1100px; margin: 0 auto; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.bd-brand { display: inline-flex; align-items: center; gap: 8px; color: #fff; text-decoration: none; font-size: 22px; }
+.bd-brand strong { font-size: 18px; letter-spacing: .02em; font-weight: 800; }
+.bd-brand strong span { color: #6aa8ff; }
+.bd-login { display: inline-flex; align-items: center; gap: 6px; background: var(--blue); color: #fff; text-decoration: none; font-size: 13px; font-weight: 700; padding: 8px 14px; border-radius: 999px; }
+.bd-login:hover { background: var(--blue-d); }
+
+.bd-footer { background: var(--navy); color: #cdd8f2; margin-top: auto; }
+.bd-footer-in { padding: 22px 20px; flex-wrap: wrap; font-size: 13px; }
+.bd-footer .bd-brand { font-size: 20px; }
+.bd-footer small { display: block; color: #9fb1d9; }
+.bd-social { display: flex; gap: 8px; }
+.bd-social a { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; background: rgba(255, 255, 255, .1); color: #fff; text-decoration: none; font-size: 12px; font-weight: 700; }
+.bd-social a:hover { background: var(--blue); }
+
+/* ----- Layout ----- */
+.bd-main { flex: 1; padding: 28px 16px 56px; }
+.bd-wrap { max-width: 780px; margin: 0 auto; }
+.bd-card { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 30px; box-shadow: 0 12px 32px rgba(15, 42, 107, .07); }
+
+/* ----- Stepper ----- */
+.bd-stepper { list-style: none; margin: 0 auto 24px; padding: 0; display: flex; align-items: center; max-width: 640px; }
+.bd-stepper li { flex: 1; display: flex; align-items: center; gap: 8px; color: #8a98b6; font-size: 13px; font-weight: 600; }
+.bd-stepper li:last-child { flex: 0 0 auto; }
+.bd-stepper li::after { content: ""; flex: 1; height: 2px; margin: 0 10px; background: var(--line); }
+.bd-stepper li:last-child::after { display: none; }
+.bd-sn { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: #e3eaf7; color: #6b7a99; font-size: 13px; font-weight: 800; flex: none; }
+.bd-stepper .is-active { color: var(--ink); }
+.bd-stepper .is-active .bd-sn { background: var(--blue); color: #fff; box-shadow: 0 0 0 4px rgba(31, 98, 255, .15); }
+
+/* ----- Section heading ----- */
+.bd-sec-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.bd-sec-head + .bd-grid { margin-top: 0; }
+.bd-sec-ic { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: var(--blue-soft); color: var(--blue); font-size: 22px; flex: none; }
+.bd-sec-head h2 { margin: 0; font-size: 17px; line-height: 1.3; }
+.bd-sec-head p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.bd-divider { height: 1px; background: var(--line); border: 0; margin: 26px 0; }
+
+/* ----- Form ----- */
+.bd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 18px; }
+.bd-full { grid-column: 1 / -1; }
+.bd-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.bd-field > label, .bd-label { font-size: 13px; font-weight: 700; }
+.bd-field .req { color: var(--err); }
+.bd-field .opt { font-weight: 500; color: var(--muted); }
+
+.bd-field input[type="text"], .bd-field input[type="email"], .bd-field input[type="tel"], .bd-field select, .bd-field textarea {
+  width: 100%; font: inherit; font-size: 14px; color: var(--ink); background: #fff;
+  border: 1.5px solid var(--line); border-radius: 10px; padding: 0 14px; height: 46px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.bd-field textarea { height: auto; min-height: 96px; padding: 12px 14px; resize: vertical; }
+.bd-field select {
+  appearance: none; -webkit-appearance: none; padding-right: 40px; cursor: pointer;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235b6b8c' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 14px center / 16px;
+}
+.bd-field select:disabled { background-color: #f4f7fc; color: #93a0bd; cursor: not-allowed; }
+.bd-field input::placeholder, .bd-field textarea::placeholder { color: #9aa7c2; }
+.bd-field input:focus, .bd-field select:focus, .bd-field textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 4px rgba(31, 98, 255, .13); }
+.bd-field .is-invalid { border-color: var(--err); }
+.bd-field .is-invalid:focus { box-shadow: 0 0 0 4px rgba(217, 45, 58, .13); }
+.bd-err { min-height: 0; font-size: 12px; font-weight: 600; color: var(--err); }
+.bd-err:empty { display: none; }
+.bd-hint { font-size: 12px; color: var(--muted); }
+
+.bd-coord { display: flex; gap: 10px; }
+.bd-coord input { flex: 1; min-width: 0; }
+
+.bd-consent { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--muted); cursor: pointer; }
+.bd-consent input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--blue); flex: none; }
+
+/* ----- Buttons ----- */
+.bd-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 50px; padding: 0 22px; border-radius: 12px; border: 1.5px solid transparent;
+  font: inherit; font-size: 15px; font-weight: 700; text-decoration: none; cursor: pointer;
+  transition: background .15s, border-color .15s, transform .1s;
+}
+.bd-btn:active { transform: translateY(1px); }
+.bd-btn-block { width: 100%; }
+.bd-btn-primary { background: var(--blue); color: #fff; }
+.bd-btn-primary:hover { background: var(--blue-d); }
+.bd-btn-outline { background: #fff; color: var(--blue); border-color: var(--blue); }
+.bd-btn-outline:hover { background: var(--blue-soft); }
+.bd-btn-ghost { background: transparent; color: var(--blue); height: 44px; }
+.bd-btn-ghost:hover { text-decoration: underline; }
+.bd-btn-sm { height: 46px; padding: 0 16px; font-size: 13px; white-space: nowrap; }
+.bd-btn:disabled { opacity: .7; cursor: not-allowed; }
+.bd-btn.is-loading { position: relative; color: transparent; pointer-events: none; }
+.bd-btn.is-loading::after { content: ""; position: absolute; width: 20px; height: 20px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .45); border-top-color: #fff; animation: bd-spin .7s linear infinite; }
+@keyframes bd-spin { to { transform: rotate(360deg); } }
+.bd-actions { margin-top: 24px; display: grid; gap: 8px; }
+
+/* ----- Alerts & notes ----- */
+.bd-alert { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; margin-bottom: 20px; font-size: 13px; font-weight: 600; background: var(--err-soft); color: #a3202b; border: 1px solid #f6c3c8; }
+.bd-alert .ic { font-size: 18px; margin-top: 1px; }
+.bd-note { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 12px 14px; border-radius: 12px; margin-bottom: 20px; background: var(--blue-soft); font-size: 13px; }
+.bd-note strong { font-weight: 800; }
+.bd-geo-msg { font-size: 12px; color: var(--muted); }
+.bd-geo-msg.is-ok { color: var(--ok); }
+.bd-geo-msg.is-bad { color: var(--err); }
+.bd-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.bd-privacy { margin-top: 18px; padding: 16px 18px; font-size: 12.5px; color: var(--muted); background: #fff; border: 1px dashed var(--line); border-radius: 12px; }
+.bd-privacy h3 { margin: 0 0 4px; font-size: 13px; color: var(--ink); }
+.bd-privacy p { margin: 0; }
+.bd-noscript { margin-bottom: 16px; padding: 10px 12px; border-radius: 10px; background: #fff7e0; color: #7a5a00; font-size: 13px; }
+
+/* ----- Success ----- */
+.bd-success { text-align: center; padding: 34px 30px 28px; }
+.bd-illu { width: 190px; height: auto; margin: 0 auto 4px; display: block; }
+.bd-success h1 { margin: 6px 0 8px; font-size: 24px; line-height: 1.25; }
+.bd-success > p { margin: 0 auto 24px; max-width: 460px; color: var(--muted); font-size: 14px; }
+.bd-summary { text-align: left; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; margin-bottom: 22px; }
+.bd-summary h2 { margin: 0 0 10px; font-size: 14px; }
+.bd-summary dl { margin: 0; display: grid; grid-template-columns: 130px 1fr; gap: 8px 0; font-size: 13px; }
+.bd-summary dt { color: var(--muted); font-weight: 600; }
+.bd-summary dd { margin: 0; font-weight: 700; display: flex; gap: 10px; word-break: break-word; }
+.bd-summary dd::before { content: ":"; color: var(--muted); font-weight: 600; }
+
+/* ----- Responsive ----- */
+@media (max-width: 640px) {
+  .bd-card { padding: 22px 18px; }
+  .bd-grid { grid-template-columns: 1fr; }
+  .bd-coord { flex-direction: column; }
+  .bd-btn-sm { width: 100%; }
+  .bd-stepper li:not(.is-active) .bd-sl { display: none; }
+  .bd-stepper li::after { margin: 0 6px; }
+  .bd-summary dl { grid-template-columns: 105px 1fr; }
+  .bd-footer-in { justify-content: center; text-align: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation-duration: .01ms !important; }
+}
+
+</style>
 </head>
 <body>
 
@@ -483,7 +652,270 @@ $fe = static function (string $k) use ($errors): string {
 </footer>
 
 <?php if (!$lead): ?>
-<script src="js/biodata.js?v=<?= $jsVer ?>" defer></script>
+<script>
+/* YesNet - Halaman Biodata: dropdown wilayah, lokasi saya, validasi form */
+(function () {
+  'use strict';
+
+  var form = document.getElementById('bd-form');
+  if (!form) return;
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ---------- Util ---------- */
+  function normalizePhone(v) {
+    var d = String(v || '').replace(/\D+/g, '');
+    if (!d) return '';
+    if (d.indexOf('62') === 0) return d;
+    if (d.charAt(0) === '0') return '62' + d.slice(1);
+    if (d.charAt(0) === '8') return '62' + d;
+    return d;
+  }
+
+  function showErr(id, msg) {
+    var span = $('err-' + id);
+    var field = $(id);
+    if (span) span.textContent = msg || '';
+    if (field) {
+      field.classList.toggle('is-invalid', !!msg);
+      if (msg) field.setAttribute('aria-invalid', 'true'); else field.removeAttribute('aria-invalid');
+    }
+  }
+
+  /* ---------- Dropdown wilayah (provinsi > kota > kecamatan > kelurahan) ---------- */
+  var API = 'https://www.emsifa.com/api-wilayah-indonesia/api/';
+  var cache = {};
+  var order = ['provinsi', 'kota', 'kecamatan', 'kelurahan'];
+  var paths = [
+    function () { return 'provinces.json'; },
+    function (c) { return 'regencies/' + c + '.json'; },
+    function (c) { return 'districts/' + c + '.json'; },
+    function (c) { return 'villages/' + c + '.json'; }
+  ];
+  var labels = {
+    provinsi: 'Pilih provinsi',
+    kota: 'Pilih kota/kabupaten',
+    kecamatan: 'Pilih kecamatan',
+    kelurahan: 'Pilih kelurahan'
+  };
+
+  function title(s) {
+    return String(s).toLowerCase()
+      .replace(/(^|\s)(\S)/g, function (m, a, b) { return a + b.toUpperCase(); })
+      .replace(/\bDki\b/, 'DKI').replace(/\bDi\b/, 'DI');
+  }
+
+  function getJSON(path) {
+    if (cache[path]) return Promise.resolve(cache[path]);
+    var ctl = ('AbortController' in window) ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctl) ctl.abort(); }, 9000);
+    return fetch(API + path, ctl ? { signal: ctl.signal } : undefined)
+      .then(function (r) { clearTimeout(timer); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) { cache[path] = d; return d; });
+  }
+
+  function currentSelect(i) {
+    var el = $(order[i]);
+    return el && el.tagName === 'SELECT' ? el : null;
+  }
+
+  function fillSelect(sel, items, label) {
+    sel.innerHTML = '';
+    var first = document.createElement('option');
+    first.value = ''; first.textContent = label;
+    sel.appendChild(first);
+    items.forEach(function (it) {
+      var o = document.createElement('option');
+      o.value = title(it.name); o.textContent = title(it.name);
+      o.setAttribute('data-code', it.id);
+      sel.appendChild(o);
+    });
+  }
+
+  function pickOld(sel) {
+    var old = (sel.getAttribute('data-old') || '').toLowerCase();
+    sel.removeAttribute('data-old');
+    if (!old) return false;
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value.toLowerCase() === old) { sel.selectedIndex = i; return true; }
+    }
+    return false;
+  }
+
+  function resetFrom(i) {
+    for (; i < order.length; i++) {
+      var s = currentSelect(i);
+      if (s) { fillSelect(s, [], labels[order[i]]); s.disabled = true; }
+    }
+  }
+
+  /* Jika API tidak bisa diakses, ganti dropdown dengan kolom ketik manual */
+  function toText(from) {
+    for (var i = from; i < order.length; i++) {
+      var s = currentSelect(i);
+      if (!s) continue;
+      var inp = document.createElement('input');
+      inp.type = 'text';
+      inp.id = s.id; inp.name = s.name; inp.className = s.className;
+      inp.required = true; inp.maxLength = 100;
+      inp.placeholder = 'Ketik ' + labels[order[i]].replace('Pilih ', '');
+      inp.value = s.getAttribute('data-old') || '';
+      s.parentNode.replaceChild(inp, s);
+    }
+  }
+
+  function loadLevel(i) {
+    var sel = currentSelect(i);
+    if (!sel) return Promise.resolve();
+    var code = '';
+    if (i > 0) {
+      var parent = currentSelect(i - 1);
+      var opt = parent && parent.options[parent.selectedIndex];
+      code = opt ? opt.getAttribute('data-code') : '';
+      if (!code) { resetFrom(i); return Promise.resolve(); }
+    }
+    sel.disabled = true;
+    sel.innerHTML = '<option value="">Memuat…</option>';
+    return getJSON(paths[i](code)).then(function (items) {
+      fillSelect(sel, items, labels[order[i]]);
+      sel.disabled = false;
+      if (pickOld(sel) && i < order.length - 1) return loadLevel(i + 1);
+    }).catch(function () {
+      toText(i);
+    });
+  }
+
+  order.forEach(function (id, i) {
+    var el = $(id);
+    if (!el || el.tagName !== 'SELECT') return;
+    el.addEventListener('change', function () {
+      showErr(id, '');
+      resetFrom(i + 1);
+      if (el.value && i < order.length - 1) loadLevel(i + 1);
+    });
+  });
+
+  resetFrom(1);
+  loadLevel(0);
+
+  /* ---------- Gunakan lokasi saya ---------- */
+  var geoBtn = $('bd-geo');
+  var geoMsg = $('bd-geo-msg');
+  var coord = $('koordinat');
+
+  function say(text, cls) {
+    if (!geoMsg) return;
+    geoMsg.textContent = text || '';
+    geoMsg.className = 'bd-geo-msg' + (cls ? ' ' + cls : '');
+  }
+
+  if (geoBtn && coord) {
+    geoBtn.addEventListener('click', function () {
+      if (!navigator.geolocation) { say('Perangkat Anda tidak mendukung pencarian lokasi.', 'is-bad'); return; }
+      if (window.isSecureContext === false) { say('Pencarian lokasi hanya bisa lewat koneksi HTTPS.', 'is-bad'); return; }
+      geoBtn.disabled = true;
+      say('Mencari lokasi Anda…');
+      navigator.geolocation.getCurrentPosition(function (p) {
+        coord.value = p.coords.latitude.toFixed(6) + ', ' + p.coords.longitude.toFixed(6);
+        showErr('koordinat', '');
+        say('Koordinat berhasil diisi.', 'is-ok');
+        geoBtn.disabled = false;
+      }, function (err) {
+        var m = err.code === 1 ? 'Izin lokasi ditolak. Anda bisa mengisi koordinat secara manual atau melewatinya.'
+              : err.code === 3 ? 'Waktu pencarian lokasi habis. Coba lagi.'
+              : 'Lokasi tidak dapat ditemukan.';
+        say(m, 'is-bad');
+        geoBtn.disabled = false;
+      }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+    });
+  }
+
+  /* ---------- Validasi (mengikuti aturan di server) ---------- */
+  function val(id) {
+    var el = $(id);
+    return el ? String(el.value || '').replace(/\s+/g, ' ').trim() : '';
+  }
+
+  var rules = {
+    nama: function () {
+      var v = val('nama');
+      if (!v) return 'Nama lengkap wajib diisi.';
+      if (v.length < 3) return 'Nama minimal 3 karakter.';
+      if (!/^[\p{L}\p{M}\s.'’-]+$/u.test(v)) return 'Nama hanya boleh berisi huruf.';
+    },
+    whatsapp: function () {
+      var v = val('whatsapp');
+      if (!v) return 'Nomor WhatsApp wajib diisi.';
+      if (!/^628\d{7,12}$/.test(normalizePhone(v))) return 'Gunakan nomor WhatsApp yang valid, contoh 081234567890.';
+    },
+    email: function () {
+      var v = val('email');
+      if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) return 'Format email tidak valid.';
+    },
+    provinsi: function () { if (!val('provinsi')) return 'Pilih provinsi.'; },
+    kota: function () { if (!val('kota')) return 'Pilih kota/kabupaten.'; },
+    kecamatan: function () { if (!val('kecamatan')) return 'Pilih kecamatan.'; },
+    kelurahan: function () { if (!val('kelurahan')) return 'Pilih kelurahan.'; },
+    alamat: function () {
+      var v = val('alamat');
+      if (!v) return 'Alamat lengkap wajib diisi.';
+      if (v.length < 10) return 'Tulis alamat lebih lengkap (jalan, nomor, RT/RW).';
+    },
+    koordinat: function () {
+      var v = val('koordinat');
+      if (!v) return;
+      var m = v.match(/^(-?\d{1,2}(?:\.\d+)?)\s*[,; ]\s*(-?\d{1,3}(?:\.\d+)?)$/);
+      if (!m) return 'Format koordinat: latitude, longitude. Contoh: -7.257472, 112.752088';
+      var lat = parseFloat(m[1]), lng = parseFloat(m[2]);
+      if (lat < -11 || lat > 6 || lng < 95 || lng > 141) return 'Koordinat berada di luar wilayah Indonesia.';
+    },
+    setuju: function () {
+      if (!$('setuju').checked) return 'Anda perlu menyetujui kebijakan privasi untuk melanjutkan.';
+    }
+  };
+
+  var ids = Object.keys(rules);
+
+  ids.forEach(function (id) {
+    var el = $(id);
+    if (!el) return;
+    el.addEventListener('blur', function () { showErr(id, rules[id]() || ''); });
+    el.addEventListener(id === 'setuju' ? 'change' : 'input', function () {
+      if (el.classList.contains('is-invalid')) showErr(id, rules[id]() || '');
+    });
+  });
+
+  var phone = $('whatsapp');
+  if (phone) phone.addEventListener('input', function () {
+    var clean = phone.value.replace(/[^\d+\s-]/g, '');
+    if (clean !== phone.value) phone.value = clean;
+  });
+
+  var submitBtn = $('bd-submit');
+
+  form.addEventListener('submit', function (ev) {
+    var first = null;
+    ids.forEach(function (id) {
+      var msg = rules[id]() || '';
+      showErr(id, msg);
+      if (msg && !first) first = $(id);
+    });
+    if (first) {
+      ev.preventDefault();
+      first.focus({ preventScroll: true });
+      first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    if (submitBtn) submitBtn.classList.add('is-loading');
+  });
+
+  /* tombol kembali dari browser: pulihkan tombol kirim */
+  window.addEventListener('pageshow', function () {
+    if (submitBtn) submitBtn.classList.remove('is-loading');
+  });
+})();
+
+</script>
 <?php endif; ?>
 </body>
 </html>
