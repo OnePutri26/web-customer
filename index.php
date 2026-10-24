@@ -14,7 +14,7 @@ if (session_status() === PHP_SESSION_NONE) {
  */
 if (!function_exists('appUrl')) {
     function appUrl(string $file): string
-    {
+     {
         foreach (['', 'customer/'] as $dir) {
             if (is_file(__DIR__ . '/' . $dir . $file)) {
                 return $dir . $file;
