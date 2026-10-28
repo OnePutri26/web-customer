@@ -976,7 +976,7 @@ $statusLabel = match ($statusTagihan) {
                 ): ?>
 
                     <a
-                        href="payment.php?id=<?= urlencode($tagihan['id']) ?>"
+                        href="../pembayaran.php?tagihan=<?= (int) $tagihan['id'] ?>"
                         class="btn-payment"
                     >
 
@@ -1227,7 +1227,7 @@ $statusLabel = match ($statusTagihan) {
                         );
 
 
-                    if ($paymentStatus === 'paid') {
+                    if (in_array($paymentStatus, ['paid', 'success'], true)) {
 
                         $statusClass = 'status-paid';
 
@@ -1238,6 +1238,12 @@ $statusLabel = match ($statusTagihan) {
                         $statusClass = 'status-pending';
 
                         $paymentLabel = 'Pending';
+
+                    } elseif ($paymentStatus === 'expired') {
+
+                        $statusClass = 'status-unpaid';
+
+                        $paymentLabel = 'Kedaluwarsa';
 
                     } else {
 
@@ -1251,6 +1257,7 @@ $statusLabel = match ($statusTagihan) {
 
 
                     $paymentInvoice =
+                        $payment['nomor_pembayaran'] ??
                         $payment['invoice'] ??
                         $payment['invoice_number'] ??
                         '-';
@@ -1263,12 +1270,16 @@ $statusLabel = match ($statusTagihan) {
 
 
                     $paymentMethod =
+                        $payment['metode_pembayaran'] ??
                         $payment['metode'] ??
                         $payment['method'] ??
-                        '-';
+                        (($payment['payment_provider'] ?? '') !== ''
+                            ? ucfirst((string) $payment['payment_provider'])
+                            : '-');
 
 
                     $paymentDate =
+                        $payment['tanggal_bayar'] ??
                         $payment['created_at'] ??
                         '-';
 

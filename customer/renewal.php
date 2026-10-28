@@ -2,6 +2,7 @@
 
 require_once "../config/database.php";
 require_once "../config/auth.php";
+require_once __DIR__ . '/../config/app.php';
 
 requireRole('customer');
 
@@ -63,7 +64,7 @@ $packages = $conn->query(
                     <div class="speed"><?= htmlspecialchars($package['kecepatan']) ?></div>
                     <div class="price">Rp <?= number_format($package['harga'], 0, ',', '.') ?> <span>/bulan</span></div>
                     <p><?= htmlspecialchars($package['deskripsi'] ?? 'Paket internet untuk kebutuhan harian.') ?></p>
-                    <form action="payment.php" method="POST"><input type="hidden" name="package_id" value="<?= (int) $package['id'] ?>"><input type="hidden" name="renewal" value="1"><button type="submit"><i class="bi bi-arrow-repeat"></i> Perpanjang Paket</button></form>
+                    <form action="payment.php" method="POST"><?= csrf_field() ?><input type="hidden" name="package_id" value="<?= (int) $package['id'] ?>"><input type="hidden" name="renewal" value="1"><button type="submit"><i class="bi bi-arrow-repeat"></i> Perpanjang Paket</button></form>
                 </div>
             <?php endwhile; ?>
         </div>

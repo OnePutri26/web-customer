@@ -38,9 +38,10 @@ $sections = [
     ],
     'payments' => [
         'title' => 'Pembayaran',
-        'columns' => ['Nomor Pembayaran', 'Pelanggan', 'Jumlah', 'Metode', 'Status', 'Tanggal'],
+        'columns' => ['Nomor Pembayaran', 'Pelanggan', 'Jumlah', 'Provider', 'Invoice Xendit', 'Metode', 'Status', 'Tanggal'],
         'query' => "
-            SELECT p.nomor_pembayaran, c.nama, p.jumlah, p.metode_pembayaran, p.status, p.tanggal_bayar
+            SELECT p.nomor_pembayaran, c.nama, p.jumlah, COALESCE(p.payment_provider, 'legacy'),
+                   p.xendit_invoice_id, p.metode_pembayaran, p.status, p.tanggal_bayar
             FROM pembayaran p
             LEFT JOIN customers c ON c.id = p.id_customer
             ORDER BY p.id DESC
