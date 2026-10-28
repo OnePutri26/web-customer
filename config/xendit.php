@@ -28,7 +28,7 @@ function xenditConfig(): array
 
     return $config = [
         'secret_key'     => $pick('XENDIT_SECRET_KEY', 'secret_key'),
-        'callback_token' => $pick('XENDIT_WEBHOOK_TOKEN', 'wALQtlkNUnBpnW4AzVlIkEXdItme9o4CkV76awc0CUWr5DGd'),
+        'callback_token' => $pick('XENDIT_WEBHOOK_TOKEN', 'callback_token'),
         'app_url'        => rtrim($pick('YESNET_APP_URL', 'app_url'), '/'),
     ];
 }
