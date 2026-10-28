@@ -3,10 +3,33 @@ declare(strict_types=1);
 
 function xenditConfig(): array
 {
-    return [
-        'secret_key' => trim((string) getenv('XENDIT_SECRET_KEY')),
-        'callback_token' => trim((string) getenv('XENDIT_WEBHOOK_TOKEN')),
-        'app_url' => rtrim(trim((string) getenv('YESNET_APP_URL')), '/'),
+    static $config = null;
+    if ($config !== null) {
+        return $config;
+    }
+
+    // Fallback: baca dari file config/xendit.local.php jika env var kosong
+    $local = [];
+    $file = __DIR__ . '/xendit.local.php';
+    if (is_file($file)) {
+        $loaded = require $file;
+        if (is_array($loaded)) {
+            $local = $loaded;
+        }
+    }
+
+    $pick = static function (string $envName, string $key) use ($local): string {
+        $value = getenv($envName);
+        if ($value === false || trim($value) === '') {
+            $value = $local[$key] ?? '';
+        }
+        return trim((string) $value);
+    };
+
+    return $config = [
+        'secret_key'     => $pick('XENDIT_SECRET_KEY', 'secret_key'),
+        'callback_token' => $pick('XENDIT_WEBHOOK_TOKEN', 'callback_token'),
+        'app_url'        => rtrim($pick('YESNET_APP_URL', 'app_url'), '/'),
     ];
 }
 
@@ -16,10 +39,17 @@ function xenditReady(): bool
     $appUrl = filter_var($config['app_url'], FILTER_VALIDATE_URL);
     $scheme = is_string($appUrl) ? strtolower((string) parse_url($appUrl, PHP_URL_SCHEME)) : '';
 
-    return $config['secret_key'] !== ''
-        && $config['callback_token'] !== ''
-        && $scheme === 'https'
-        && function_exists('curl_init');
+    $missing = [];
+    if ($config['secret_key'] === '') $missing[] = 'secret_key';
+    if ($config['callback_token'] === '') $missing[] = 'callback_token';
+    if ($scheme !== 'https') $missing[] = 'app_url(harus https)';
+    if (!function_exists('curl_init')) $missing[] = 'ekstensi curl';
+
+    if ($missing) {
+        error_log('Xendit belum siap, kurang: ' . implode(', ', $missing));
+        return false;
+    }
+    return true;
 }
 
 function xenditRequest(string $method, string $path, ?array $body = null): array
