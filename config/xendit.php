@@ -8,28 +8,28 @@ function xenditConfig(): array
         return $config;
     }
 
-    // Fallback: baca dari file config/xendit.local.php jika env var kosong
+    // Keep local application URL configuration separate from API credentials.
     $local = [];
     $file = __DIR__ . '/xendit.local.php';
     if (is_file($file)) {
         $loaded = require $file;
-        if (is_array($loaded)) {
+        if (is_array($loaded) && isset($loaded['app_url'])) {
             $local = $loaded;
         }
     }
 
-    $pick = static function (string $envName, string $key) use ($local): string {
-        $value = getenv($envName);
-        if ($value === false || trim($value) === '') {
-            $value = $local[$key] ?? '';
-        }
-        return trim((string) $value);
-    };
+    $secretKey = getenv('XENDIT_SECRET_KEY');
+    $callbackToken = getenv('XENDIT_WEBHOOK_TOKEN');
+    $appUrl = getenv('YESNET_APP_URL');
 
     return $config = [
-        'secret_key'     => $pick('XENDIT_SECRET_KEY', 'secret_key'),
-        'callback_token' => $pick('XENDIT_WEBHOOK_TOKEN', 'callback_token'),
-        'app_url'        => rtrim($pick('YESNET_APP_URL', 'app_url'), '/'),
+        'secret_key' => trim((string) ($secretKey === false ? '' : $secretKey)),
+        'callback_token' => trim((string) ($callbackToken === false ? '' : $callbackToken)),
+        'app_url' => rtrim(trim((string) (
+            $appUrl !== false && trim($appUrl) !== ''
+                ? $appUrl
+                : ($local['app_url'] ?? '')
+        )), '/'),
     ];
 }
 
@@ -133,6 +133,43 @@ function xenditWebhookTokenValid(): bool
         && hash_equals($expected, $received);
 }
 
+function xenditIsYesnetExternalId(string $externalId): bool
+{
+    return preg_match('/\AYESNET-[A-Z0-9-]{1,90}\z/', $externalId) === 1;
+}
+
+function xenditExternalIdCustomerId(string $externalId): ?int
+{
+    if (preg_match('/\AYESNET-C([1-9][0-9]*)-[A-F0-9]{32}\z/', $externalId, $matches) !== 1) {
+        return null;
+    }
+
+    $customerId = filter_var($matches[1], FILTER_VALIDATE_INT);
+    return $customerId === false ? null : $customerId;
+}
+
+function xenditPaymentMethodLabel(array $invoice): string
+{
+    $method = strtoupper(trim((string) ($invoice['payment_method'] ?? '')));
+    $channel = strtoupper(trim((string) ($invoice['payment_channel'] ?? '')));
+    $value = $channel !== '' ? $channel : $method;
+
+    if ($value === '') {
+        return 'Xendit Invoice';
+    }
+    if (in_array($method, ['QR_CODE', 'QRIS'], true) || in_array($channel, ['QRIS'], true)) {
+        return 'Xendit QRIS';
+    }
+    if (in_array($method, ['BANK_TRANSFER', 'VIRTUAL_ACCOUNT'], true)) {
+        return $channel !== '' ? 'Xendit VA ' . $channel : 'Xendit Virtual Account';
+    }
+    if (in_array($method, ['EWALLET', 'E_WALLET'], true)) {
+        return $channel !== '' ? 'Xendit E-Wallet ' . $channel : 'Xendit E-Wallet';
+    }
+
+    return 'Xendit ' . substr(preg_replace('/[^A-Z0-9 _-]/', '', $value) ?? '', 0, 40);
+}
+
 function xenditMoneyToMinorUnits(mixed $amount): ?int
 {
     if (!is_numeric($amount)) {
@@ -174,6 +211,9 @@ function xenditApplyInvoiceStatus(mysqli $conn, array $invoice): string
     if ($status === 'unknown') {
         return 'unknown';
     }
+    if (strtoupper(trim((string) ($invoice['currency'] ?? ''))) !== 'IDR') {
+        throw new RuntimeException('Mata uang invoice Xendit bukan IDR.');
+    }
 
     $amount = xenditMoneyToMinorUnits($invoice['amount'] ?? null);
     if ($amount === null) {
@@ -189,8 +229,9 @@ function xenditApplyInvoiceStatus(mysqli $conn, array $invoice): string
     $conn->begin_transaction();
     try {
         $stmt = $conn->prepare(
-            'SELECT p.id, p.id_tagihan, p.jumlah, p.status, p.payment_provider,
-                    p.xendit_external_id, p.xendit_invoice_id, t.jumlah AS tagihan_jumlah
+            'SELECT p.id, p.id_tagihan, p.id_customer, p.jumlah, p.status, p.payment_provider,
+                    p.xendit_external_id, p.xendit_invoice_id,
+                    t.id_customer AS tagihan_customer_id, t.jumlah AS tagihan_jumlah
              FROM pembayaran p
              JOIN tagihan t ON t.id = p.id_tagihan
              WHERE p.xendit_invoice_id = ? OR p.xendit_external_id = ?
@@ -208,6 +249,12 @@ function xenditApplyInvoiceStatus(mysqli $conn, array $invoice): string
         }
         if (
             (string) $payment['payment_provider'] !== 'xendit'
+            || (int) $payment['id_customer'] <= 0
+            || (int) $payment['id_customer'] !== (int) $payment['tagihan_customer_id']
+            || (
+                xenditExternalIdCustomerId($externalId) !== null
+                && xenditExternalIdCustomerId($externalId) !== (int) $payment['id_customer']
+            )
             || (string) $payment['xendit_external_id'] !== $externalId
             || (
                 !empty($payment['xendit_invoice_id'])
@@ -244,7 +291,7 @@ function xenditApplyInvoiceStatus(mysqli $conn, array $invoice): string
 
         $paymentId = (int) $payment['id'];
         $tagihanId = (int) $payment['id_tagihan'];
-        $method = 'Xendit Invoice';
+        $method = xenditPaymentMethodLabel($invoice);
 
         if ($status === 'success') {
             $paidAt = date('Y-m-d H:i:s');

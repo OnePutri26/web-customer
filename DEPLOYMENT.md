@@ -7,7 +7,8 @@ variables; do not put them in PHP source, browser code, or source control.
 ## Database migration
 
 Back up the database, inspect the existing `pembayaran` columns, then run
-[`database/migrasi_xendit.sql`](./database/migrasi_xendit.sql) once. It adds
+[`database/migrasi_xendit.sql`](./database/migrasi_xendit.sql). It is safe to
+rerun and adds
 Xendit identifiers/provider metadata and widens status fields while retaining
 old payment rows and Midtrans identifiers. The migration marks rows as
 `midtrans` only when both old Midtrans identifier columns exist and a row has
@@ -46,8 +47,9 @@ Apache so PHP can read them with `getenv()`. Do not put secret values in
 `.htaccess`, a tracked PHP file, or browser JavaScript. A local-only XAMPP URL
 cannot receive Xendit webhooks; use a public HTTPS test/staging host.
 
-The Xendit secret that had previously been present in the repository must be
-revoked/rotated in the Xendit Dashboard before deployment. Do not reuse it.
+The Xendit Secret API Key and webhook callback token that were previously
+present in the repository must be revoked/rotated in the Xendit Dashboard
+before deployment. Do not reuse either value, including in local files.
 
 ## Configure the Xendit webhook
 
@@ -55,14 +57,23 @@ In the Xendit Dashboard, open **Settings → Developers → Webhooks/Callbacks**
 select the Invoice event notifications, and set the callback URL to:
 
 ```text
-https://your-public-domain.example/customer/payment_webhook.php
+https://your-public-domain.example/webhook_xendit.php
 ```
 
-Copy the webhook verification token shown by Xendit into
+`webhook_xendit.php` and `payment_webhook.php` use the same validated handler;
+the customer path `customer/payment_webhook.php` is a compatibility alias.
+Configure only the one callback URL in the Xendit dashboard. The handler
+acknowledges invoices whose `external_id` is not in the YESNET namespace with
+HTTP 200 without fetching or changing them, so integrations sharing the Xendit
+account are not modified.
+
+Copy the newly generated webhook verification token shown by Xendit into
 `XENDIT_WEBHOOK_TOKEN`. The endpoint checks `x-callback-token`, retrieves the
 invoice from Xendit using the server-side Secret API Key, and verifies invoice
-ID, external ID, and amount before updating payment/tagihan status. Do not
-disable webhook-token validation.
+ID, external ID, ID customer relationship, currency, and amount before updating
+payment/tagihan status. Do not disable webhook-token validation. Apply the
+database migration before enabling the callback; a database/schema error
+returns a retryable 5xx instead of acknowledging an unrecorded payment.
 
 ## Test mode checklist
 

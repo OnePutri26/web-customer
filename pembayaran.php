@@ -96,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tagihanId) {
                 throw new RuntimeException('Nominal tagihan tidak valid.');
             }
 
-            $externalId = 'YESNET-' . strtoupper(bin2hex(random_bytes(16)));
+            $externalId = 'YESNET-C' . $customerId . '-' . strtoupper(bin2hex(random_bytes(16)));
             $paymentNumber = 'PAY-' . strtoupper(bin2hex(random_bytes(8)));
             $method = 'Xendit Invoice';
             $pending = 'PENDING';
