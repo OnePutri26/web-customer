@@ -63,6 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tagihanId) {
                 throw new RuntimeException('Tagihan ini tidak lagi dapat dibayar.');
             }
 
+            // Jika sudah ada invoice Xendit yang masih pending, arahkan ke invoice itu
             $stmt = $conn->prepare(
                 "SELECT id, xendit_external_id, xendit_invoice_id, xendit_invoice_url, status
                  FROM pembayaran
@@ -100,12 +101,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tagihanId) {
             $paymentNumber = 'PAY-' . strtoupper(bin2hex(random_bytes(8)));
             $method = 'Xendit Invoice';
             $pending = 'PENDING';
+
+            // payment_gateway ikut diisi 'xendit' (default kolom ini adalah 'midtrans')
             $stmt = $conn->prepare(
                 "INSERT INTO pembayaran
                     (id_tagihan, id_customer, nomor_pembayaran, jumlah,
                      metode_pembayaran, status, transaction_status,
-                     payment_provider, xendit_external_id)
-                 VALUES (?, ?, ?, ?, ?, 'pending', ?, 'xendit', ?)"
+                     payment_provider, payment_gateway, xendit_external_id)
+                 VALUES (?, ?, ?, ?, ?, 'pending', ?, 'xendit', 'xendit', ?)"
             );
             $stmt->bind_param(
                 'iisdsss',
@@ -223,6 +226,13 @@ if ($tagihan) {
     }
 }
 
+// Tombol "Lanjutkan pembayaran" hanya muncul jika invoice terakhir masih pending.
+// Jika sudah expired/failed, pelanggan bisa membuat invoice baru.
+$hasPendingInvoice = $payment
+    && ($payment['payment_provider'] ?? '') === 'xendit'
+    && strtolower((string) ($payment['status'] ?? '')) === 'pending'
+    && !empty($payment['xendit_invoice_url']);
+
 $pageTitle = 'Pembayaran';
 $step = 3;
 $narrow = true;
@@ -239,7 +249,7 @@ require __DIR__ . '/inc/header.php';
     <?php if ($tagihan): ?>
         <div class="sum"><span>No. tagihan</span><b><?= e($tagihan['nomor_tagihan']) ?></b></div>
         <div class="sum"><span>Total pembayaran</span><b><?= rupiah($tagihan['jumlah']) ?></b></div>
-        <?php if (!empty($payment['xendit_invoice_url']) && ($payment['payment_provider'] ?? '') === 'xendit'): ?>
+        <?php if ($hasPendingInvoice): ?>
             <div class="actions">
                 <a class="btn btn-primary" href="<?= e($payment['xendit_invoice_url']) ?>">Lanjutkan pembayaran di Xendit</a>
             </div>
