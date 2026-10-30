@@ -213,6 +213,10 @@ $paketWilayahResmi = [
         'yesmax'   => ['mbps' => 100, 'harga' => 299000],
         'yespower' => ['mbps' => 150, 'harga' => 349000],
         // yesgalaxy memang tidak ditawarkan untuk Jakarta.
+
+        // PAKET UJI COBA PEMBAYARAN (Rp 2.000). HAPUS baris ini setelah pengujian selesai.
+        // Harga yang tampil mengikuti kolom harga di tabel paket_wifi (id 16), pastikan nilainya 2000.
+        'coba'     => ['mbps' => 12345, 'harga' => 2000],
     ],
 ];
 
@@ -279,11 +283,14 @@ foreach ($daftarPaket as $i => $row) {
         }
     }
     $mbps = (int) ($speedByRegion[$wilayahDipilih] ?? ($row['speed_mbps'] ?? 0));
-    $maxMbps = max($maxMbps, $mbps);
+    // Paket uji "coba" tidak ikut menentukan kecepatan tertinggi di tampilan landing.
+    if ($namaKey !== 'coba') {
+        $maxMbps = max($maxMbps, $mbps);
+    }
     $paket[] = [
         'id'    => $pid,
         'nama'  => (string) ($row['nama_paket'] ?? ('Paket ' . ($i + 1))),
-        'desc'  => $desc !== '' ? $desc : $descDefault[min($i, 3)],
+        'desc'  => $desc !== '' ? $desc : ($namaKey === 'coba' ? 'Paket uji coba pembayaran' : $descDefault[min($i, 3)]),
         'mbps'  => $mbps,
         'speed' => $speedByRegion,
         'harga' => $harga,
@@ -580,7 +587,7 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
           <div><h3><?= e($p['nama']) ?></h3><small><?= e($p['desc']) ?></small></div>
         </div>
         <div class="package-speed"><?= ic('wifi') ?><span><b data-count="<?= (int)$p['mbps'] ?>"><?= (int)$p['mbps'] ?></b> Mbps</span></div>
-        <div class="speed-bar" aria-hidden="true"><i style="--w:<?= round($p['mbps'] / $maxMbps * 100) ?>%"></i></div>
+        <div class="speed-bar" aria-hidden="true"><i style="--w:<?= min(100, round($p['mbps'] / $maxMbps * 100)) ?>%"></i></div>
         <div class="package-price"><?php $hg = $p['harga'][$wilayahDipilih] ?? null; if ($hg !== null): ?><span class="cur">Rp</span><?= e($hg) ?><small>/bulan</small><?php else: ?><span class="cur">Hubungi kami</span><?php endif; ?></div>
         <a class="package-promo" href="#promo"><?= ic('gift') ?>Lihat promo sesuai lokasi</a>
         <ul>
