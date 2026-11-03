@@ -618,8 +618,8 @@
     }
 
     function dash() {
-      ['bayar', 'hemat'].forEach(function (k) { base[k]._v = undefined; base[k].textContent = '-'; });
-      base.bayarBln.textContent = ''; base.eff.textContent = '';
+      ['bayar', 'hemat', 'dapat'].forEach(function (k) { base[k]._v = undefined; base[k].textContent = '-'; });
+      base.bayarBln.textContent = ''; base.gratis.textContent = ''; base.eff.textContent = '';
     }
 
     function calc(bump) {
@@ -633,26 +633,27 @@
         return;
       }
       var gratis = t.total - t.bayar;
-      base.dapat.textContent = t.total + ' bulan';
-      base.gratis.textContent = 'Gratis ' + gratis + ' bulan';
-      base.bayarBln.textContent = 'untuk ' + t.bayar + ' bulan';
+      base.bayarBln.textContent = 'untuk ' + t.total + ' bulan layanan';
+      base.gratis.textContent = 'Bayar ' + t.bayar + ' bulan, bonus ' + gratis + ' bulan';
 
       var raw = parseFloat(card.getAttribute('data-raw-' + region));
       if (isNaN(raw) || raw <= 0) {
         dash();
-        base.bayarBln.textContent = 'untuk ' + t.bayar + ' bulan';
+        base.bayarBln.textContent = 'untuk ' + t.total + ' bulan layanan';
+        base.gratis.textContent = 'Bayar ' + t.bayar + ' bulan, bonus ' + gratis + ' bulan';
         if (note) note.textContent = 'Harga paket ini belum tampil. Hubungi kami untuk total biaya promo.';
       } else {
         var total = raw * t.bayar, normal = raw * t.total;
-        tweenNum(base.bayar, total, rupiah);
+        tweenNum(base.bayar, normal, rupiah);
         tweenNum(base.hemat, normal - total, rupiah);
+        tweenNum(base.dapat, total, rupiah);
         base.eff.textContent = 'Setara ' + rupiah(total / t.total) + ' per bulan';
         if (note) note.textContent = NOTE_DEFAULT;
       }
 
       var name = card.getAttribute('data-name');
       var href = box.getAttribute('data-pilih') + '?paket=' + encodeURIComponent(card.getAttribute('data-id')) +
-        '&wilayah=' + encodeURIComponent(region) + '&promo=' + encodeURIComponent(selPromo.value) + '&bayar=' + t.bayar;
+        '&wilayah=' + encodeURIComponent(region);
       if (go) go.setAttribute('href', href);
       if (wa) {
         var msg = 'Halo YesNet, saya tertarik promo ' + pr.nama + ' (' + t.label + ') untuk ' + name + ' wilayah ' + (REGION_NAMES[region] || region) + '. Mohon info pendaftarannya.';

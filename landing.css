@@ -107,3 +107,33 @@ footer{background:var(--navy);color:rgba(255,255,255,.7);padding:60px 0 24px}.fo
 
 /* ================= reduce motion ================= */
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}.strip-track{animation:none}.js .reveal,.js [data-in]{opacity:1;transform:none}.speed-bar i{transform:none}.tl-item{opacity:1}.timeline:before{transform:none}}
+
+/* YESNET brand polish */
+:root{--blue:#103b73;--blue-dark:#092c57;--cyan:#d21f32;--navy:#071a36;--ink:#10213b;--grad:linear-gradient(135deg,#103b73 0%,#14528d 58%,#d21f32 145%)}
+.navbar{background:rgba(255,255,255,.94);border-bottom:1px solid rgba(16,59,115,.07)}
+.brand{gap:0}
+.brand-image{display:block;width:clamp(124px,12vw,150px);height:auto;object-fit:contain}
+.ld-brand-image{display:block;width:min(220px,70vw);height:auto;margin:0 auto 12px;object-fit:contain}
+.footer-brand-image{display:block;width:76px;height:76px;object-fit:contain;padding:7px;border-radius:18px;background:#fff;box-shadow:0 10px 24px rgba(0,0,0,.18)}
+.footer-logo{width:max-content}
+.hero{background:radial-gradient(760px 420px at 88% 0,rgba(210,31,50,.12),transparent 62%),radial-gradient(700px 450px at 0 10%,rgba(16,59,115,.15),transparent 60%),linear-gradient(180deg,#f7f9fc,#edf3fa 72%,#fff)}
+.section-label{color:var(--blue)}
+.package-card{border-color:rgba(16,59,115,.12);box-shadow:0 16px 38px rgba(7,26,54,.07);transition:transform .28s,box-shadow .28s,border-color .28s}
+.package-card:hover{border-color:rgba(210,31,50,.35);box-shadow:0 24px 48px rgba(7,26,54,.14);transform:translateY(-7px)}
+.package-card.popular{border-color:var(--blue);box-shadow:0 18px 42px rgba(16,59,115,.16)}
+.popular-label{background:linear-gradient(110deg,#103b73,#d21f32)}
+.package-speed{color:var(--blue)}
+.package-button,.btn-primary{background-image:var(--grad)}
+.package-button{color:#fff;border-color:transparent;box-shadow:0 10px 22px rgba(16,59,115,.17)}
+.package-button:hover,.popular .package-button{background-image:var(--grad);color:#fff}
+.promo-grid{grid-template-columns:minmax(0,640px);justify-content:center}
+.promo-card{border-color:rgba(16,59,115,.14);box-shadow:0 18px 44px rgba(7,26,54,.09)}
+.promo-card:before{background:linear-gradient(90deg,#103b73,#d21f32)}
+.promo-card .tier:hover,.promo-card .tier.on{border-color:var(--blue);box-shadow:0 10px 24px rgba(16,59,115,.1)}
+.calc-result .stat.hl{background:linear-gradient(145deg,#103b73,#0a2b52)}
+.advantage-card{transition:transform .28s,border-color .28s,box-shadow .28s}
+.advantage-card:hover{border-color:rgba(210,31,50,.3)}
+.cta-band{background:linear-gradient(120deg,#0a2d59,#124c83 72%,#a9162a)}
+footer{background:linear-gradient(135deg,#071a36,#0c2e57)}
+.footer-column a:hover{color:#fff}
+@media(max-width:700px){.brand-image{width:128px}.footer-brand-image{width:70px;height:70px}.promo-grid{grid-template-columns:minmax(0,1fr)}}
