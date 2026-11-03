@@ -49,7 +49,10 @@ $jsVer  = @filemtime(__DIR__ . '/assets/js/landing.js') ?: 1;
 
 /*
  * PROMO
- * Tiap skema: [bulan yang dibayar, total bulan layanan, label tampilan].
+ * Edit di sini jika promo berubah. Tiap skema: [bayar (bulan), total layanan (bulan), label tampilan].
+ * Asumsi: "Buy 5 Get 1" = bayar 5 bulan + gratis 1 bulan (total 6 bulan);
+ *         "Buy 10 Get 12" = bayar 10 bulan, total layanan 12 bulan;
+ *         "Buy 1 Get 1"  = bayar 1 bulan + gratis 1 bulan (total 2 bulan).
  */
 $promo = [
     'umum' => [
