@@ -257,20 +257,21 @@ $fitur = [
 
 /* Alur versi customer: singkat, 5 langkah. who: you = dilakukan customer, us = dilakukan tim YesNet */
 $langkah = [
-    ['pin',    'Cek alamat',         'you', 'Ketik alamat pemasangan di kolom Cek Coverage. Hasilnya langsung terlihat. Jika belum terjangkau, kirim form request dan kami pertimbangkan area Anda.'],
-    ['box',   'Pilih paket',        'you', 'Pilih wilayah dan paket yang sesuai, lalu lihat promo umum yang sedang ditawarkan.'],
-    ['card',   'Daftar dan bayar',   'you', 'Isi data diri, lalu bayar online. Data Anda kami verifikasi setelah pembayaran.'],
+    ['user',   'Isi biodata',        'you', 'Isi data diri dan alamat pemasangan terlebih dahulu agar data calon pelanggan tercatat di database.'],
+    ['pin',    'Cek coverage',       'you', 'Setelah biodata berhasil disimpan, lanjutkan pengecekan ketersediaan jaringan di alamat Anda.'],
+    ['box',   'Pilih paket',        'you', 'Jika jaringan tersedia, pilih paket WiFi yang sesuai dengan kebutuhan Anda.'],
+    ['card',   'Konfirmasi dan bayar','you', 'Lanjutkan proses pemesanan dan pembayaran sesuai instruksi.'],
     ['tool',   'Survei dan jadwal',  'us',  'Tim kami mensurvei lokasi lalu menghubungi Anda untuk jadwal pemasangan.'],
     ['check',  'Internet aktif',     'us',  'Teknisi memasang dan mengaktifkan layanan. Pantau semuanya lewat dashboard.'],
 ];
 $pintas = [
-    ['Cek Coverage', appUrl('coverage.php'), 'pin'],
+    ['Isi Biodata & Cek Coverage', appUrl('biodata.php'), 'pin'],
     ['Lihat Paket', '#paket', 'box'],
     [$loginLabel, $loginUrl, 'user'],
 ];
 
 $faq = [
-    ['Bagaimana cara berlangganan YesNet?', 'Cek coverage dengan memasukkan alamat Anda, pilih paket, daftar sebagai customer, lalu lakukan pembayaran. Setelah data diverifikasi, tim kami melakukan survei dan menjadwalkan instalasi.'],
+    ['Bagaimana cara berlangganan YesNet?', 'Isi biodata terlebih dahulu agar data Anda tercatat, lanjutkan cek coverage, pilih paket jika jaringan tersedia, lalu ikuti proses pemesanan. Setelah data diverifikasi, tim kami melakukan survei dan menjadwalkan instalasi.'],
     ['Apakah ada biaya instalasi?', 'Semua paket sudah termasuk instalasi gratis dan WiFi router.'],
     ['Apakah harga paket sama di Jakarta dan Surabaya?', 'Harga dan ketersediaan paket mengikuti wilayah. Pilih Jakarta atau Sidoarjo di bagian Paket untuk melihat daftar yang berlaku.'],
     ['Bagaimana cara mendapatkan Promo?', 'Lihat skema Promo Umum dan gunakan simulasi untuk menghitung estimasi harga normal, potongan, dan total promo. Harga promo belum diterapkan otomatis di checkout online; hubungi tim YesNet untuk konfirmasi sebelum pembayaran.'],
@@ -376,7 +377,7 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
 
     <div class="nav-actions">
       <a href="<?= e($loginUrl) ?>" class="nav-login"><?= ic('user') ?><?= e($loginLabel) ?></a>
-      <a href="#paket" class="btn btn-primary btn-sm">Berlangganan</a>
+      <a href="<?= e(appUrl('biodata.php')) ?>?next=coverage" class="btn btn-primary btn-sm">Daftar Sekarang</a>
       <button class="nav-toggle" type="button" aria-label="Buka menu" aria-expanded="false" aria-controls="menu"><?= ic('menu', 'i-open') ?><?= ic('close', 'i-shut') ?></button>
     </div>
   </div>
@@ -391,15 +392,11 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
       <h1 data-in style="--i:1">Internet <span class="grad">Cepat &amp; Stabil</span> dengan Harga Terjangkau</h1>
       <p class="hero-description" data-in style="--i:2">Nikmati koneksi fiber optic berkecepatan tinggi untuk rumah, keluarga, dan bisnis Anda. Instalasi gratis di semua paket.</p>
 
-      <form class="hero-check" action="<?= e(appUrl('coverage.php')) ?>" method="get" data-coverage data-in style="--i:3">
-        <input type="hidden" name="auto" value="1">
-        <label class="check-field"><?= ic('pin') ?>
-          <span class="sr-only">Alamat pemasangan</span>
-          <input type="text" name="alamat" placeholder="Masukkan alamat pemasangan Anda…" required minlength="10" autocomplete="street-address">
-        </label>
-        <button type="submit" class="btn btn-primary btn-lg"><span>Cek Coverage</span><?= ic('arrow') ?></button>
+      <form class="hero-check" action="<?= e(appUrl('biodata.php')) ?>" method="get" data-in style="--i:3">
+        <input type="hidden" name="next" value="coverage">
+        <button type="submit" class="btn btn-primary btn-lg"><span>Isi Biodata &amp; Cek Coverage</span><?= ic('arrow') ?></button>
       </form>
-      <p class="hero-hint" data-in style="--i:3">Masukkan alamat untuk melihat apakah jaringan YesNet sudah tersedia di lokasi Anda.</p>
+      <p class="hero-hint" data-in style="--i:3">Isi data diri terlebih dahulu. Setelah tersimpan, Anda dapat melanjutkan pengecekan coverage.</p>
 
       <div class="hero-actions" data-in style="--i:4">
         <a href="#paket" class="btn btn-outline"><?= ic('box') ?>Lihat Paket</a>
@@ -615,9 +612,9 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
       <li class="step reveal">
         <span class="step-num">1</span>
         <div class="step-icon"><?= ic('pin') ?></div>
-        <h3>Cek Coverage</h3>
-        <p>Masukkan alamat Anda untuk memastikan jaringan YesNet tersedia di lokasi Anda.</p>
-        <a href="<?= e(appUrl('coverage.php')) ?>" class="step-link">Cek sekarang <?= ic('arrow') ?></a>
+        <h3>Isi Biodata &amp; Cek Coverage</h3>
+        <p>Isi data diri terlebih dahulu agar tercatat sebagai calon pelanggan, lalu lanjutkan pengecekan jaringan.</p>
+        <a href="<?= e(appUrl('biodata.php')) ?>" class="step-link">Isi biodata dulu <?= ic('arrow') ?></a>
       </li>
       <li class="step reveal">
         <span class="step-num">2</span>
@@ -669,13 +666,9 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
           <div class="coverage-icon"><?= ic('pin') ?></div>
           <div><h2>Cek Coverage</h2><p>Pastikan alamat Anda sudah terjangkau jaringan YesNet.</p></div>
         </div>
-        <form action="<?= e(appUrl('coverage.php')) ?>" method="get" class="coverage-form" data-coverage>
-          <input type="hidden" name="auto" value="1">
-          <label class="coverage-input"><?= ic('search') ?>
-            <span class="sr-only">Alamat lengkap</span>
-            <input type="text" name="alamat" placeholder="Masukkan alamat lengkap Anda..." required minlength="10" autocomplete="street-address">
-          </label>
-          <button type="submit" class="btn btn-light"><span>Cek Sekarang</span><?= ic('arrow') ?></button>
+        <form action="<?= e(appUrl('biodata.php')) ?>" method="get" class="coverage-form">
+          <input type="hidden" name="next" value="coverage">
+          <button type="submit" class="btn btn-light"><span>Isi Biodata &amp; Cek Coverage</span><?= ic('arrow') ?></button>
         </form>
         <div class="coverage-steps">
           <div class="coverage-step"><b>1</b><div><strong>Masukkan Alamat</strong><small>Ketik alamat lengkap rumah Anda</small></div></div>
@@ -712,7 +705,7 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
     <div class="cta-band reveal">
       <div><h3>Siap menikmati internet yang lebih cepat?</h3><p>Cek alamat Anda sekarang atau langsung pilih paket.</p></div>
       <div class="cta-actions">
-        <a href="<?= e(appUrl('coverage.php')) ?>" class="btn btn-light"><?= ic('pin') ?>Cek Coverage</a>
+        <a href="<?= e(appUrl('biodata.php')) ?>?next=coverage" class="btn btn-light"><?= ic('user') ?>Isi Biodata &amp; Cek Coverage</a>
         <a href="#paket" class="btn btn-ghost">Pilih Paket</a>
       </div>
     </div>
@@ -733,7 +726,7 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
       <div class="footer-column"><h4>Hubungi Kami</h4>
         <a href="tel:<?= e($telp) ?>"><?= ic('phone') ?><?= e($telp) ?></a>
         <a href="mailto:<?= e($email) ?>"><?= ic('mail') ?><?= e($email) ?></a>
-        <a href="<?= e(appUrl('coverage.php')) ?>" id="footer-alamat" data-alamat-jakarta="<?= e($alamatJakarta) ?>" data-alamat-surabaya="<?= e($alamatSurabaya) ?>"><?= ic('pin') ?><span class="addr-text"><?= e($alamat) ?></span></a></div>
+        <a href="<?= e(appUrl('biodata.php')) ?>?next=coverage" id="footer-alamat" data-alamat-jakarta="<?= e($alamatJakarta) ?>" data-alamat-surabaya="<?= e($alamatSurabaya) ?>"><?= ic('pin') ?><span class="addr-text"><?= e($alamat) ?></span></a></div>
       <div class="footer-column"><h4>Ikuti Kami</h4>
         <div class="social-links"><a href="#" aria-label="Facebook">f</a>
 <a href="https://www.instagram.com/yesnet.id/" target="_blank" rel="noopener noreferrer" aria-label="Instagram YesNet">ig</a>
@@ -746,7 +739,7 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
 <!-- AKSES CEPAT -->
 <a href="<?= e($waUrl) ?>" class="wa-float" target="_blank" rel="noopener" aria-label="Chat WhatsApp YesNet"><?= ic('chat') ?><span>Chat WhatsApp</span></a>
 <div class="mbar" id="mbar">
-  <a href="<?= e(appUrl('coverage.php')) ?>" class="btn btn-outline"><?= ic('pin') ?>Cek Coverage</a>
+  <a href="<?= e(appUrl('biodata.php')) ?>?next=coverage" class="btn btn-outline"><?= ic('user') ?>Isi Biodata</a>
   <a href="#paket" class="btn btn-primary">Pilih Paket</a>
 </div>
 
