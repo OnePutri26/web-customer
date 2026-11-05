@@ -33,7 +33,7 @@ $telp      = '6285604145030';
 $waNumber  = '6285604145030';
 $email     = 'yesnet_official@yesnet.net.id';
 $alamatJakarta  = 'Gedung Cyber 1, Lantai 10, Jl. Kuningan Barat No. 8, Jakarta Selatan, 12710';
-$alamatSurabaya = 'Wilayah layanan Sidoarjo dan sekitarnya, Jawa Timur';
+$alamatSurabaya = 'Wilayah layanan Surabaya dan sekitarnya, Jawa Timur';
 
 /* Wilayah yang tersedia. Tambahkan kota baru di sini jika perlu (juga di tabel paket_harga_wifi). */
 $wilayahList = ['jakarta' => 'Jakarta', 'surabaya' => 'Surabaya'];
@@ -165,7 +165,7 @@ foreach ($daftarPaket as $i => $row) {
 
     /*
      * FILTER UTAMA: wilayah diambil dari kolom `wilayah` pada tabel paket_wifi.
-     * Nilai JAKARTA hanya tampil di Jakarta; nilai JATIM hanya tampil di Sidoarjo.
+     * Nilai JAKARTA hanya tampil di Jakarta; nilai JATIM hanya tampil di Surabaya.
      * Jangan menentukan ketersediaan hanya dari nama paket, karena nama paket
      * (misalnya yeslite) memang berulang untuk tiap wilayah.
      */
@@ -273,7 +273,7 @@ $pintas = [
 $faq = [
     ['Bagaimana cara berlangganan YesNet?', 'Isi biodata terlebih dahulu agar data Anda tercatat, lanjutkan cek coverage, pilih paket jika jaringan tersedia, lalu ikuti proses pemesanan. Setelah data diverifikasi, tim kami melakukan survei dan menjadwalkan instalasi.'],
     ['Apakah ada biaya instalasi?', 'Semua paket sudah termasuk instalasi gratis dan WiFi router.'],
-    ['Apakah harga paket sama di Jakarta dan Surabaya?', 'Harga dan ketersediaan paket mengikuti wilayah. Pilih Jakarta atau Sidoarjo di bagian Paket untuk melihat daftar yang berlaku.'],
+    ['Apakah harga paket sama di Jakarta dan Surabaya?', 'Harga dan ketersediaan paket mengikuti wilayah. Pilih Jakarta atau Surabaya di bagian Paket untuk melihat daftar yang berlaku.'],
     ['Bagaimana cara mendapatkan Promo?', 'Lihat skema Promo Umum dan gunakan simulasi untuk menghitung estimasi harga normal, potongan, dan total promo. Harga promo belum diterapkan otomatis di checkout online; hubungi tim YesNet untuk konfirmasi sebelum pembayaran.'],
     ['Bagaimana jika alamat saya belum terjangkau?', 'Anda dapat mengirim form request melalui halaman Cek Coverage agar area Anda dapat kami pertimbangkan.'],
     ['Paket mana yang cocok untuk saya?', 'Untuk browsing dan sosmed, paket dengan kecepatan lebih rendah sudah cukup. Untuk keluarga, streaming, dan gaming, pilih kecepatan yang lebih tinggi. Gunakan pemilih kebutuhan di bagian Paket untuk rekomendasi cepat.'],
