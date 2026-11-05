@@ -52,6 +52,51 @@ function xenditReady(): bool
     return true;
 }
 
+/**
+ * Aturan biaya layanan per metode pembayaran.
+ * - bp       : persen dalam basis point (1% = 100 bp), dihitung dari nominal tagihan
+ * - flat     : biaya tetap (Rp) untuk metode di luar daftar persen
+ * - channels : kode channel Xendit yang diizinkan pada invoice (dikirim sebagai payment_methods)
+ *
+ * Pastikan semua kode channel sudah aktif di dashboard Xendit.
+ */
+function xenditFeeOptions(): array
+{
+    return [
+        'shopeepay'  => ['label' => 'ShopeePay',  'channels' => ['SHOPEEPAY'], 'bp' => 200, 'flat' => 0],
+        'va_mandiri' => ['label' => 'VA Mandiri', 'channels' => ['MANDIRI'],   'bp' => 62,  'flat' => 0],
+        'va_bri'     => ['label' => 'VA BRI',     'channels' => ['BRI'],       'bp' => 200, 'flat' => 0],
+        'va_bca'     => ['label' => 'VA BCA',     'channels' => ['BCA'],       'bp' => 225, 'flat' => 0],
+        'qris'       => ['label' => 'QRIS',       'channels' => ['QRIS'],      'bp' => 71,  'flat' => 0],
+        'dana'       => ['label' => 'DANA',       'channels' => ['DANA'],      'bp' => 167, 'flat' => 0],
+        'alfamart'   => ['label' => 'Alfamart',   'channels' => ['ALFAMART'],  'bp' => 93,  'flat' => 0],
+        // Semua metode lain: naik flat Rp 5.000
+        'lainnya'    => [
+            'label'    => 'Metode lain (VA BNI/BSI/Permata, Indomaret, OVO, LinkAja)',
+            'channels' => ['BNI', 'BSI', 'PERMATA', 'INDOMARET', 'OVO', 'LINKAJA'],
+            'bp'       => 0,
+            'flat'     => 5000,
+        ],
+    ];
+}
+
+function xenditFeeOption(string $key): ?array
+{
+    $options = xenditFeeOptions();
+    return $options[$key] ?? null;
+}
+
+/**
+ * Biaya layanan (Rupiah, dibulatkan ke atas) untuk nominal tagihan + metode terpilih.
+ * Contoh: tagihan 200.000, VA BCA 2,25% => 4.500. Metode lain => flat 5.000.
+ */
+function xenditCustomerFee(int $amount, array $option): int
+{
+    $amount = max(0, $amount);
+    $percentFee = intdiv($amount * (int) $option['bp'] + 9999, 10000); // ceil
+    return $percentFee + (int) $option['flat'];
+}
+
 function xenditRequest(string $method, string $path, ?array $body = null): array
 {
     $secretKey = xenditConfig()['secret_key'];
@@ -229,7 +274,7 @@ function xenditApplyInvoiceStatus(mysqli $conn, array $invoice): string
     $conn->begin_transaction();
     try {
         $stmt = $conn->prepare(
-            'SELECT p.id, p.id_tagihan, p.id_customer, p.jumlah, p.status, p.payment_provider,
+            'SELECT p.id, p.id_tagihan, p.id_customer, p.jumlah, p.biaya_layanan, p.status, p.payment_provider,
                     p.xendit_external_id, p.xendit_invoice_id,
                     t.id_customer AS tagihan_customer_id, t.jumlah AS tagihan_jumlah
              FROM pembayaran p
@@ -264,13 +309,17 @@ function xenditApplyInvoiceStatus(mysqli $conn, array $invoice): string
             throw new RuntimeException('Identitas invoice Xendit tidak cocok dengan transaksi.');
         }
 
+        // jumlah pembayaran = nominal tagihan + biaya layanan yang ditanggung pelanggan
+        // (biaya layanan sudah dihitung per metode pembayaran saat invoice dibuat)
         $storedAmount = xenditMoneyToMinorUnits($payment['jumlah']);
         $billAmount = xenditMoneyToMinorUnits($payment['tagihan_jumlah']);
+        $feeAmount = xenditMoneyToMinorUnits($payment['biaya_layanan'] ?? 0);
         if (
             $storedAmount === null
             || $billAmount === null
+            || $feeAmount === null
             || $storedAmount !== $amount
-            || $billAmount !== $amount
+            || ($billAmount + $feeAmount) !== $amount
         ) {
             throw new RuntimeException('Nominal invoice Xendit tidak cocok dengan tagihan.');
         }
