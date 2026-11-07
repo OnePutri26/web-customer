@@ -5,6 +5,10 @@ require_once "../config/auth.php";
 
 requireRole('admin');
 
+if (empty($_SESSION['complaint_admin_csrf'])) {
+    $_SESSION['complaint_admin_csrf'] = bin2hex(random_bytes(32));
+}
+
 $sql = "
 SELECT
     c.*,
@@ -93,6 +97,12 @@ rel="stylesheet"
 
 <input
 type="hidden"
+name="csrf"
+value="<?= htmlspecialchars($_SESSION['complaint_admin_csrf'], ENT_QUOTES, 'UTF-8') ?>"
+>
+
+<input
+type="hidden"
 name="id"
 value="<?= $row['id'] ?>"
 >
@@ -100,6 +110,7 @@ value="<?= $row['id'] ?>"
 <select
 name="status"
 class="form-select form-select-sm"
+aria-label="Ubah status pengaduan"
 onchange="this.form.submit()"
 >
 
