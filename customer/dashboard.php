@@ -2,10 +2,13 @@
 
 session_start();
 
-require_once "../config/database.php";
 require_once "../config/auth.php";
 
-requireActiveCustomer($conn);
+requireLogin();
+
+require_once "../config/database.php";
+
+requireRole('customer');
 
 date_default_timezone_set('Asia/Jakarta');
 
@@ -1340,7 +1343,7 @@ $currentPage =
                 ): ?>
 
                     <a
-                        href="langganan.php"
+                        href="../paket.php?mode=direct"
                         class="menu-item"
                     >
 
@@ -1768,7 +1771,7 @@ $currentPage =
                         ): ?>
 
                             <a
-                                href="langganan.php"
+                                href="../paket.php?mode=direct"
                                 class="hero-button"
                             >
 
@@ -3278,7 +3281,7 @@ $currentPage =
 
 
                     <a
-                        href="langganan.php"
+                        href="../paket.php?mode=direct"
                         class="state-button"
                     >
 

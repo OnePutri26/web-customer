@@ -49,7 +49,7 @@ function e($value): string
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
-    header("Location: packages.php");
+    header("Location: ../paket.php?mode=direct");
     exit;
 }
 
@@ -69,7 +69,7 @@ if ($action !== 'select_package') {
     $_SESSION['flash_error'] =
         'Permintaan tidak valid.';
 
-    header("Location: packages.php");
+    header("Location: ../paket.php?mode=direct");
     exit;
 }
 
@@ -89,7 +89,7 @@ if ($paketId <= 0) {
     $_SESSION['flash_error'] =
         'Paket WiFi tidak valid.';
 
-    header("Location: packages.php");
+    header("Location: ../paket.php?mode=direct");
     exit;
 }
 
@@ -134,7 +134,7 @@ if (!$customer) {
     $_SESSION['flash_error'] =
         'Data customer tidak ditemukan.';
 
-    header("Location: packages.php");
+    header("Location: ../paket.php?mode=direct");
     exit;
 }
 
@@ -211,7 +211,7 @@ if (!$package) {
     $_SESSION['flash_error'] =
         'Paket WiFi tidak ditemukan.';
 
-    header("Location: packages.php");
+    header("Location: ../paket.php?mode=direct");
     exit;
 }
 
@@ -252,7 +252,7 @@ if (!$packageAvailable) {
     $_SESSION['flash_error'] =
         'Paket yang dipilih sudah tidak tersedia.';
 
-    header("Location: packages.php");
+    header("Location: ../paket.php?mode=direct");
     exit;
 }
 
@@ -471,7 +471,7 @@ try {
     $_SESSION['flash_error'] =
         $e->getMessage();
 
-    header("Location: packages.php");
+    header("Location: ../paket.php?mode=direct");
     exit;
 }
 
@@ -1246,7 +1246,7 @@ try {
 
 
         <a
-            href="packages.php"
+            href="../paket.php?mode=direct"
             class="back"
         >
 
@@ -1600,7 +1600,7 @@ try {
 
 
                     <a
-                        href="packages.php"
+                        href="../paket.php?mode=direct"
                         class="btn btn-back"
                     >
 

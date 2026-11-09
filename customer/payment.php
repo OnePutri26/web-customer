@@ -59,4 +59,4 @@ if ($tagihanId > 0) {
     redirect('../pembayaran.php?tagihan=' . $tagihanId);
 }
 
-redirect('packages.php');
+redirect('../paket.php?mode=direct');

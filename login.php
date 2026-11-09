@@ -57,7 +57,7 @@ if (isset($_SESSION['login_error'])) {
 */
 
 if (isset($_SESSION['user_id'], $_SESSION['role'])) {
-    redirectRoleHome(
+    redirectRoleDashboard(
         $conn,
         (string) $_SESSION['role'],
         (int) $_SESSION['user_id']
@@ -119,12 +119,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             FROM users
             WHERE
                 username = ?
+                OR email = ?
                 OR nama = ?
             LIMIT 1
         ");
 
         $stmt->bind_param(
-            "ss",
+            "sss",
+            $usernameInput,
             $usernameInput,
             $usernameInput
         );
@@ -252,7 +254,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 
                     $stmt->close();
-                    redirectRoleHome(
+                    redirectRoleDashboard(
                         $conn,
                         (string) $_SESSION['role'],
                         (int) $user['id']

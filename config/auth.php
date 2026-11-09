@@ -298,7 +298,7 @@ function customerRedirectPath(array $state): string
 
     // 2. Belum punya paket sama sekali
     if ((int) ($state['paket_id'] ?? 0) <= 0 && $subscriptionId <= 0) {
-        return 'customer/packages.php';
+        return 'paket.php?mode=direct';
     }
 
     $subscriptionActive = in_array($subscriptionStatus, ['active', 'aktif'], true);
@@ -332,7 +332,7 @@ function customerRedirectPath(array $state): string
         return 'customer/dashboard.php';
     }
 
-    return 'customer/packages.php';
+    return 'paket.php?mode=direct';
 }
 
 /*
@@ -362,7 +362,7 @@ function redirectCustomer(mysqli $conn, int $userId): never
 
     // Jika paket sudah dipilih sebelumnya lewat flow, lanjut ke verifikasi
     if (
-        $target === 'customer/packages.php'
+        $target === 'paket.php?mode=direct'
         && !empty($_SESSION['flow']['tersedia'])
         && (int) ($_SESSION['flow']['paket_id'] ?? 0) > 0
     ) {
@@ -418,6 +418,25 @@ function redirectRoleHome(mysqli $conn, string $role, int $userId): never
     clearAuthSession();
     $_SESSION['login_error'] = 'Role akun tidak dikenali.';
     appRedirect('login.php');
+}
+
+function redirectRoleDashboard(mysqli $conn, string $role, int $userId): never
+{
+    $role = normalizeAuthRole($role);
+
+    if ($role === 'customer') {
+        $state = customerRoutingState($conn, $userId);
+        if (empty($state['customer_exists'])) {
+            clearAuthSession();
+            $_SESSION['login_error'] = 'Data customer tidak ditemukan. Silakan hubungi administrator.';
+            appRedirect('login.php');
+        }
+
+        $_SESSION['subscription_status'] = $state['customer_status'];
+        appRedirect('customer/dashboard.php');
+    }
+
+    redirectRoleHome($conn, $role, $userId);
 }
 
 /*
@@ -492,27 +511,6 @@ function getCustomerSubscriptionStatus(mysqli $conn, int $userId): string
     return empty($state['customer_exists'])
         ? 'belum_berlangganan'
         : $state['customer_status'];
-}
-
-/*
- * Dipakai di halaman pilih paket (customer/packages.php).
- * Hanya boleh tetap di halaman jika memang tujuannya packages.php;
- * selain itu diarahkan ke halaman yang sesuai (mencegah redirect loop).
- */
-function requireCustomerCanChoosePackage(mysqli $conn): void
-{
-    requireRole('customer');
-
-    $state = customerRoutingState($conn, (int) $_SESSION['user_id']);
-    $_SESSION['subscription_status'] = $state['customer_status'];
-
-    $target = customerRedirectPath($state);
-
-    if ($target === 'customer/packages.php') {
-        return;
-    }
-
-    appRedirect($target);
 }
 
 function requireActiveCustomer(mysqli $conn): void

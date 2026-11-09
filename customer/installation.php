@@ -10,7 +10,7 @@ requireCustomerInstallation($conn);
 $userId = $_SESSION['user_id'];
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header("Location: packages.php");
+    header("Location: ../paket.php?mode=direct");
     exit;
 }
 
@@ -155,7 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_installation']
 
 <div class="installation-page">
     <nav class="installation-navbar">
-        <a href="packages.php" class="back-dashboard" aria-label="Kembali ke paket"><i class="bi bi-arrow-left"></i></a>
+        <a href="../paket.php?mode=direct" class="back-dashboard" aria-label="Kembali ke paket"><i class="bi bi-arrow-left"></i></a>
         <div class="nav-title"><strong>Pengajuan Pemasangan</strong><span>Lengkapi data pemasangan layanan</span></div>
         <a href="dashboard.php" class="dashboard-link"><i class="bi bi-grid-fill"></i> Dashboard</a>
     </nav>

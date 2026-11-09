@@ -378,7 +378,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             'Pemasangan sudah dikonfirmasi sebelumnya.';
 
                         header(
-                            "Location: langganan.php"
+                            "Location: dashboard.php"
                         );
 
                         exit;
@@ -449,7 +449,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             */
 
                             header(
-                                "Location: langganan.php"
+                                "Location: dashboard.php"
                             );
 
                             exit;
@@ -476,7 +476,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 'Pemasangan sudah dikonfirmasi.';
 
                             header(
-                                "Location: langganan.php"
+                                "Location: dashboard.php"
                             );
 
                             exit;
@@ -1013,7 +1013,7 @@ $isAlreadyConfirmed =
                 <div class="action-buttons">
 
                     <a
-                        href="langganan.php"
+                        href="../paket.php?mode=direct"
                         class="btn btn-primary btn-confirm full-button"
                     >
 

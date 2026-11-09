@@ -835,7 +835,7 @@ $initial = strtoupper(
             <div class="actions">
 
                 <a
-                    href="langganan.php"
+                    href="../paket.php?mode=direct"
                     class="back-button"
                 >
 

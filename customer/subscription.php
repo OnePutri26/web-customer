@@ -43,9 +43,9 @@ $subscriptionStatus = $subscription['status'] ?? null;
 
 <div class="subscription-page">
     <nav class="subscription-navbar">
-        <a href="<?= $subscriptionStatus === 'active' ? 'dashboard.php' : 'packages.php' ?>" class="back-dashboard" aria-label="Kembali"><i class="bi bi-arrow-left"></i></a>
+        <a href="<?= $subscriptionStatus === 'active' ? 'dashboard.php' : '../paket.php?mode=direct' ?>" class="back-dashboard" aria-label="Kembali"><i class="bi bi-arrow-left"></i></a>
         <div class="nav-title"><strong>Langganan Saya</strong><span>Kelola layanan internet kamu</span></div>
-        <a href="<?= $subscriptionStatus === 'active' ? 'dashboard.php' : 'packages.php' ?>" class="dashboard-link"><i class="bi bi-grid-fill"></i> <?= $subscriptionStatus === 'active' ? 'Dashboard' : 'Dashboard' ?></a>
+        <a href="<?= $subscriptionStatus === 'active' ? 'dashboard.php' : '../paket.php?mode=direct' ?>" class="dashboard-link"><i class="bi bi-grid-fill"></i> Dashboard</a>
     </nav>
 
     <main class="subscription-container">
@@ -71,7 +71,7 @@ $subscriptionStatus = $subscription['status'] ?? null;
                 Saat ini akun kamu belum memiliki layanan internet aktif. Pilih paket WiFi dan ajukan pemasangan untuk mulai menikmati koneksi yang stabil.
             </p>
 
-            <a href="packages.php" class="btn-primary">
+            <a href="../paket.php?mode=direct" class="btn-primary">
                 <i class="bi bi-boxes"></i> Lihat Paket WiFi
             </a>
 
@@ -87,7 +87,7 @@ $subscriptionStatus = $subscription['status'] ?? null;
             <span class="card-kicker">PENGAJUAN DIPROSES</span>
             <h2>Menunggu aktivasi</h2>
             <p>Status layanan saat ini <strong><?= htmlspecialchars(strtoupper(str_replace('_', ' ', $subscriptionStatus))) ?></strong>. Kami akan memproses pengajuanmu.</p>
-            <a href="packages.php" class="btn-primary"><i class="bi bi-boxes"></i> Lihat Paket</a>
+            <a href="../paket.php?mode=direct" class="btn-primary"><i class="bi bi-boxes"></i> Lihat Paket</a>
 
         <?php else: ?>
 
