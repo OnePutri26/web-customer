@@ -92,6 +92,57 @@ function columnExists(
 }
 
 
+/**
+ * Mengambil seluruh hasil prepared statement.
+ * Mendukung hosting dengan maupun tanpa mysqlnd.
+ */
+function statementFetchAll(mysqli_stmt $stmt): array
+{
+    // Cara standar jika ekstensi mysqlnd tersedia.
+    if (method_exists($stmt, 'get_result')) {
+        $result = $stmt->get_result();
+
+        if ($result instanceof mysqli_result) {
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+    }
+
+    // Fallback untuk hosting tanpa mysqlnd.
+    $metadata = $stmt->result_metadata();
+
+    if (!$metadata) {
+        return [];
+    }
+
+    $fields = $metadata->fetch_fields();
+    $row = [];
+    $bind = [];
+
+    foreach ($fields as $field) {
+        $row[$field->name] = null;
+        $bind[] = &$row[$field->name];
+    }
+
+    call_user_func_array([$stmt, 'bind_result'], $bind);
+
+    $rows = [];
+
+    while ($stmt->fetch()) {
+        $copy = [];
+
+        foreach ($row as $key => $value) {
+            $copy[$key] = $value;
+        }
+
+        $rows[] = $copy;
+    }
+
+    $metadata->free();
+
+    return $rows;
+}
+
+
 /*
 |--------------------------------------------------------------------------
 | NORMALISASI STATUS
@@ -333,80 +384,80 @@ if (
 |--------------------------------------------------------------------------
 */
 
+// Kolom relasi customer wajib tersedia.
+if (!columnExists($conn, 'customers', 'user_id')) {
+    error_log("Dashboard YESNET: kolom customers.user_id tidak ditemukan.");
+    http_response_code(500);
+    die("Struktur tabel customers belum sesuai. Kolom user_id tidak ditemukan.");
+}
+
+// Join paket hanya dilakukan jika tabel dan kolom relasinya tersedia.
+// Kolom paket yang tidak tersedia akan diisi NULL agar dashboard tetap dapat dibuka.
+$paketColumns = [
+    'nama_paket' => 'nama_paket',
+    'speed_mbps' => 'speed_mbps',
+    'harga'      => 'harga_paket',
+    'deskripsi'  => 'deskripsi_paket'
+];
+
+$selectPaket = [];
+$joinPaket = "";
+
+$paketTableAvailable =
+    tableExists($conn, 'paket_wifi') &&
+    columnExists($conn, 'paket_wifi', 'id') &&
+    columnExists($conn, 'customers', 'paket_id');
+
+if ($paketTableAvailable) {
+    $joinPaket = "LEFT JOIN paket_wifi p ON p.id = c.paket_id";
+}
+
+foreach ($paketColumns as $column => $alias) {
+    if (
+        $paketTableAvailable &&
+        columnExists($conn, 'paket_wifi', $column)
+    ) {
+        $selectPaket[] = "p.`{$column}` AS `{$alias}`";
+    } else {
+        $selectPaket[] = "NULL AS `{$alias}`";
+    }
+}
+
 $sqlCustomer = "
-
     SELECT
-
         c.*,
-
-        p.nama_paket,
-
-        p.speed_mbps,
-
-        p.harga AS harga_paket,
-
-        p.deskripsi AS deskripsi_paket
-
+        " . implode(",\n        ", $selectPaket) . "
     FROM customers c
-
-    LEFT JOIN paket_wifi p
-
-        ON p.id = c.paket_id
-
+    {$joinPaket}
     WHERE c.user_id = ?
-
     LIMIT 1
-
 ";
 
+try {
+    $stmt = $conn->prepare($sqlCustomer);
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
 
-$stmt =
-    $conn->prepare(
-        $sqlCustomer
-    );
-
-
-if (!$stmt) {
-
-    die(
-        "Query customer gagal: " .
-        e($conn->error)
-    );
-}
-
-
-$stmt->bind_param(
-    "i",
-    $userId
-);
-
-
-$stmt->execute();
-
-
-$result =
-    $stmt->get_result();
-
-
-if (
-    $result &&
-    $result->num_rows > 0
-) {
-
-    $customer =
-        $result->fetch_assoc();
-
-} else {
-
+    $customerRows = statementFetchAll($stmt);
     $stmt->close();
 
-    die(
-        "Data customer tidak ditemukan."
+    if (!empty($customerRows)) {
+        $customer = $customerRows[0];
+    } else {
+        http_response_code(404);
+        die("Data customer tidak ditemukan untuk akun ini.");
+    }
+} catch (Throwable $e) {
+    error_log(
+        "Dashboard YESNET customer query error: " .
+        $e->getMessage() .
+        " | file: " . $e->getFile() .
+        " | line: " . $e->getLine()
     );
+
+    http_response_code(500);
+    die("Data dashboard gagal dimuat. Periksa struktur tabel customers dan paket_wifi atau error log hosting.");
 }
-
-
-$stmt->close();
 
 
 /*
@@ -666,22 +717,11 @@ if (
 
         $stmt->execute();
 
-        $result =
-            $stmt->get_result();
+        $rows = statementFetchAll($stmt);
+        $row = $rows[0] ?? [];
 
-
-        if ($result) {
-
-            $row =
-                $result->fetch_assoc();
-
-            $totalInstalasi =
-                (int) (
-                    $row['total']
-                    ??
-                    0
-                );
-        }
+        $totalInstalasi =
+            (int) ($row['total'] ?? 0);
 
 
         $stmt->close();
@@ -754,22 +794,11 @@ if (
 
         $stmt->execute();
 
-        $result =
-            $stmt->get_result();
+        $rows = statementFetchAll($stmt);
+        $row = $rows[0] ?? [];
 
-
-        if ($result) {
-
-            $row =
-                $result->fetch_assoc();
-
-            $totalGangguan =
-                (int) (
-                    $row['total']
-                    ??
-                    0
-                );
-        }
+        $totalGangguan =
+            (int) ($row['total'] ?? 0);
 
 
         $stmt->close();
@@ -873,17 +902,11 @@ if (
 
         $stmt->execute();
 
-        $result =
-            $stmt->get_result();
+        $rows = statementFetchAll($stmt);
 
+        if (!empty($rows)) {
 
-        if (
-            $result &&
-            $result->num_rows > 0
-        ) {
-
-            $tagihan =
-                $result->fetch_assoc();
+            $tagihan = $rows[0];
 
 
             $jumlahTagihan =
@@ -1004,20 +1027,10 @@ if (
 
         $stmt->execute();
 
-        $result =
-            $stmt->get_result();
+        $rows = statementFetchAll($stmt);
 
-
-        if ($result) {
-
-            while (
-                $row =
-                $result->fetch_assoc()
-            ) {
-
-                $riwayatPembayaran[] =
-                    $row;
-            }
+        foreach ($rows as $row) {
+            $riwayatPembayaran[] = $row;
         }
 
 
