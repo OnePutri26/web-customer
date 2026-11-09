@@ -42,53 +42,7 @@ $initial = strtoupper(
    DATA NETWORK
 ===================================================== */
 
-// IP customer
-$clientIp = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
-
-// IP server
-$serverIp = $_SERVER['SERVER_ADDR'] ?? '127.0.0.1';
-
-// Host server
-$serverHost = $_SERVER['SERVER_NAME'] ?? 'localhost';
-
-// Protocol
-$protocol = (
-    !empty($_SERVER['HTTPS']) &&
-    $_SERVER['HTTPS'] !== 'off'
-)
-    ? 'HTTPS'
-    : 'HTTP';
-
-// Port
-$serverPort = $_SERVER['SERVER_PORT'] ?? '80';
-
-
-/* =====================================================
-   CEK INTERNET SERVER
-===================================================== */
-
-function checkInternetConnection(): bool
-{
-    $connection = @fsockopen(
-        "8.8.8.8",
-        53,
-        $errno,
-        $errstr,
-        2
-    );
-
-    if ($connection) {
-
-        fclose($connection);
-
-        return true;
-    }
-
-    return false;
-}
-
-
-$isOnline = checkInternetConnection();
+$isOnline = null;
 
 
 /* =====================================================
@@ -116,27 +70,17 @@ try {
 
 $webStatus = true;
 
-$networkStatus = (
-    $isOnline &&
-    $databaseStatus &&
-    $webStatus
-);
+$networkStatus = null;
 
 
 /* =====================================================
    LABEL STATUS
 ===================================================== */
 
-$networkLabel =
-    $networkStatus
-        ? 'Jaringan Normal'
-        : 'Terjadi Gangguan';
+$networkLabel = 'Status Area Belum Tersedia';
 
 
-$networkDescription =
-    $networkStatus
-        ? 'Koneksi jaringan dan layanan berjalan normal.'
-        : 'Terdapat layanan yang sedang mengalami gangguan.';
+$networkDescription = 'Informasi gangguan dan pemeliharaan area belum terhubung ke dashboard.';
 
 
 /* =====================================================
@@ -159,16 +103,24 @@ $checkDuration = 'Normal';
    STATUS SERVICE CLASS
 ===================================================== */
 
-function statusClass($status)
+function statusClass(?bool $status)
 {
+    if ($status === null) {
+        return 'service-unknown';
+    }
+
     return $status
         ? 'service-online'
         : 'service-offline';
 }
 
 
-function statusText($status)
+function statusText(?bool $status)
 {
+    if ($status === null) {
+        return 'Belum tersedia';
+    }
+
     return $status
         ? 'Online'
         : 'Offline';
@@ -609,7 +561,10 @@ function statusText($status)
         <section
             class="
                 network-main-status
-                <?= $networkStatus ? 'status-normal' : 'status-danger' ?>
+                <?= $networkStatus === true
+                    ? 'status-normal'
+                    : ($networkStatus === false ? 'status-danger' : 'status-unknown')
+                ?>
             "
         >
 
@@ -619,13 +574,17 @@ function statusText($status)
 
                 <div class="main-status-icon">
 
-                    <?php if ($networkStatus): ?>
+                    <?php if ($networkStatus === true): ?>
 
                         <i class="bi bi-check-lg"></i>
 
-                    <?php else: ?>
+                    <?php elseif ($networkStatus === false): ?>
 
                         <i class="bi bi-exclamation-lg"></i>
+
+                    <?php else: ?>
+
+                        <i class="bi bi-question-lg"></i>
 
                     <?php endif; ?>
 
@@ -655,7 +614,10 @@ function statusText($status)
 
                 <span class="live-dot"></span>
 
-                <?= $networkStatus ? 'ONLINE' : 'OFFLINE' ?>
+                <?= $networkStatus === true
+                    ? 'NORMAL'
+                    : ($networkStatus === false ? 'GANGGUAN' : 'BELUM TERSEDIA')
+                ?>
 
             </div>
 
@@ -686,7 +648,7 @@ function statusText($status)
 
 
                 <span class="live-text">
-                    ● MONITORING
+                    STATUS INTEGRASI
                 </span>
 
             </div>
@@ -702,9 +664,9 @@ function statusText($status)
 
                     <div
                         class="service-icon
-                        <?= $isOnline
+                        <?= $isOnline === true
                             ? 'icon-online'
-                            : 'icon-offline'
+                        : ($isOnline === false ? 'icon-offline' : 'icon-unknown')
                         ?>"
                     >
 
@@ -720,7 +682,7 @@ function statusText($status)
                         </strong>
 
                         <span>
-                            Koneksi internet server
+                            Telemetri koneksi pelanggan
                         </span>
 
                     </div>
@@ -844,16 +806,20 @@ function statusText($status)
                 </span>
 
                 <h3>
-                    <?= $networkStatus
-                        ? 'Koneksi internet kamu berjalan normal'
-                        : 'Koneksi sedang mengalami gangguan'
+                    <?= $networkStatus === true
+                        ? 'Jaringan area kamu berjalan normal'
+                        : ($networkStatus === false
+                            ? 'Terdapat gangguan jaringan area'
+                            : 'Status jaringan area belum terhubung')
                     ?>
                 </h3>
 
                 <p>
-                    <?= $networkStatus
-                        ? 'Semua layanan utama saat ini terpantau aktif. Kamu dapat menggunakan layanan internet seperti biasa.'
-                        : 'Beberapa layanan tidak dapat diakses. Silakan coba refresh halaman atau hubungi Customer Service jika masalah berlanjut.'
+                    <?= $networkStatus === true
+                        ? 'Informasi jaringan area tersedia dari sistem monitoring.'
+                        : ($networkStatus === false
+                            ? 'Sistem monitoring melaporkan gangguan. Hubungi Customer Service untuk informasi lebih lanjut.'
+                            : 'Halaman ini tidak menguji koneksi server sebagai pengganti status jaringan pelanggan. Integrasi monitoring area perlu dikonfigurasi terlebih dahulu.')
                     ?>
                 </p>
 

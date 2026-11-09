@@ -1630,6 +1630,23 @@ a {
         width: 56px;
     }
 
+    .chart-stage.no-usage-data::after {
+        position: absolute;
+        inset: 0 0 33px;
+        z-index: 1;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        color: #64748b;
+        content: "Belum ada data telemetri untuk ditampilkan.";
+        font-size: 13px;
+        text-align: center;
+    }
+
+    .chart-stage.no-usage-data .usage-svg {
+        display: none;
+    }
+
     .dashboard-container .main-content {
         width: calc(100% - 56px);
 

@@ -7,6 +7,15 @@ requireRole('customer');
 
 $userId = $_SESSION['user_id'];
 
+if (
+    !isset($_SESSION['speedtest_csrf']) ||
+    !is_string($_SESSION['speedtest_csrf'])
+) {
+    $_SESSION['speedtest_csrf'] = bin2hex(random_bytes(32));
+}
+
+$speedtestCsrf = $_SESSION['speedtest_csrf'];
+
 
 /* =====================================================
    DATA CUSTOMER
@@ -439,8 +448,8 @@ $serverIp =
             </h2>
 
             <p>
-                Uji kecepatan internet untuk mengetahui kualitas
-                koneksi kamu saat ini.
+                Uji koneksi perangkat kamu ke server aplikasi YESNET.
+                Hasil mengukur jalur ke server ini, bukan pembacaan langsung dari router.
             </p>
 
         </div>
@@ -868,6 +877,8 @@ $serverIp =
 
 <script>
 
+const speedtestCsrf = <?= json_encode($speedtestCsrf, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+
 /* =====================================================
    ELEMENT
 ===================================================== */
@@ -988,8 +999,7 @@ async function testPing()
     const samples = [];
 
     const url =
-        window.location.href.split("?")[0]
-        + "?ping=1&_="
+        "speedtest-download.php?_="
         + Date.now();
 
 
@@ -1009,7 +1019,10 @@ async function testPing()
                 url,
                 {
                     method: "HEAD",
-                    cache: "no-store"
+                    cache: "no-store",
+                    headers: {
+                        "X-YESNET-CSRF": speedtestCsrf
+                    }
                 }
             );
 
@@ -1073,7 +1086,10 @@ async function testDownload()
         await fetch(
             url,
             {
-                cache: "no-store"
+                cache: "no-store",
+                headers: {
+                    "X-YESNET-CSRF": speedtestCsrf
+                }
             }
         );
 
@@ -1144,7 +1160,8 @@ async function testUpload()
 
                 headers: {
                     "Content-Type":
-                        "application/octet-stream"
+                        "application/octet-stream",
+                    "X-YESNET-CSRF": speedtestCsrf
                 },
 
                 body: data,
@@ -1431,4 +1448,3 @@ startButton.addEventListener(
 </body>
 
 </html>
-

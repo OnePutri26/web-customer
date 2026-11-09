@@ -404,41 +404,7 @@ $maxUpload = 0;
 $totalRecords = 0;
 
 
-/*
-|--------------------------------------------------------------------------
-| DEFAULT DAILY DATA
-|--------------------------------------------------------------------------
-*/
-
 $usageData = [];
-
-
-for (
-    $i = 6;
-    $i >= 0;
-    $i--
-) {
-
-    $date =
-        date(
-            'Y-m-d',
-            strtotime(
-                "-{$i} days"
-            )
-        );
-
-
-    $usageData[$date] = [
-
-        'download' => 0,
-
-        'upload' => 0,
-
-        'ping' => 0,
-
-        'count' => 0
-    ];
-}
 
 
 /*
@@ -704,47 +670,40 @@ if ($hasUsageTable) {
             $row['tanggal'];
 
 
-        if (
-            isset(
-                $usageData[$tanggal]
-            )
-        ) {
+        $usageData[$tanggal] = [
 
-            $usageData[$tanggal] = [
+            'download' =>
+                (float)
+                (
+                    $row[
+                        'download_mbps'
+                    ] ?? 0
+                ),
 
-                'download' =>
-                    (float)
-                    (
-                        $row[
-                            'download_mbps'
-                        ] ?? 0
-                    ),
+            'upload' =>
+                (float)
+                (
+                    $row[
+                        'upload_mbps'
+                    ] ?? 0
+                ),
 
-                'upload' =>
-                    (float)
-                    (
-                        $row[
-                            'upload_mbps'
-                        ] ?? 0
-                    ),
+            'ping' =>
+                (float)
+                (
+                    $row[
+                        'ping_ms'
+                    ] ?? 0
+                ),
 
-                'ping' =>
-                    (float)
-                    (
-                        $row[
-                            'ping_ms'
-                        ] ?? 0
-                    ),
-
-                'count' =>
-                    (int)
-                    (
-                        $row[
-                            'total_data'
-                        ] ?? 0
-                    )
-            ];
-        }
+            'count' =>
+                (int)
+                (
+                    $row[
+                        'total_data'
+                    ] ?? 0
+                )
+        ];
     }
 
 
@@ -827,307 +786,11 @@ if ($hasUsageTable) {
 }
 
 
-/*
-|--------------------------------------------------------------------------
-| DUMMY DATA
-|--------------------------------------------------------------------------
-|
-| Dipakai jika:
-|
-| 1. usage_data belum ada
-| 2. usage_data ada tetapi belum mempunyai data
-|
-*/
-
-if (
-    !$hasUsageTable ||
-    $totalRecords <= 0
-) {
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | BASE SPEED
-    |--------------------------------------------------------------------------
-    */
-
-    $baseSpeed =
-        $paketSpeed > 0
-            ? $paketSpeed
-            : 50;
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | DUMMY HISTORY
-    |--------------------------------------------------------------------------
-    */
-
-    $dummyHistory = [];
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | DUMMY 7 HARI
-    |--------------------------------------------------------------------------
-    */
-
-    $dummyValues = [
-
-        6 => [
-            'download' => 0.82,
-            'upload'   => 0.36,
-            'ping'     => 9
-        ],
-
-        5 => [
-            'download' => 0.91,
-            'upload'   => 0.40,
-            'ping'     => 10
-        ],
-
-        4 => [
-            'download' => 0.87,
-            'upload'   => 0.38,
-            'ping'     => 8
-        ],
-
-        3 => [
-            'download' => 0.95,
-            'upload'   => 0.43,
-            'ping'     => 11
-        ],
-
-        2 => [
-            'download' => 0.89,
-            'upload'   => 0.39,
-            'ping'     => 9
-        ],
-
-        1 => [
-            'download' => 0.97,
-            'upload'   => 0.44,
-            'ping'     => 8
-        ],
-
-        0 => [
-            'download' => 0.93,
-            'upload'   => 0.41,
-            'ping'     => 9
-        ]
-    ];
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | BUAT DATA GRAFIK
-    |--------------------------------------------------------------------------
-    */
-
-    for (
-        $i = 6;
-        $i >= 0;
-        $i--
-    ) {
-
-        $date =
-            date(
-                'Y-m-d',
-                strtotime(
-                    "-{$i} days"
-                )
-            );
-
-
-        $factor =
-            $dummyValues[$i];
-
-
-        $download =
-            round(
-                $baseSpeed *
-                $factor['download'],
-                2
-            );
-
-
-        $upload =
-            round(
-                max(
-                    1,
-                    $baseSpeed *
-                    0.45 *
-                    $factor['upload']
-                ),
-                2
-            );
-
-
-        $ping =
-            (float)
-            $factor['ping'];
-
-
-        $usageData[$date] = [
-
-            'download' =>
-                $download,
-
-            'upload' =>
-                $upload,
-
-            'ping' =>
-                $ping,
-
-            'count' =>
-                1
-        ];
-
-
-        $dummyHistory[] = [
-
-            'id' =>
-                9000 + $i,
-
-            'download_mbps' =>
-                $download,
-
-            'upload_mbps' =>
-                $upload,
-
-            'ping_ms' =>
-                $ping,
-
-            'recorded_at' =>
-                $date .
-                ' ' .
-                str_pad(
-                    (string)
-                    (20 + $i),
-                    2,
-                    '0',
-                    STR_PAD_LEFT
-                ) .
-                ':00:00'
-        ];
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | HITUNG AVERAGE
-    |--------------------------------------------------------------------------
-    */
-
-    $downloadValues = [];
-
-    $uploadValues = [];
-
-    $pingValues = [];
-
-
-    foreach (
-        $usageData
-        as $data
-    ) {
-
-        $downloadValues[] =
-            (float)
-            $data['download'];
-
-
-        $uploadValues[] =
-            (float)
-            $data['upload'];
-
-
-        $pingValues[] =
-            (float)
-            $data['ping'];
-    }
-
-
-    if (
-        !empty(
-            $downloadValues
-        )
-    ) {
-
-        $avgDownload =
-            array_sum(
-                $downloadValues
-            )
-            /
-            count(
-                $downloadValues
-            );
-
-
-        $maxDownload =
-            max(
-                $downloadValues
-            );
-    }
-
-
-    if (
-        !empty(
-            $uploadValues
-        )
-    ) {
-
-        $avgUpload =
-            array_sum(
-                $uploadValues
-            )
-            /
-            count(
-                $uploadValues
-            );
-
-
-        $maxUpload =
-            max(
-                $uploadValues
-            );
-    }
-
-
-    if (
-        !empty(
-            $pingValues
-        )
-    ) {
-
-        $avgPing =
-            array_sum(
-                $pingValues
-            )
-            /
-            count(
-                $pingValues
-            );
-    }
-
-
-    $totalRecords = 7;
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | HISTORY DUMMY
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-        empty(
-            $usageHistory
-        )
-    ) {
-
-        $usageHistory =
-            $dummyHistory;
-    }
+$hasUsageData = $totalRecords > 0;
+
+if (!$hasUsageData) {
+    $usageData = [];
+    $usageHistory = [];
 }
 
 
@@ -1397,7 +1060,7 @@ if (
 */
 
 $isOnline =
-    $totalRecords > 0;
+    $hasUsageData;
 
 
 /*
@@ -1809,12 +1472,10 @@ if (
 
             <strong>
 
-                <?= number_format(
-                    $avgDownload,
-                    2,
-                    ',',
-                    '.'
-                ) ?>
+                <?= $hasUsageData
+                    ? number_format($avgDownload, 2, ',', '.')
+                    : '—'
+                ?>
 
                 <small>
                     Mbps
@@ -1857,12 +1518,10 @@ if (
 
             <strong>
 
-                <?= number_format(
-                    $avgUpload,
-                    2,
-                    ',',
-                    '.'
-                ) ?>
+                <?= $hasUsageData
+                    ? number_format($avgUpload, 2, ',', '.')
+                    : '—'
+                ?>
 
                 <small>
                     Mbps
@@ -1905,12 +1564,10 @@ if (
 
             <strong>
 
-                <?= number_format(
-                    $avgPing,
-                    1,
-                    ',',
-                    '.'
-                ) ?>
+                <?= $hasUsageData
+                    ? number_format($avgPing, 1, ',', '.')
+                    : '—'
+                ?>
 
                 <small>
                     ms
@@ -2054,7 +1711,7 @@ if (
 
 
             <?= $isOnline
-                ? 'Koneksi Aktif'
+                ? 'Data Tersedia'
                 : 'Belum Ada Data'
             ?>
 
@@ -2081,12 +1738,10 @@ if (
 
             <strong>
 
-                <?= number_format(
-                    $avgDownload,
-                    1,
-                    ',',
-                    '.'
-                ) ?>
+                <?= $hasUsageData
+                    ? number_format($avgDownload, 1, ',', '.')
+                    : '—'
+                ?>
 
 
                 <small>
@@ -2111,12 +1766,10 @@ if (
 
             <strong>
 
-                <?= number_format(
-                    $avgUpload,
-                    1,
-                    ',',
-                    '.'
-                ) ?>
+                <?= $hasUsageData
+                    ? number_format($avgUpload, 1, ',', '.')
+                    : '—'
+                ?>
 
 
                 <small>
@@ -2141,12 +1794,10 @@ if (
 
             <strong>
 
-                <?= number_format(
-                    $avgPing,
-                    1,
-                    ',',
-                    '.'
-                ) ?>
+                <?= $hasUsageData
+                    ? number_format($avgPing, 1, ',', '.')
+                    : '—'
+                ?>
 
 
                 <small>
@@ -2256,7 +1907,7 @@ if (
 
 
 
-        <div class="chart-stage">
+        <div class="chart-stage <?= $hasUsageData ? '' : 'no-usage-data'; ?>">
 
 
             <div class="chart-grid">

@@ -329,6 +329,8 @@ $totalGangguan =
 $jumlahTagihan =
     0;
 
+$tagihan = null;
+
 $jatuhTempo =
     '-';
 
@@ -339,24 +341,16 @@ $nomorTagihan =
 $riwayatPembayaran =
     [];
 
+$unreadNotifications = 0;
 
-/*
-|--------------------------------------------------------------------------
-| DATA CONTOH UNTUK TAMPILAN
-|--------------------------------------------------------------------------
-*/
 
-$downloadMbps =
-    87.4;
-
-$uploadMbps =
-    18.2;
-
-$pingMs =
-    9;
-
-$networkNormal =
-    true;
+$downloadMbps = null;
+$uploadMbps = null;
+$pingMs = null;
+$bandwidthReadings = [];
+$bandwidthTelemetryAvailable = false;
+$bandwidthIsLive = false;
+$bandwidthDataUpdatedAt = null;
 
 
 /*
@@ -592,6 +586,72 @@ if (
 
 /*
 |--------------------------------------------------------------------------
+| TELEMETRI BANDWIDTH
+|--------------------------------------------------------------------------
+| Grafik hanya menampilkan data yang benar-benar dicatat oleh integrasi
+| jaringan ke tabel usage_data. Tidak ada nilai contoh/fallback.
+*/
+
+$usageColumns = [
+    'customer_id',
+    'download_mbps',
+    'upload_mbps',
+    'ping_ms',
+    'recorded_at'
+];
+
+$hasUsageSchema = tableExists($conn, 'usage_data');
+
+foreach ($usageColumns as $usageColumn) {
+    $hasUsageSchema = $hasUsageSchema
+        && columnExists($conn, 'usage_data', $usageColumn);
+}
+
+if ($hasUsageSchema) {
+    try {
+        $stmt = $conn->prepare("
+            SELECT download_mbps, upload_mbps, ping_ms, recorded_at
+            FROM usage_data
+            WHERE customer_id = ?
+            ORDER BY recorded_at DESC
+            LIMIT 20
+        ");
+        $stmt->bind_param("i", $customerId);
+        $stmt->execute();
+        $bandwidthReadings = statementFetchAll($stmt);
+        $stmt->close();
+
+        if (!empty($bandwidthReadings)) {
+            $latestReading = $bandwidthReadings[0];
+            $downloadMbps = is_numeric($latestReading['download_mbps'] ?? null)
+                ? (float) $latestReading['download_mbps']
+                : null;
+            $uploadMbps = is_numeric($latestReading['upload_mbps'] ?? null)
+                ? (float) $latestReading['upload_mbps']
+                : null;
+            $pingMs = is_numeric($latestReading['ping_ms'] ?? null)
+                ? (float) $latestReading['ping_ms']
+                : null;
+            $bandwidthDataUpdatedAt = $latestReading['recorded_at'] ?? null;
+
+            $readingTimestamp = strtotime((string) $bandwidthDataUpdatedAt);
+            $bandwidthIsLive = $readingTimestamp !== false
+                && $readingTimestamp <= time()
+                && $readingTimestamp >= time() - 300;
+            $bandwidthTelemetryAvailable = $downloadMbps !== null
+                || $uploadMbps !== null
+                || $pingMs !== null;
+
+            $bandwidthReadings = array_reverse($bandwidthReadings);
+        }
+    } catch (Throwable $e) {
+        error_log('Dashboard YESNET telemetry query failed: ' . $e->getMessage());
+    }
+}
+
+
+/*
+|--------------------------------------------------------------------------
 | STATUS DISPLAY
 |--------------------------------------------------------------------------
 */
@@ -725,6 +785,35 @@ if (
 
 
         $stmt->close();
+    }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| NOTIFIKASI BELUM DIBACA
+|--------------------------------------------------------------------------
+*/
+
+if (
+    tableExists($conn, 'notifications') &&
+    columnExists($conn, 'notifications', 'id_user') &&
+    columnExists($conn, 'notifications', 'dibaca')
+) {
+    try {
+        $stmt = $conn->prepare("
+            SELECT COUNT(*) AS total
+            FROM notifications
+            WHERE (id_user = ? OR id_user IS NULL)
+              AND dibaca = 0
+        ");
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $rows = statementFetchAll($stmt);
+        $unreadNotifications = (int) ($rows[0]['total'] ?? 0);
+        $stmt->close();
+    } catch (Throwable $e) {
+        error_log('Dashboard YESNET notification count failed: ' . $e->getMessage());
     }
 }
 
@@ -1087,7 +1176,7 @@ $currentPage =
     >
 
     <title>
-        Dashboard Customer - WiFi Management
+        Dashboard Pelanggan - YESNET
     </title>
 
 
@@ -1154,7 +1243,7 @@ $currentPage =
             <div class="brand-text">
 
                 <strong>
-                    WiFi Management
+                    YESNET
                 </strong>
 
                 <span>
@@ -1602,7 +1691,11 @@ $currentPage =
 
                     <i class="bi bi-bell"></i>
 
-                    <span class="notification-pulse"></span>
+                    <?php if ($unreadNotifications > 0): ?>
+                        <span class="notification-count">
+                            <?= $unreadNotifications > 99 ? '99+' : $unreadNotifications; ?>
+                        </span>
+                    <?php endif; ?>
 
                 </a>
 
@@ -2038,8 +2131,10 @@ $currentPage =
                             </div>
 
 
-                            <span class="stat-tag green">
-                                LIVE
+                            <span class="stat-tag <?= $bandwidthIsLive ? 'green' : ''; ?>">
+                                        <?= $bandwidthIsLive
+                                            ? 'LIVE'
+                                            : ($bandwidthTelemetryAvailable ? 'HISTORIS' : 'BELUM TERSEDIA'); ?>
                             </span>
 
                         </div>
@@ -2047,10 +2142,9 @@ $currentPage =
 
                         <div class="stat-value">
 
-                            <?= number_format(
-                                $downloadMbps,
-                                1
-                            ); ?>
+                            <?= $downloadMbps !== null
+                                ? number_format($downloadMbps, 1)
+                                : '—'; ?>
 
                             <small>
                                 Mbps
@@ -2066,29 +2160,10 @@ $currentPage =
 
                         <div class="stat-bottom">
 
-                            <span class="positive">
-
-                                <i class="bi bi-arrow-down"></i>
-
-                                <?= number_format(
-                                    $downloadMbps,
-                                    1
-                                ); ?>
-
-                            </span>
-
-
-                            <span class="upload-text">
-
-                                <i class="bi bi-arrow-up"></i>
-
-                                <?= number_format(
-                                    $uploadMbps,
-                                    1
-                                ); ?>
-
-                                Mbps
-
+                            <span>
+                                <?= $bandwidthTelemetryAvailable
+                                    ? 'Terakhir diperbarui ' . formatTanggal($bandwidthDataUpdatedAt)
+                                    : 'Telemetri belum terhubung'; ?>
                             </span>
 
                         </div>
@@ -2246,12 +2321,13 @@ $currentPage =
                                 </div>
 
 
-                                <div class="live-status">
-
+                                <div class="live-status <?= $bandwidthIsLive
+                                    ? 'is-live'
+                                    : ($bandwidthTelemetryAvailable ? 'is-historical' : 'is-unavailable'); ?>">
                                     <span></span>
-
-                                    LIVE
-
+                                    <?= $bandwidthIsLive
+                                        ? 'LIVE'
+                                        : ($bandwidthTelemetryAvailable ? 'HISTORIS' : 'BELUM TERSEDIA'); ?>
                                 </div>
 
                             </div>
@@ -2268,10 +2344,9 @@ $currentPage =
 
                                     <strong>
 
-                                        <?= number_format(
-                                            $downloadMbps,
-                                            1
-                                        ); ?>
+                                        <?= $downloadMbps !== null
+                                            ? number_format($downloadMbps, 1)
+                                            : '—'; ?>
 
                                         <small>
                                             Mbps
@@ -2290,10 +2365,9 @@ $currentPage =
 
                                     <strong>
 
-                                        <?= number_format(
-                                            $uploadMbps,
-                                            1
-                                        ); ?>
+                                        <?= $uploadMbps !== null
+                                            ? number_format($uploadMbps, 1)
+                                            : '—'; ?>
 
                                         <small>
                                             Mbps
@@ -2312,7 +2386,9 @@ $currentPage =
 
                                     <strong>
 
-                                        <?= $pingMs; ?>
+                                        <?= $pingMs !== null
+                                            ? number_format($pingMs, 0)
+                                            : '—'; ?>
 
                                         <small>
                                             ms
@@ -2325,13 +2401,29 @@ $currentPage =
                             </div>
 
 
-                            <div class="chart-container">
-
-                                <canvas
-                                    id="bandwidthChart"
-                                ></canvas>
-
-                            </div>
+                            <?php if ($bandwidthTelemetryAvailable): ?>
+                                <div class="chart-container">
+                                    <canvas id="bandwidthChart"></canvas>
+                                </div>
+                                <p class="telemetry-caption">
+                                    <?= $bandwidthIsLive
+                                        ? 'Data telemetri diperbarui dalam 5 menit terakhir.'
+                                        : 'Menampilkan catatan telemetri, bukan pembacaan live.'; ?>
+                                    <?php if ($bandwidthDataUpdatedAt && strtotime((string) $bandwidthDataUpdatedAt) !== false): ?>
+                                        Terakhir: <?= e(date('d M Y, H:i', strtotime((string) $bandwidthDataUpdatedAt))); ?> WIB.
+                                    <?php endif; ?>
+                                </p>
+                            <?php else: ?>
+                                <div class="telemetry-empty">
+                                    <i class="bi bi-router"></i>
+                                    <strong>Data bandwidth belum tersedia</strong>
+                                    <span>
+                                        Grafik akan terisi setelah integrasi monitoring jaringan
+                                        menyimpan data ke layanan telemetri.
+                                    </span>
+                                    <a href="usage.php">Lihat riwayat pemakaian</a>
+                                </div>
+                            <?php endif; ?>
 
                         </div>
 
@@ -2461,6 +2553,10 @@ $currentPage =
                                             ]
                                             ??
                                             $payment[
+                                                'nomor_pembayaran'
+                                            ]
+                                            ??
+                                            $payment[
                                                 'kode_pembayaran'
                                             ]
                                             ??
@@ -2492,7 +2588,7 @@ $currentPage =
                                                 'status'
                                             ]
                                             ??
-                                            'paid';
+                                            'Tidak diketahui';
 
 
                                         $statusText =
@@ -2554,7 +2650,7 @@ $currentPage =
                                                     class="payment-badge <?= $isSuccess ? 'success' : 'warning'; ?>"
                                                 >
 
-                                                    <i class="bi bi-check-circle-fill"></i>
+                                                    <i class="<?= $isSuccess ? 'bi bi-check-circle-fill' : 'bi bi-clock-history'; ?>"></i>
 
                                                     <?= e(
                                                         ucfirst(
@@ -2732,8 +2828,8 @@ $currentPage =
                                 </div>
 
 
-                                <span class="online-dot">
-                                    ONLINE
+                                <span class="network-unavailable">
+                                    BELUM TERHUBUNG
                                 </span>
 
                             </div>
@@ -2742,22 +2838,18 @@ $currentPage =
                             <div class="network-main">
 
 
-                                <div class="network-check">
-
-                                    <i class="bi bi-check-lg"></i>
-
+                                <div class="network-check network-unknown">
+                                    <i class="bi bi-question-lg"></i>
                                 </div>
 
 
                                 <div>
 
-                                    <strong>
-                                        Jaringan Normal
-                                    </strong>
+                                    <strong>Status wilayah belum tersedia</strong>
 
                                     <span>
-                                        Tidak ada gangguan
-                                        terdeteksi.
+                                        Belum ada integrasi status gangguan atau pemeliharaan
+                                        jaringan berdasarkan area pelanggan.
                                     </span>
 
                                 </div>
@@ -2773,7 +2865,7 @@ $currentPage =
                                     <i class="bi bi-broadcast-pin"></i>
 
                                     <span>
-                                        Koneksi stabil
+                                        Status area belum dikonfigurasi
                                     </span>
 
                                 </div>
@@ -2781,10 +2873,10 @@ $currentPage =
 
                                 <div>
 
-                                    <i class="bi bi-shield-check"></i>
+                                    <i class="bi bi-info-circle"></i>
 
                                     <span>
-                                        Sistem aman
+                                        Tidak menampilkan status jaringan contoh
                                     </span>
 
                                 </div>
@@ -3321,7 +3413,7 @@ $currentPage =
 
                     © <?= date('Y'); ?>
 
-                    WiFi Management
+                    YESNET
 
                 </span>
 
@@ -3353,6 +3445,12 @@ document.addEventListener(
     'DOMContentLoaded',
     function () {
 
+        const hasOpenInvoice = <?= !empty($tagihan) ? 'true' : 'false'; ?>;
+        if (hasOpenInvoice) {
+            window.setTimeout(function () {
+                window.location.reload();
+            }, 60000);
+        }
 
         /*
         |--------------------------------------------------------------------------
@@ -3364,6 +3462,28 @@ document.addEventListener(
             document.getElementById(
                 'bandwidthChart'
             );
+
+        const bandwidthSeries = <?= json_encode([
+            'labels' => array_map(
+                static function (array $reading): string {
+                    $timestamp = strtotime((string) ($reading['recorded_at'] ?? ''));
+                    return $timestamp ? date('d/m H:i', $timestamp) : '';
+                },
+                $bandwidthReadings
+            ),
+            'download' => array_map(
+                static fn (array $reading) => is_numeric($reading['download_mbps'] ?? null)
+                    ? (float) $reading['download_mbps']
+                    : null,
+                $bandwidthReadings
+            ),
+            'upload' => array_map(
+                static fn (array $reading) => is_numeric($reading['upload_mbps'] ?? null)
+                    ? (float) $reading['upload_mbps']
+                    : null,
+                $bandwidthReadings
+            ),
+        ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
 
 
         if (chartElement) {
@@ -3425,20 +3545,7 @@ document.addEventListener(
 
                     data: {
 
-                        labels: [
-
-                            '10:00',
-                            '10:05',
-                            '10:10',
-                            '10:15',
-                            '10:20',
-                            '10:25',
-                            '10:30',
-                            '10:35',
-                            '10:40',
-                            '10:45'
-
-                        ],
+                        labels: bandwidthSeries.labels,
 
 
                         datasets: [
@@ -3450,20 +3557,7 @@ document.addEventListener(
                                     'Download',
 
 
-                                data: [
-
-                                    42,
-                                    56,
-                                    51,
-                                    68,
-                                    61,
-                                    77,
-                                    72,
-                                    81,
-                                    76,
-                                    <?= (float) $downloadMbps; ?>
-
-                                ],
+                                data: bandwidthSeries.download,
 
 
                                 borderColor:
@@ -3502,20 +3596,7 @@ document.addEventListener(
                                     'Upload',
 
 
-                                data: [
-
-                                    9,
-                                    12,
-                                    11,
-                                    14,
-                                    13,
-                                    16,
-                                    14,
-                                    17,
-                                    15,
-                                    <?= (float) $uploadMbps; ?>
-
-                                ],
+                                data: bandwidthSeries.upload,
 
 
                                 borderColor:
