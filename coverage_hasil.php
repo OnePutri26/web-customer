@@ -321,7 +321,12 @@ $pendingPackageId = filter_var(
 );
 if ($tersedia && $pendingPackageId > 0) {
     $_SESSION['flow']['paket_id'] = $pendingPackageId;
+    $pendingPromoCode = trim((string) ($_SESSION['pending_coverage_promo_code'] ?? ''));
+    if ($pendingPromoCode !== '' && array_key_exists($pendingPromoCode, subscriptionPromoPlans())) {
+        $_SESSION['flow']['promo_code'] = $pendingPromoCode;
+    }
     unset($_SESSION['pending_coverage_package_id']);
+    unset($_SESSION['pending_coverage_promo_code']);
     redirect('detail_paket.php?id=' . $pendingPackageId);
 }
 

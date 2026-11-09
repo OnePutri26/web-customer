@@ -93,6 +93,22 @@ if (!function_exists('e')) {
     }
 }
 
+$promoInput = $_GET['promo'] ?? '';
+if (!is_string($promoInput)) {
+    http_response_code(400);
+    exit('Promo yang dipilih tidak valid.');
+}
+$requestedPromoCode = trim($promoInput);
+if (array_key_exists('promo', $_GET) && !array_key_exists('paket', $_GET) && $requestedPromoCode !== '') {
+    http_response_code(400);
+    exit('Promo harus digunakan bersama pilihan paket.');
+}
+
+if ($requestedPromoCode !== '' && !array_key_exists($requestedPromoCode, subscriptionPromoPlans())) {
+    http_response_code(400);
+    exit('Promo yang dipilih tidak valid.');
+}
+
 if (array_key_exists('paket', $_GET)) {
     $requestedPackageId = filter_var($_GET['paket'], FILTER_VALIDATE_INT);
     if ($requestedPackageId === false || $requestedPackageId < 1) {
@@ -105,6 +121,11 @@ if (array_key_exists('paket', $_GET)) {
             exit('Paket yang dipilih tidak tersedia.');
         }
         $_SESSION['pending_coverage_package_id'] = (int) $requestedPackageId;
+        if ($requestedPromoCode !== '') {
+            $_SESSION['pending_coverage_promo_code'] = $requestedPromoCode;
+        } else {
+            unset($_SESSION['pending_coverage_promo_code']);
+        }
     } catch (Throwable $e) {
         error_log('Coverage package validation failed: ' . $e->getMessage());
         http_response_code(503);
@@ -424,6 +445,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'jarak'    => $h['jarak'] ?? null,
                 'odp_lat'  => $h['odp_lat'] ?? null,
                 'odp_lng'  => $h['odp_lng'] ?? null,
+                'promo_code' => (string) ($_SESSION['pending_coverage_promo_code'] ?? ''),
             ];
             if (!empty($h['tersedia']) && $pendingPackageId > 0) {
                 $_SESSION['flow']['paket_id'] = $pendingPackageId;

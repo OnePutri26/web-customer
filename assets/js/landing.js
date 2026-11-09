@@ -18,7 +18,7 @@
   var REGION_NAMES = { jakarta: 'Jakarta', surabaya: 'Surabaya' };
 
   /* penghubung antar modul (diisi saat init) */
-  var hooks = { pick: null };
+  var hooks = { pick: null, promoRegion: null };
   var region = 'jakarta';
 
   function $(s, r) { return (r || d).querySelector(s); }
@@ -521,6 +521,7 @@
 
       try { history.replaceState(null, '', '?wilayah=' + r + '#paket'); } catch (e) {}
       if (hooks.pick) hooks.pick();
+      if (hooks.promoRegion) hooks.promoRegion(r);
     }
 
     btns.forEach(function (b) {
@@ -531,6 +532,123 @@
         apply(r, true);
       });
     });
+  }
+
+  /* ===================================================== SIMULASI PROMO BERLANGGANAN */
+  function promoSimulator() {
+    var sim = $('#promo-simulator');
+    if (!sim) return;
+    var select = $('#promo-package', sim);
+    var cards = $$('[data-promo-card]', sim);
+    var status = $('#promo-selection-status', sim);
+    var rateLabel = $('#promo-monthly-rate', sim);
+    var next = $('#promo-continue', sim);
+    var selectedCode = '';
+    var simRegion = sim.getAttribute('data-region') || region;
+
+    function optionAvailable(option, r) {
+      return (option.getAttribute('data-avail') || '').split(' ').indexOf(r) !== -1;
+    }
+
+    function selectedOption() {
+      return select && select.options.length ? select.options[select.selectedIndex] : null;
+    }
+
+    function buildLink(packageId, code) {
+      return sim.getAttribute('data-biodata-url')
+        + '?paket=' + encodeURIComponent(packageId)
+        + '&wilayah=' + encodeURIComponent(simRegion)
+        + '&promo=' + encodeURIComponent(code);
+    }
+
+    function render() {
+      var option = selectedOption();
+      var price = option ? parseFloat(option.getAttribute('data-raw-' + simRegion) || '0') : 0;
+      var available = !!option && price > 0;
+      var packageName = option ? option.getAttribute('data-name') : '';
+      if (rateLabel) {
+        rateLabel.textContent = available
+          ? 'Tarif bulanan normal: ' + rupiah(price) + '/bulan'
+          : 'Tarif paket tidak tersedia di wilayah ini.';
+      }
+
+      cards.forEach(function (card) {
+        var payMonths = parseInt(card.getAttribute('data-pay-months'), 10);
+        var totalMonths = parseInt(card.getAttribute('data-total-months'), 10);
+        var normal = price * totalMonths;
+        var payable = price * payMonths;
+        var savings = normal - payable;
+        var percent = normal > 0 ? (savings / normal) * 100 : 0;
+        var normalEl = $('[data-promo-normal]', card);
+        var payEl = $('[data-promo-payable]', card);
+        var savingEl = $('[data-promo-saving]', card);
+        var percentEl = $('[data-promo-percent]', card);
+        var choose = $('[data-promo-select]', card);
+        if (normalEl) normalEl.textContent = rupiah(normal);
+        if (payEl) payEl.textContent = rupiah(payable);
+        if (savingEl) savingEl.textContent = rupiah(savings);
+        if (percentEl) percentEl.textContent = fmtNum(percent, 2) + '%';
+        card.classList.toggle('is-selected', card.getAttribute('data-promo-card') === selectedCode);
+        if (choose) {
+          var code = choose.getAttribute('data-promo-select');
+          choose.href = buildLink(option ? option.value : '', code);
+          choose.setAttribute('aria-pressed', code === selectedCode ? 'true' : 'false');
+        }
+      });
+
+      if (next) {
+        next.href = selectedCode && option ? buildLink(option.value, selectedCode) : '#promo-package';
+        next.setAttribute('aria-disabled', selectedCode && available ? 'false' : 'true');
+        next.tabIndex = selectedCode && available ? 0 : -1;
+      }
+      if (status) {
+        status.textContent = selectedCode && available
+          ? ($('[data-promo-card="' + selectedCode + '"] h3', sim) || {}).textContent
+            + ' dipilih untuk ' + packageName + ' (' + rupiah(price) + '/bulan).'
+          : available
+            ? 'Belum ada promo dipilih. Pilih salah satu promo untuk melanjutkan.'
+            : 'Tidak ada paket tersedia di wilayah ' + (REGION_NAMES[simRegion] || simRegion) + '.';
+      }
+    }
+
+    function changeRegion(r) {
+      simRegion = r;
+      sim.setAttribute('data-region', r);
+      var current = selectedOption();
+      var hasSelection = current && optionAvailable(current, r);
+      Array.prototype.forEach.call(select.options, function (option) {
+        option.disabled = !optionAvailable(option, r);
+      });
+      if (!hasSelection) {
+        var firstAvailable = null;
+        for (var i = 0; i < select.options.length; i++) {
+          if (optionAvailable(select.options[i], r)) {
+            firstAvailable = select.options[i];
+            break;
+          }
+        }
+        if (firstAvailable) select.value = firstAvailable.value;
+      }
+      render();
+    }
+
+    if (select) on(select, 'change', render);
+    cards.forEach(function (card) {
+      var choose = $('[data-promo-select]', card);
+      if (!choose) return;
+      on(choose, 'click', function (event) {
+        event.preventDefault();
+        selectedCode = choose.getAttribute('data-promo-select');
+        render();
+      });
+    });
+    if (next) {
+      on(next, 'click', function (event) {
+        if (next.getAttribute('aria-disabled') === 'true') event.preventDefault();
+      });
+    }
+    hooks.promoRegion = changeRegion;
+    render();
   }
 
   /* ===================================================== PEMILIH KEBUTUHAN */
@@ -635,6 +753,7 @@
     safe(buttons);
     safe(regionFilter);
     safe(picker);
+    safe(promoSimulator);
     safe(coverageForms);
     safe(prepareSplit);
     safe(prepareCounters);

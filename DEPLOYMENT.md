@@ -21,6 +21,16 @@ to `paket_wifi`; existing package prices and orders are unchanged. Manage
 promotions from the package add/edit screens. A blank type disables a promo,
 and a promo outside its configured dates is not shown or charged.
 
+For subscription bundles (pay 3/5/8 months and receive 1/2/4 bonus months),
+back up the database and run
+[`database/migrasi_promo_langganan.sql`](./database/migrasi_promo_langganan.sql).
+It adds the selected promo and paid/bonus/total-month counts to `subscription`,
+and the promo code to `calon_pelanggan` when that table already exists. Existing
+subscriptions retain a one-month term through the migration defaults. Bundle
+prices are recalculated from the package's normal database price when an order
+is created; the invoice charges only the paid months, and activation applies
+the full service term including bonus months.
+
 ## Server environment
 
 Configure these values for the PHP-FPM pool used by the site. Keep the pool

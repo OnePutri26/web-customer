@@ -128,14 +128,9 @@ foreach ($daftarPaket as $i => $row) {
     $namaAsli = (string) ($row['nama_paket'] ?? ('Paket ' . ($i + 1)));
     $pricing = packagePriceDetails($row);
 
-    /* Gunakan harga paket_wifi, sama dengan harga yang dipakai proses order. */
-    $baseRaw = null;
-    foreach ($row as $k => $v) {
-        if (preg_match('/^(harga|price|tarif|biaya)/i', (string) $k) && is_numeric($v) && (float) $v > 0) {
-            $baseRaw = (float) $v;
-            break;
-        }
-    }
+    /* Paket bundle memakai tarif bulanan normal yang juga dihitung helper order. */
+    $baseRaw = (float) $pricing['harga_normal'];
+    if ($baseRaw <= 0) $baseRaw = null;
 
     /*
      * FILTER UTAMA: wilayah diambil dari kolom `wilayah` pada tabel paket_wifi.
@@ -187,14 +182,6 @@ foreach ($daftarPaket as $i => $row) {
 }
 
 /* Tampilkan maksimal empat paket database per wilayah, dari kecepatan terendah. */
-$promoPaket = array_values(array_filter($paket, static function ($p) {
-    return !empty($p['pricing']['promo_aktif']) && !empty(array_filter($p['avail']));
-}));
-foreach ($promoPaket as &$promoPackage) {
-    $promoPackage['promo_region'] = !empty($promoPackage['avail']['jakarta']) ? 'jakarta' : 'surabaya';
-}
-unset($promoPackage);
-
 $paketTerpilih = [];
 foreach (array_keys($wilayahList) as $wl) {
     $rank = 0;
@@ -257,7 +244,7 @@ $faq = [
     ['Bagaimana cara berlangganan YesNet?', 'Isi biodata terlebih dahulu agar data Anda tercatat, lanjutkan cek coverage, pilih paket jika jaringan tersedia, lalu ikuti proses pemesanan. Setelah data diverifikasi, tim kami melakukan survei dan menjadwalkan instalasi.'],
     ['Apakah ada biaya instalasi?', 'Semua paket sudah termasuk instalasi gratis dan WiFi router.'],
     ['Apakah harga paket sama di Jakarta dan Surabaya?', 'Harga dan ketersediaan paket mengikuti wilayah. Pilih Jakarta atau Surabaya di bagian Paket untuk melihat daftar yang berlaku.'],
-    ['Bagaimana cara mendapatkan promo?', 'Pilih paket yang sedang berpromo. Harga promo aktif ditampilkan otomatis dan dihitung kembali dari data paket saat order dibuat.'],
+    ['Bagaimana promo berlangganan dihitung?', 'Harga normal dihitung dari tarif bulanan paket dikalikan seluruh bulan layanan. Tagihan hanya mencakup bulan yang dibayar; bulan bonus tidak dikenakan biaya.'],
     ['Bagaimana jika alamat saya belum terjangkau?', 'Anda dapat mengirim form request melalui halaman Cek Coverage agar area Anda dapat kami pertimbangkan.'],
     ['Paket mana yang cocok untuk saya?', 'Untuk browsing dan sosmed, paket dengan kecepatan lebih rendah sudah cukup. Untuk keluarga, streaming, dan gaming, pilih kecepatan yang lebih tinggi. Gunakan pemilih kebutuhan di bagian Paket untuk rekomendasi cepat.'],
     ['Bagaimana memantau layanan setelah aktif?', 'Masuk melalui menu Login Customer untuk membuka dashboard Anda.'],
@@ -548,39 +535,77 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
   <div class="container">
     <div class="section-heading reveal">
       <span class="section-label">Promo Paket</span>
-      <h2>Harga Spesial, <span class="grad">Langsung dari Paket</span></h2>
-      <p>Potongan dan harga setelah promo dihitung dari data paket yang berlaku.</p>
+      <h2>Bayar Bulan Pilihan, <span class="grad">Nikmati Bonus Bulan</span></h2>
+      <p>Pilih paket dan simulasikan harga normal, total pembayaran, serta bulan gratis secara langsung.</p>
     </div>
 
-    <?php if ($promoPaket): ?>
-    <div class="promo-grid promo-packages">
-      <?php foreach ($promoPaket as $pr): ?>
-        <?php $promoRegion = $pr['promo_region']; ?>
-        <article class="promo-card promo-product reveal">
-          <div class="promo-head">
-            <div class="promo-icon"><?= ic('gift') ?></div>
-            <div><h3><?= e($pr['nama']) ?></h3><small><?= (int) $pr['mbps'] ?> Mbps · <?= e($wilayahList[$promoRegion]) ?></small></div>
-          </div>
-          <div class="promo-prices">
-            <span>Harga normal <del><?= e(rupiah($pr['pricing']['harga_normal'])) ?></del></span>
-            <span>Diskon <strong><?= e(rupiah($pr['pricing']['diskon'])) ?></strong>
-              <?= $pr['pricing']['promo_jenis'] === 'persentase'
-                  ? '(' . e(rtrim(rtrim(number_format((float) $pr['pricing']['promo_nilai'], 2, ',', '.'), '0'), ',')) . '%)'
-                  : '(potongan nominal)' ?></span>
-            <strong class="promo-final"><?= e(rupiah($pr['pricing']['harga_akhir'])) ?><small>/bulan</small></strong>
-          </div>
-          <?php if ($pr['pricing']['promo_mulai'] !== '' || $pr['pricing']['promo_berakhir'] !== ''): ?>
-          <p class="promo-period">Berlaku <?= $pr['pricing']['promo_mulai'] !== '' ? e($pr['pricing']['promo_mulai']) : 'sekarang' ?> – <?= $pr['pricing']['promo_berakhir'] !== '' ? e($pr['pricing']['promo_berakhir']) : 'tanpa batas' ?></p>
-          <?php endif; ?>
-          <a class="btn btn-primary btn-sm promo-select" href="<?= e(appUrl('pilih_paket.php')) ?>?paket=<?= (int) $pr['id'] ?>&amp;wilayah=<?= e($promoRegion) ?>">Pilih paket promo <?= ic('arrow') ?></a>
-        </article>
-      <?php endforeach; ?>
+    <?php $promoPlans = subscriptionPromoPlans(); ?>
+    <?php if ($paketWilayahDipilih): ?>
+    <?php $promoDefaultPackage = $paketWilayahDipilih[0]; ?>
+    <div class="promo-simulator reveal" id="promo-simulator"
+      data-region="<?= e($wilayahDipilih) ?>"
+      data-biodata-url="<?= e(appUrl('biodata.php')) ?>">
+      <label class="promo-package-label" for="promo-package">Pilih paket internet</label>
+      <select id="promo-package" class="promo-package-select">
+        <?php foreach ($paket as $p): ?>
+          <option value="<?= (int) $p['id'] ?>"
+            data-name="<?= e($p['nama']) ?>"
+            data-mbps="<?= (int) $p['mbps'] ?>"
+            <?php foreach ($wilayahList as $kode => $nama): ?>
+              data-raw-<?= e($kode) ?>="<?= e((string) ($p['raw'][$kode] ?? '')) ?>"
+            <?php endforeach; ?>
+            data-avail="<?= e(implode(' ', array_keys(array_filter($p['avail'])))) ?>"
+            <?= empty($p['avail'][$wilayahDipilih]) ? 'disabled' : '' ?>
+            <?= (int) $p['id'] === (int) $promoDefaultPackage['id'] ? 'selected' : '' ?>>
+            <?= e($p['nama']) ?> · <?= (int) $p['mbps'] ?> Mbps
+          </option>
+        <?php endforeach; ?>
+      </select>
+      <p class="promo-monthly-rate" id="promo-monthly-rate">Tarif bulanan normal: <?= e(rupiah($promoDefaultPackage['pricing']['harga_normal'])) ?>/bulan</p>
+      <p class="promo-sim-hint">Simulasi memakai tarif bulanan normal dari database dan tidak menumpuk promo bulanan lainnya.</p>
+      <div class="promo-grid promo-plan-grid">
+        <?php foreach ($promoPlans as $code => $plan): ?>
+          <?php
+            $initialDetails = subscriptionPromoDetails(
+                (float) ($promoDefaultPackage['raw'][$wilayahDipilih] ?? 0),
+                (string) $code
+            );
+            $popular = $code === 'super_hemat';
+            $promoHref = appUrl('biodata.php') . '?' . http_build_query([
+                'paket' => (int) $promoDefaultPackage['id'],
+                'wilayah' => $wilayahDipilih,
+                'promo' => $code,
+            ]);
+          ?>
+          <article class="promo-card promo-plan<?= $popular ? ' is-best-value' : '' ?>"
+            data-promo-card="<?= e($code) ?>"
+            data-pay-months="<?= (int) $plan['bayar_bulan'] ?>"
+            data-free-months="<?= (int) $plan['bonus_bulan'] ?>"
+            data-total-months="<?= (int) $plan['total_bulan'] ?>">
+            <?php if ($popular): ?><span class="promo-best-label">Paling hemat</span><?php endif; ?>
+            <div class="promo-head">
+              <div class="promo-icon"><?= ic('gift') ?></div>
+              <div><h3><?= e($plan['nama']) ?></h3><small>Bayar <?= (int) $plan['bayar_bulan'] ?> bulan · Gratis <?= (int) $plan['bonus_bulan'] ?> bulan</small></div>
+            </div>
+            <p class="promo-total-months"><strong><?= (int) $plan['total_bulan'] ?> bulan</strong> masa berlangganan</p>
+            <div class="promo-prices">
+              <span>Harga normal <del data-promo-normal><?= e(rupiah($initialDetails['harga_normal'])) ?></del></span>
+              <span>Total hemat <strong data-promo-saving><?= e(rupiah($initialDetails['hemat'])) ?></strong></span>
+              <span>Penghematan <strong data-promo-percent><?= e(number_format($initialDetails['persentase_hemat'], 2, ',', '.')) ?>%</strong></span>
+              <span>Harga setelah promo / total bayar <strong class="promo-final" data-promo-payable><?= e(rupiah($initialDetails['total_bayar'])) ?></strong></span>
+            </div>
+            <a class="btn btn-primary btn-sm promo-select" data-promo-select="<?= e($code) ?>" href="<?= e($promoHref) ?>">Pilih Promo <?= ic('arrow') ?></a>
+          </article>
+        <?php endforeach; ?>
+      </div>
+      <p class="promo-selection-status" id="promo-selection-status" aria-live="polite">Belum ada promo dipilih. Pilih salah satu promo untuk melanjutkan.</p>
+      <a class="btn btn-primary promo-continue" id="promo-continue" href="<?= e(appUrl('biodata.php')) ?>">Lanjutkan dengan Promo Terpilih <?= ic('arrow') ?></a>
     </div>
     <?php else: ?>
-    <div class="promo-empty reveal">
-      <strong>Belum ada promo aktif saat ini.</strong>
-      <span>Promo akan tampil di sini selama periode yang ditentukan admin.</span>
-    </div>
+      <div class="promo-empty reveal">
+        <strong>Paket belum tersedia di wilayah <?= e($namaWilayah) ?>.</strong>
+        <span>Pilih wilayah lain untuk melihat pilihan paket dan simulasi promo.</span>
+      </div>
     <?php endif; ?>
   </div>
 </section>
@@ -703,7 +728,7 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
   <div class="container">
     <div class="footer-inner">
       <div class="footer-brand">
-        <a href="#home" class="brand footer-logo" aria-label="YESNET"><img class="footer-brand-image" src="yesnet.png" alt="YESNET"></a>
+        <a href="#home" class="brand footer-logo" aria-label="YESNET"><img class="footer-brand-image" src="logo-yesnet.png" alt="YESNET"></a>
         <p>Internet Cepat &amp; Stabil untuk rumah, keluarga, dan bisnis Anda.</p>
         <a href="<?= e($waUrl) ?>" class="btn btn-wa btn-sm" target="_blank" rel="noopener"><?= ic('chat') ?>Chat WhatsApp</a>
       </div>

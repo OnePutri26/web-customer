@@ -45,6 +45,7 @@ function bdDdl(): string
       `latitude` DECIMAL(10,7) DEFAULT NULL,
       `longitude` DECIMAL(10,7) DEFAULT NULL,
       `paket_id` INT DEFAULT NULL,
+      `promo_code` VARCHAR(32) DEFAULT NULL,
       `wilayah` VARCHAR(30) DEFAULT NULL,
       `status` ENUM('lead','coverage_tersedia','coverage_tidak_tersedia','prospek','order','batal') NOT NULL DEFAULT 'lead',
       `odp_terdekat` VARCHAR(100) DEFAULT NULL,
@@ -102,7 +103,7 @@ function bdDetectRegion(string $kota, string $prov): string
     return '';
 }
 
-function bdPaket(?mysqli $conn, int $id): ?array
+function bdPaket(?mysqli $conn, int $id, string $promoCode = ''): ?array
 {
     if (!$conn || $id <= 0) return null;
     try {
@@ -115,6 +116,10 @@ function bdPaket(?mysqli $conn, int $id): ?array
                 'nama' => (string)($row['nama_paket'] ?? 'Paket'),
                 'mbps' => (int)($row['speed_mbps'] ?? 0),
                 'pricing' => $pricing,
+                'subscription_promo' => subscriptionPromoDetails(
+                    (float) $pricing['harga_normal'],
+                    $promoCode
+                ),
             ];
         }
     } catch (Throwable $e) {
@@ -142,8 +147,24 @@ if (empty($_SESSION['bd_csrf'])) {
 $paketId = (int)($_GET['paket'] ?? $_POST['paket'] ?? 0);
 $wilayahReq = strtolower(trim((string)($_GET['wilayah'] ?? $_POST['wilayah'] ?? '')));
 if (!in_array($wilayahReq, ['jakarta', 'surabaya'], true)) $wilayahReq = '';
-$paketInfo = bdPaket($dbConn, $paketId);
+$promoInput = $_GET['promo']
+    ?? $_POST['promo']
+    ?? (isset($_GET['sukses']) ? ($_SESSION['bd_promo_code'] ?? '') : '');
+if (!is_string($promoInput)) {
+    http_response_code(400);
+    exit('Promo yang dipilih tidak valid.');
+}
+$promoCode = trim($promoInput);
+if ($promoCode !== '' && !array_key_exists($promoCode, subscriptionPromoPlans())) {
+    http_response_code(400);
+    exit('Promo yang dipilih tidak valid.');
+}
+$paketInfo = bdPaket($dbConn, $paketId, $promoCode);
 if (!$paketInfo) $paketId = 0;
+if ($promoCode !== '' && $paketId <= 0) {
+    http_response_code(400);
+    exit('Promo harus digunakan bersama paket yang valid.');
+}
 
 /* ---------- Proses form ---------- */
 $old = ['nama' => '', 'whatsapp' => '', 'email' => '', 'provinsi' => '', 'kota' => '', 'kecamatan' => '',
@@ -212,6 +233,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $ua = mb_substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255);
                     $emailDb  = $old['email'] !== '' ? $old['email'] : null;
                     $paketDb  = $paketId > 0 ? $paketId : null;
+                    $promoDb  = $promoCode !== '' ? $promoCode : null;
                     $detected = bdDetectRegion($old['kota'], $old['provinsi']);
                     $wilDb    = $detected !== '' ? $detected : ($wilayahReq !== '' ? $wilayahReq : null);
                     $nama = $old['nama']; $prov = $old['provinsi']; $kota = $old['kota'];
@@ -227,14 +249,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $st->close();
 
                     if ($existingId > 0) {
-                        $st = $dbConn->prepare('UPDATE calon_pelanggan SET nama=?, email=?, provinsi=?, kota=?, kecamatan=?, kelurahan=?, alamat_lengkap=?, latitude=?, longitude=?, paket_id=COALESCE(?, paket_id), wilayah=COALESCE(?, wilayah), ip_address=?, user_agent=?, persetujuan=1, persetujuan_at=NOW() WHERE id=?');
-                        $st->bind_param('sssssssddisssi', $nama, $emailDb, $prov, $kota, $kec, $kel, $alamat, $lat, $lng, $paketDb, $wilDb, $ip, $ua, $existingId);
+                        $st = $dbConn->prepare('UPDATE calon_pelanggan SET nama=?, email=?, provinsi=?, kota=?, kecamatan=?, kelurahan=?, alamat_lengkap=?, latitude=?, longitude=?, paket_id=COALESCE(?, paket_id), wilayah=COALESCE(?, wilayah), promo_code=?, ip_address=?, user_agent=?, persetujuan=1, persetujuan_at=NOW() WHERE id=?');
+                        $st->bind_param('sssssssddissssi', $nama, $emailDb, $prov, $kota, $kec, $kel, $alamat, $lat, $lng, $paketDb, $wilDb, $promoDb, $ip, $ua, $existingId);
                         if (!$st->execute()) throw new RuntimeException($st->error);
                         $st->close();
                         $leadId = $existingId;
                     } else {
-                        $st = $dbConn->prepare("INSERT INTO calon_pelanggan (nama, whatsapp, email, provinsi, kota, kecamatan, kelurahan, alamat_lengkap, latitude, longitude, paket_id, wilayah, ip_address, user_agent, status, persetujuan, persetujuan_at, sumber) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'lead', 1, NOW(), 'landing')");
-                        $st->bind_param('ssssssssddisss', $nama, $wa, $emailDb, $prov, $kota, $kec, $kel, $alamat, $lat, $lng, $paketDb, $wilDb, $ip, $ua);
+                        $st = $dbConn->prepare("INSERT INTO calon_pelanggan (nama, whatsapp, email, provinsi, kota, kecamatan, kelurahan, alamat_lengkap, latitude, longitude, paket_id, wilayah, promo_code, ip_address, user_agent, status, persetujuan, persetujuan_at, sumber) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'lead', 1, NOW(), 'landing')");
+                        $st->bind_param('ssssssssddissss', $nama, $wa, $emailDb, $prov, $kota, $kec, $kel, $alamat, $lat, $lng, $paketDb, $wilDb, $promoDb, $ip, $ua);
                         if (!$st->execute()) throw new RuntimeException($st->error);
                         $leadId = (int)$dbConn->insert_id;
                         $st->close();
@@ -242,6 +264,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     session_regenerate_id(true);
                     $_SESSION['bd_lead_id'] = (int)$leadId;
+                    if ($promoCode !== '') {
+                        $_SESSION['bd_promo_code'] = $promoCode;
+                    } else {
+                        unset($_SESSION['bd_promo_code']);
+                    }
                     $_SESSION['bd_last'] = time();
                     $_SESSION['bd_csrf'] = bin2hex(random_bytes(32));
                     header('Location: ' . $selfUrl . '?sukses=1');
@@ -269,11 +296,18 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' && isset($_GET['sukses']) && !empty($_
 $lanjutUrl = $coverageUrl;
 $paketLead = null;
 if ($lead) {
-    $paketLead = bdPaket($dbConn, (int)($lead['paket_id'] ?? 0));
+    $promoLeadCode = (string) ($lead['promo_code'] ?? $_SESSION['bd_promo_code'] ?? '');
+    if ($promoLeadCode !== '' && !array_key_exists($promoLeadCode, subscriptionPromoPlans())) {
+        $promoLeadCode = '';
+    }
+    $paketLead = bdPaket($dbConn, (int)($lead['paket_id'] ?? 0), $promoLeadCode);
     $fullAddr = implode(', ', array_filter([$lead['alamat_lengkap'], $lead['kelurahan'], $lead['kecamatan'], $lead['kota'], $lead['provinsi']]));
     $q = ['auto' => 1, 'alamat' => $fullAddr];
     if (!empty($lead['paket_id'])) {
         $q['paket'] = (int) $lead['paket_id'];
+    }
+    if ($promoLeadCode !== '') {
+        $q['promo'] = $promoLeadCode;
     }
     if ($lead['latitude'] !== null && $lead['longitude'] !== null) {
         $q['lat'] = $lead['latitude'];
@@ -514,6 +548,9 @@ a { color: var(--blue); }
         <dt>No. WhatsApp</dt><dd><?= e(bdPhoneDisplay((string)$lead['whatsapp'])) ?></dd>
         <dt>Alamat</dt><dd><?= e(implode(', ', array_filter([$lead['alamat_lengkap'], $lead['kelurahan'], $lead['kecamatan'], $lead['kota']]))) ?></dd>
         <dt>Paket Pilihan</dt><dd><?= $paketLead ? e($paketLead['nama'] . ($paketLead['mbps'] ? ' - ' . $paketLead['mbps'] . ' Mbps' : '')) : 'Belum dipilih' ?></dd>
+        <?php if ($promoLeadCode !== '' && $paketLead): ?>
+        <dt>Promo Pilihan</dt><dd><?= e($paketLead['subscription_promo']['nama']) ?> · Bayar <?= (int) $paketLead['subscription_promo']['bayar_bulan'] ?> bulan, gratis <?= (int) $paketLead['subscription_promo']['bonus_bulan'] ?> bulan (total <?= (int) $paketLead['subscription_promo']['total_bulan'] ?> bulan, <?= e(rupiah($paketLead['subscription_promo']['total_bayar'])) ?>)</dd>
+        <?php endif; ?>
       </dl>
     </div>
 
@@ -542,12 +579,19 @@ a { color: var(--blue); }
     <?php if ($paketInfo): ?>
     <div class="bd-note">
       <span>Paket pilihan: <strong><?= e($paketInfo['nama']) ?><?= $paketInfo['mbps'] ? ' - ' . (int)$paketInfo['mbps'] . ' Mbps' : '' ?></strong>
-        <?php if ($paketInfo['pricing']['promo_aktif']): ?>
+        <?php if ($promoCode === '' && $paketInfo['pricing']['promo_aktif']): ?>
           <br><del><?= e(rupiah($paketInfo['pricing']['harga_normal'])) ?></del>
           <strong><?= e(rupiah($paketInfo['pricing']['harga_akhir'])) ?>/bulan</strong>
           (hemat <?= e(rupiah($paketInfo['pricing']['diskon'])) ?>)
         <?php elseif ($paketInfo['pricing']['harga_normal'] > 0): ?>
           <br><?= e(rupiah($paketInfo['pricing']['harga_normal'])) ?>/bulan
+        <?php endif; ?>
+        <?php if ($promoCode !== ''): ?>
+          <br><strong><?= e($paketInfo['subscription_promo']['nama']) ?></strong>:
+          bayar <?= (int) $paketInfo['subscription_promo']['bayar_bulan'] ?> bulan,
+          gratis <?= (int) $paketInfo['subscription_promo']['bonus_bulan'] ?> bulan.
+          Total pembayaran <?= e(rupiah($paketInfo['subscription_promo']['total_bayar'])) ?> untuk
+          <?= (int) $paketInfo['subscription_promo']['total_bulan'] ?> bulan layanan.
         <?php endif; ?>
       </span>
       <a href="<?= e($homeUrl) ?>#paket">Ubah paket</a>
@@ -558,6 +602,7 @@ a { color: var(--blue); }
       <input type="hidden" name="csrf" value="<?= e($_SESSION['bd_csrf']) ?>">
       <input type="hidden" name="paket" value="<?= (int)$paketId ?>">
       <input type="hidden" name="wilayah" value="<?= e($wilayahReq) ?>">
+      <input type="hidden" name="promo" value="<?= e($promoCode) ?>">
       <div class="bd-hp" aria-hidden="true"><label>Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
 
       <div class="bd-sec-head">

@@ -11,9 +11,23 @@ if (!$p) {
     redirect('paket.php');
 }
 $pricing = packagePriceDetails($p);
+$promoCode = trim((string) flow('promo_code', ''));
+if ($promoCode !== '' && !array_key_exists($promoCode, subscriptionPromoPlans())) {
+    http_response_code(400);
+    exit('Promo pada sesi order tidak valid.');
+}
+$subscriptionPromo = subscriptionPromoDetails(
+    (float) $pricing['harga_normal'],
+    $promoCode
+);
 
 if (empty(flow('tersedia'))) {
     $_SESSION['pending_coverage_package_id'] = (int) $p['id'];
+    if ($promoCode !== '') {
+        $_SESSION['pending_coverage_promo_code'] = $promoCode;
+    } else {
+        unset($_SESSION['pending_coverage_promo_code']);
+    }
     redirect('coverage.php');
 }
 
@@ -188,7 +202,10 @@ require __DIR__ . '/inc/header.php';
             <div class="dp-body">
                 <div class="dp-priceline">
                     <div class="dp-price">
-                        <?php if ($pricing['promo_aktif']): ?>
+                        <?php if ($promoCode !== ''): ?>
+                            <?= e(rupiah($pricing['harga_normal'])) ?> <small>/bulan</small>
+                            <span class="dp-promo-saving"><?= (int) $subscriptionPromo['bonus_bulan'] ?> bulan gratis</span>
+                        <?php elseif ($pricing['promo_aktif']): ?>
                             <del><?= e(rupiah($pricing['harga_normal'])) ?></del>
                             <strong><?= e(rupiah($pricing['harga_akhir'])) ?></strong> <small>/bulan</small>
                             <span class="dp-promo-saving">Hemat <?= e(rupiah($pricing['diskon'])) ?></span>
@@ -233,11 +250,20 @@ require __DIR__ . '/inc/header.php';
             <dl class="dp-rows">
                 <div><dt>Paket</dt><dd><?= e($namaPaket) ?> · <?= $speed ?> Mbps</dd></div>
                 <div><dt>Biaya instalasi</dt><dd>Gratis</dd></div>
-                <?php if ($pricing['promo_aktif']): ?>
+                <?php if ($promoCode !== ''): ?>
+                    <div><dt>Promo</dt><dd><?= e($subscriptionPromo['nama']) ?></dd></div>
+                    <div><dt>Masa berlangganan</dt><dd><?= (int) $subscriptionPromo['total_bulan'] ?> bulan</dd></div>
+                    <div><dt>Harga normal</dt><dd><?= e(rupiah($subscriptionPromo['harga_normal'])) ?></dd></div>
+                    <div><dt>Gratis</dt><dd><?= (int) $subscriptionPromo['bonus_bulan'] ?> bulan</dd></div>
+                    <div><dt>Hemat</dt><dd><?= e(rupiah($subscriptionPromo['hemat'])) ?> (<?= e(number_format($subscriptionPromo['persentase_hemat'], 2, ',', '.')) ?>%)</dd></div>
+                    <div class="total"><dt>Total pembayaran</dt><dd><?= e(rupiah($subscriptionPromo['total_bayar'])) ?></dd></div>
+                <?php elseif ($pricing['promo_aktif']): ?>
                     <div><dt>Harga normal</dt><dd><del><?= e(rupiah($pricing['harga_normal'])) ?></del></dd></div>
                     <div><dt>Diskon promo</dt><dd>-<?= e(rupiah($pricing['diskon'])) ?></dd></div>
+                    <div class="total"><dt>Biaya bulanan</dt><dd><?= e(rupiah($pricing['harga_akhir'])) ?></dd></div>
+                <?php else: ?>
+                    <div class="total"><dt>Biaya bulanan</dt><dd><?= e(rupiah($pricing['harga_akhir'])) ?></dd></div>
                 <?php endif; ?>
-                <div class="total"><dt>Biaya bulanan</dt><dd><?= e(rupiah($pricing['harga_akhir'])) ?></dd></div>
             </dl>
 
             <div class="dp-addr">

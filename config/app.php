@@ -355,6 +355,60 @@ if (!function_exists('packagePriceDetails')) {
     }
 }
 
+if (!function_exists('subscriptionPromoPlans')) {
+    function subscriptionPromoPlans(): array
+    {
+        return [
+            'hemat' => [
+                'nama' => 'Promo Hemat',
+                'bayar_bulan' => 3,
+                'bonus_bulan' => 1,
+                'total_bulan' => 4,
+            ],
+            'favorit' => [
+                'nama' => 'Promo Favorit',
+                'bayar_bulan' => 5,
+                'bonus_bulan' => 2,
+                'total_bulan' => 7,
+            ],
+            'super_hemat' => [
+                'nama' => 'Promo Super Hemat',
+                'bayar_bulan' => 8,
+                'bonus_bulan' => 4,
+                'total_bulan' => 12,
+            ],
+        ];
+    }
+}
+
+if (!function_exists('subscriptionPromoDetails')) {
+    function subscriptionPromoDetails(float $monthlyPrice, string $promoCode = ''): array
+    {
+        $plan = $promoCode === ''
+            ? ['nama' => 'Bulanan', 'bayar_bulan' => 1, 'bonus_bulan' => 0, 'total_bulan' => 1]
+            : (subscriptionPromoPlans()[$promoCode] ?? null);
+        if ($plan === null || !is_finite($monthlyPrice) || $monthlyPrice <= 0) {
+            throw new InvalidArgumentException('Paket atau promo berlangganan tidak valid.');
+        }
+
+        $normal = $monthlyPrice * (int) $plan['total_bulan'];
+        $payable = $monthlyPrice * (int) $plan['bayar_bulan'];
+        $savings = $normal - $payable;
+
+        return [
+            'kode' => $promoCode,
+            'nama' => $plan['nama'],
+            'bayar_bulan' => (int) $plan['bayar_bulan'],
+            'bonus_bulan' => (int) $plan['bonus_bulan'],
+            'total_bulan' => (int) $plan['total_bulan'],
+            'harga_normal' => $normal,
+            'total_bayar' => $payable,
+            'hemat' => $savings,
+            'persentase_hemat' => $normal > 0 ? ($savings / $normal) * 100 : 0,
+        ];
+    }
+}
+
 /* ========================================================================
    COVERAGE DAN JARAK ODP
    Radius ODP diasumsikan menggunakan kilometer.
@@ -514,7 +568,15 @@ if (!function_exists('ensureOrder')) {
             );
         }
 
-        $harga = (float) packagePriceDetails($paket)['harga_akhir'];
+        $promoCode = trim((string) flow('promo_code', ''));
+        $pricing = packagePriceDetails($paket);
+        $monthlyPrice = (float) (
+            $promoCode !== ''
+                ? $pricing['harga_normal']
+                : $pricing['harga_akhir']
+        );
+        $promoDetails = subscriptionPromoDetails($monthlyPrice, $promoCode);
+        $totalPrice = (float) $promoDetails['total_bayar'];
 
         /*
          * Cek order yang masih menunggu pembayaran.
@@ -527,13 +589,14 @@ if (!function_exists('ensureOrder')) {
                 ON s.id = t.id_subscription
             WHERE t.id_customer = ?
               AND s.paket_id = ?
+              AND (s.promo_code = ? OR (s.promo_code IS NULL AND ? = ''))
               AND s.status = 'pending'
               AND t.status IN ('unpaid', 'pending')
             ORDER BY t.id DESC
             LIMIT 1
         ");
 
-        $st->bind_param('ii', $cid, $pid);
+        $st->bind_param('iiss', $cid, $pid, $promoCode, $promoCode);
         $st->execute();
 
         $ada = $st->get_result()->fetch_assoc();
@@ -550,11 +613,24 @@ if (!function_exists('ensureOrder')) {
             /* Buat subscription. */
             $st = $conn->prepare("
                 INSERT INTO subscription
-                    (id_customer, paket_id, harga, status)
-                VALUES (?, ?, ?, 'pending')
+                    (id_customer, paket_id, harga, status, promo_code,
+                     bulan_dibayar, bulan_bonus, masa_berlangganan_bulan)
+                VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)
             ");
 
-            $st->bind_param('iid', $cid, $pid, $harga);
+            $paidMonths = (int) $promoDetails['bayar_bulan'];
+            $bonusMonths = (int) $promoDetails['bonus_bulan'];
+            $totalMonths = (int) $promoDetails['total_bulan'];
+            $st->bind_param(
+                'iidsiii',
+                $cid,
+                $pid,
+                $monthlyPrice,
+                $promoCode,
+                $paidMonths,
+                $bonusMonths,
+                $totalMonths
+            );
             $st->execute();
 
             $subId = (int) $conn->insert_id;
@@ -683,7 +759,7 @@ if (!function_exists('ensureOrder')) {
                 $noTagihan,
                 $bln,
                 $thn,
-                $harga
+                $totalPrice
             );
 
             $st->execute();

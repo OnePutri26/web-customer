@@ -493,18 +493,19 @@ if (
             }
 
         } elseif ($done === 4) {
+            $subscriptionMonths = max(
+                1,
+                (int) ($sub['masa_berlangganan_bulan'] ?? 1)
+            );
             soExec(
                 $conn,
                 "UPDATE subscription
                  SET status = 'active',
                      tanggal_mulai = CURDATE(),
-                     tanggal_berakhir = DATE_ADD(
-                         CURDATE(),
-                         INTERVAL 30 DAY
-                     )
+                     tanggal_berakhir = DATE_ADD(CURDATE(), INTERVAL ? MONTH)
                  WHERE id = ? AND id_customer = ?",
-                'ii',
-                [$sid, $cid]
+                'iii',
+                [$subscriptionMonths, $sid, $cid]
             );
 
         } elseif ($done === 5) {
