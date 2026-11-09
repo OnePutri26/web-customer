@@ -109,7 +109,13 @@ function bdPaket(?mysqli $conn, int $id): ?array
         $r = $conn->query('SELECT * FROM paket_wifi WHERE id = ' . (int)$id . ' LIMIT 1');
         $row = $r ? $r->fetch_assoc() : null;
         if ($row) {
-            return ['id' => (int)$row['id'], 'nama' => (string)($row['nama_paket'] ?? 'Paket'), 'mbps' => (int)($row['speed_mbps'] ?? 0)];
+            $pricing = packagePriceDetails($row);
+            return [
+                'id' => (int)$row['id'],
+                'nama' => (string)($row['nama_paket'] ?? 'Paket'),
+                'mbps' => (int)($row['speed_mbps'] ?? 0),
+                'pricing' => $pricing,
+            ];
         }
     } catch (Throwable $e) {
         error_log('Biodata paket: ' . $e->getMessage());
@@ -266,6 +272,9 @@ if ($lead) {
     $paketLead = bdPaket($dbConn, (int)($lead['paket_id'] ?? 0));
     $fullAddr = implode(', ', array_filter([$lead['alamat_lengkap'], $lead['kelurahan'], $lead['kecamatan'], $lead['kota'], $lead['provinsi']]));
     $q = ['auto' => 1, 'alamat' => $fullAddr];
+    if (!empty($lead['paket_id'])) {
+        $q['paket'] = (int) $lead['paket_id'];
+    }
     if ($lead['latitude'] !== null && $lead['longitude'] !== null) {
         $q['lat'] = $lead['latitude'];
         $q['lng'] = $lead['longitude'];
@@ -293,9 +302,9 @@ $fe = static function (string $k) use ($errors): string {
 /* ===== YesNet - Halaman Biodata ===== */
 :root {
   --navy: #0a1d4d;
-  --blue: #1f62ff;
-  --blue-d: #154fd6;
-  --blue-soft: #e8f0ff;
+  --blue: #103b73;
+  --blue-d: #092c57;
+  --blue-soft: #e9f0f8;
   --ink: #0f1f3d;
   --muted: #5b6b8c;
   --line: #d9e3f4;
@@ -314,7 +323,7 @@ body {
   flex-direction: column;
   font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: var(--ink);
-  background: var(--bg);
+  background: radial-gradient(circle at 8% 0, rgba(210, 31, 50, .06), transparent 28rem), var(--bg);
   line-height: 1.5;
 }
 a { color: var(--blue); }
@@ -327,7 +336,7 @@ a { color: var(--blue); }
 .bd-header-in, .bd-footer-in { max-width: 1100px; margin: 0 auto; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .bd-brand { display: inline-flex; align-items: center; gap: 8px; color: #fff; text-decoration: none; font-size: 22px; }
 .bd-brand strong { font-size: 18px; letter-spacing: .02em; font-weight: 800; }
-.bd-brand strong span { color: #6aa8ff; }
+.bd-brand-image { display: block; width: clamp(124px, 16vw, 150px); height: auto; max-height: 48px; padding: 4px 8px; border-radius: 8px; background: #fff; object-fit: contain; }
 .bd-login { display: inline-flex; align-items: center; gap: 6px; background: var(--blue); color: #fff; text-decoration: none; font-size: 13px; font-weight: 700; padding: 8px 14px; border-radius: 999px; }
 .bd-login:hover { background: var(--blue-d); }
 
@@ -340,9 +349,9 @@ a { color: var(--blue); }
 .bd-social a:hover { background: var(--blue); }
 
 /* ----- Layout ----- */
-.bd-main { flex: 1; padding: 28px 16px 56px; }
+.bd-main { flex: 1; padding: 36px 16px 56px; }
 .bd-wrap { max-width: 780px; margin: 0 auto; }
-.bd-card { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 30px; box-shadow: 0 12px 32px rgba(15, 42, 107, .07); }
+.bd-card { background: #fff; border: 1px solid var(--line); border-radius: 22px; padding: 34px; box-shadow: 0 18px 48px rgba(15, 42, 107, .09); }
 
 /* ----- Stepper ----- */
 .bd-stepper { list-style: none; margin: 0 auto 24px; padding: 0; display: flex; align-items: center; max-width: 640px; }
@@ -363,7 +372,7 @@ a { color: var(--blue); }
 .bd-divider { height: 1px; background: var(--line); border: 0; margin: 26px 0; }
 
 /* ----- Form ----- */
-.bd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 18px; }
+.bd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 20px; }
 .bd-full { grid-column: 1 / -1; }
 .bd-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .bd-field > label, .bd-label { font-size: 13px; font-weight: 700; }
@@ -372,7 +381,7 @@ a { color: var(--blue); }
 
 .bd-field input[type="text"], .bd-field input[type="email"], .bd-field input[type="tel"], .bd-field select, .bd-field textarea {
   width: 100%; font: inherit; font-size: 14px; color: var(--ink); background: #fff;
-  border: 1.5px solid var(--line); border-radius: 10px; padding: 0 14px; height: 46px;
+  border: 1.5px solid var(--line); border-radius: 12px; padding: 0 14px; height: 48px;
   transition: border-color .15s, box-shadow .15s;
 }
 .bd-field textarea { height: auto; min-height: 96px; padding: 12px 14px; resize: vertical; }
@@ -404,8 +413,8 @@ a { color: var(--blue); }
 }
 .bd-btn:active { transform: translateY(1px); }
 .bd-btn-block { width: 100%; }
-.bd-btn-primary { background: var(--blue); color: #fff; }
-.bd-btn-primary:hover { background: var(--blue-d); }
+.bd-btn-primary { background: linear-gradient(110deg, #103b73, #14528d 72%, #bd2035); color: #fff; box-shadow: 0 10px 24px rgba(16, 59, 115, .18); }
+.bd-btn-primary:hover { background: linear-gradient(110deg, #092c57, #103b73 72%, #a9162a); }
 .bd-btn-outline { background: #fff; color: var(--blue); border-color: var(--blue); }
 .bd-btn-outline:hover { background: var(--blue-soft); }
 .bd-btn-ghost { background: transparent; color: var(--blue); height: 44px; }
@@ -445,7 +454,8 @@ a { color: var(--blue); }
 
 /* ----- Responsive ----- */
 @media (max-width: 640px) {
-  .bd-card { padding: 22px 18px; }
+  .bd-main { padding: 24px 12px 40px; }
+  .bd-card { padding: 24px 18px; border-radius: 18px; }
   .bd-grid { grid-template-columns: 1fr; }
   .bd-coord { flex-direction: column; }
   .bd-btn-sm { width: 100%; }
@@ -474,7 +484,7 @@ a { color: var(--blue); }
 
 <header class="bd-header">
   <div class="bd-header-in">
-    <a href="<?= e($homeUrl) ?>" class="bd-brand" aria-label="YesNet beranda"><?= ic('wifi') ?><strong>YES<span>NET</span></strong></a>
+    <a href="<?= e($homeUrl) ?>" class="bd-brand" aria-label="YesNet beranda"><img class="bd-brand-image" src="logo-yesnet.png" alt="YESNET"></a>
     <a href="<?= e($loginUrl) ?>" class="bd-login"><?= ic('user') ?><?= e($loginLabel) ?></a>
   </div>
 </header>
@@ -531,7 +541,15 @@ a { color: var(--blue); }
 
     <?php if ($paketInfo): ?>
     <div class="bd-note">
-      <span>Paket pilihan: <strong><?= e($paketInfo['nama']) ?><?= $paketInfo['mbps'] ? ' - ' . (int)$paketInfo['mbps'] . ' Mbps' : '' ?></strong></span>
+      <span>Paket pilihan: <strong><?= e($paketInfo['nama']) ?><?= $paketInfo['mbps'] ? ' - ' . (int)$paketInfo['mbps'] . ' Mbps' : '' ?></strong>
+        <?php if ($paketInfo['pricing']['promo_aktif']): ?>
+          <br><del><?= e(rupiah($paketInfo['pricing']['harga_normal'])) ?></del>
+          <strong><?= e(rupiah($paketInfo['pricing']['harga_akhir'])) ?>/bulan</strong>
+          (hemat <?= e(rupiah($paketInfo['pricing']['diskon'])) ?>)
+        <?php elseif ($paketInfo['pricing']['harga_normal'] > 0): ?>
+          <br><?= e(rupiah($paketInfo['pricing']['harga_normal'])) ?>/bulan
+        <?php endif; ?>
+      </span>
       <a href="<?= e($homeUrl) ?>#paket">Ubah paket</a>
     </div>
     <?php endif; ?>
@@ -638,7 +656,7 @@ a { color: var(--blue); }
 <footer class="bd-footer">
   <div class="bd-footer-in">
     <div>
-      <a href="<?= e($homeUrl) ?>" class="bd-brand"><?= ic('wifi') ?><strong>YES<span>NET</span></strong></a>
+      <a href="<?= e($homeUrl) ?>" class="bd-brand"><img class="bd-brand-image" src="logo-yesnet.png" alt="YESNET"></a>
       <small>Internet Cepat &amp; Stabil</small>
     </div>
     <div class="bd-social" aria-label="Media sosial">

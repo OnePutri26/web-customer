@@ -14,6 +14,13 @@ old payment rows and Midtrans identifiers. The migration marks rows as
 `midtrans` only when both old Midtrans identifier columns exist and a row has
 an order ID or Snap token; other historical rows are marked `legacy`.
 
+To configure package promotions, back up the database and run
+[`database/migrasi_promo_paket.sql`](./database/migrasi_promo_paket.sql) once.
+The migration adds nullable discount type/value and inclusive start/end dates
+to `paket_wifi`; existing package prices and orders are unchanged. Manage
+promotions from the package add/edit screens. A blank type disables a promo,
+and a promo outside its configured dates is not shown or charged.
+
 ## Server environment
 
 Configure these values for the PHP-FPM pool used by the site. Keep the pool

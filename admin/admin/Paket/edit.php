@@ -19,7 +19,8 @@ if (!$packageId || $packageId < 1) {
 $error = '';
 try {
     $stmt = $conn->prepare("
-        SELECT id, nama_paket, speed_mbps, harga, deskripsi, status
+        SELECT id, nama_paket, speed_mbps, harga, deskripsi, status,
+               promo_jenis, promo_nilai, promo_mulai, promo_berakhir
         FROM paket_wifi
         WHERE id = ?
         LIMIT 1
@@ -44,6 +45,10 @@ $speed = (string) $package['speed_mbps'];
 $price = (string) $package['harga'];
 $description = (string) ($package['deskripsi'] ?? '');
 $status = strtolower(trim((string) $package['status'])) === 'nonaktif' ? 'nonaktif' : 'aktif';
+$promoType = (string) ($package['promo_jenis'] ?? '');
+$promoValue = (string) ($package['promo_nilai'] ?? '');
+$promoStart = (string) ($package['promo_mulai'] ?? '');
+$promoEnd = (string) ($package['promo_berakhir'] ?? '');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = trim((string) ($_POST['nama_paket'] ?? ''));
@@ -51,6 +56,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $price = trim((string) ($_POST['harga'] ?? ''));
     $description = trim((string) ($_POST['deskripsi'] ?? ''));
     $status = (string) ($_POST['status'] ?? '');
+    $promoType = (string) ($_POST['promo_jenis'] ?? '');
+    $promoValue = trim((string) ($_POST['promo_nilai'] ?? ''));
+    $promoStart = trim((string) ($_POST['promo_mulai'] ?? ''));
+    $promoEnd = trim((string) ($_POST['promo_berakhir'] ?? ''));
     $token = (string) ($_POST['csrf'] ?? '');
 
     if (!hash_equals((string) $_SESSION['package_admin_csrf'], $token)) {
@@ -64,18 +73,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         || (float) $price <= 0
         || strlen($description) > 1000
         || !in_array($status, ['aktif', 'nonaktif'], true)
+        || !in_array($promoType, ['', 'nominal', 'persentase'], true)
+        || ($promoType !== '' && (
+            !is_numeric($promoValue)
+            || (float) $promoValue <= 0
+            || ($promoType === 'persentase' && (float) $promoValue >= 100)
+            || ($promoType === 'nominal' && (float) $promoValue >= (float) $price)
+        ))
+        || !paketEditValidDate($promoStart)
+        || !paketEditValidDate($promoEnd)
+        || ($promoStart !== '' && $promoEnd !== '' && $promoStart > $promoEnd)
     ) {
-        $error = 'Periksa kembali nama, kecepatan, harga, deskripsi, dan status paket.';
+        $error = 'Periksa kembali data paket, nilai promo, dan periode promo.';
     } else {
         try {
             $stmt = $conn->prepare("
                 UPDATE paket_wifi
-                SET nama_paket = ?, speed_mbps = ?, harga = ?, deskripsi = ?, status = ?
+                SET nama_paket = ?, speed_mbps = ?, harga = ?, deskripsi = ?, status = ?,
+                    promo_jenis = ?, promo_nilai = ?, promo_mulai = ?, promo_berakhir = ?
                 WHERE id = ?
             ");
             $speedValue = (int) $speed;
             $priceValue = (float) $price;
-            $stmt->bind_param('sidssi', $name, $speedValue, $priceValue, $description, $status, $packageId);
+            $promoTypeDb = $promoType !== '' ? $promoType : null;
+            $promoValueDb = $promoType !== '' ? (float) $promoValue : null;
+            $promoStartDb = $promoType !== '' && $promoStart !== '' ? $promoStart : null;
+            $promoEndDb = $promoType !== '' && $promoEnd !== '' ? $promoEnd : null;
+            $stmt->bind_param('sidsssdssi', $name, $speedValue, $priceValue, $description, $status, $promoTypeDb, $promoValueDb, $promoStartDb, $promoEndDb, $packageId);
             $stmt->execute();
             $stmt->close();
 
@@ -86,6 +110,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Paket gagal diperbarui karena layanan sedang mengalami gangguan.';
         }
     }
+}
+
+function paketEditValidDate(string $value): bool
+{
+    if ($value === '') {
+        return true;
+    }
+    $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+    $errors = DateTimeImmutable::getLastErrors();
+    return $date !== false
+        && $date->format('Y-m-d') === $value
+        && ($errors === false || ($errors['warning_count'] === 0 && $errors['error_count'] === 0));
 }
 
 function paketEditEscape(mixed $value): string
@@ -123,6 +159,32 @@ function paketEditEscape(mixed $value): string
             <label class="form-label" for="harga">Harga per bulan (Rp)</label>
             <input class="form-control" id="harga" type="number" name="harga" min="1" step="0.01" required value="<?= paketEditEscape($price) ?>">
         </div>
+        <fieldset class="border rounded p-3 mb-3">
+            <legend class="float-none w-auto px-2 fs-6">Promo (opsional)</legend>
+            <div class="mb-3">
+                <label class="form-label" for="promo-jenis">Jenis potongan</label>
+                <select class="form-select" id="promo-jenis" name="promo_jenis">
+                    <option value="" <?= $promoType === '' ? 'selected' : '' ?>>Tidak ada promo</option>
+                    <option value="nominal" <?= $promoType === 'nominal' ? 'selected' : '' ?>>Nominal (Rp)</option>
+                    <option value="persentase" <?= $promoType === 'persentase' ? 'selected' : '' ?>>Persentase (%)</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="promo-nilai">Besaran potongan</label>
+                <input class="form-control" id="promo-nilai" type="number" name="promo_nilai" min="0.01" step="0.01" value="<?= paketEditEscape($promoValue) ?>" aria-describedby="promo-help">
+                <div class="form-text" id="promo-help">Nominal harus lebih kecil dari harga paket; persentase di bawah 100%. Kosongkan periode untuk promo tanpa batas tanggal.</div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label" for="promo-mulai">Mulai</label>
+                    <input class="form-control" id="promo-mulai" type="date" name="promo_mulai" value="<?= paketEditEscape($promoStart) ?>">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label" for="promo-berakhir">Berakhir</label>
+                    <input class="form-control" id="promo-berakhir" type="date" name="promo_berakhir" value="<?= paketEditEscape($promoEnd) ?>">
+                </div>
+            </div>
+        </fieldset>
         <div class="mb-3">
             <label class="form-label" for="deskripsi">Deskripsi</label>
             <textarea class="form-control" id="deskripsi" name="deskripsi" maxlength="1000" rows="4"><?= paketEditEscape($description) ?></textarea>

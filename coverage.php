@@ -93,6 +93,25 @@ if (!function_exists('e')) {
     }
 }
 
+if (array_key_exists('paket', $_GET)) {
+    $requestedPackageId = filter_var($_GET['paket'], FILTER_VALIDATE_INT);
+    if ($requestedPackageId === false || $requestedPackageId < 1) {
+        http_response_code(400);
+        exit('Paket yang dipilih tidak valid.');
+    }
+    try {
+        if (!getPaket($conn, (int) $requestedPackageId)) {
+            http_response_code(404);
+            exit('Paket yang dipilih tidak tersedia.');
+        }
+        $_SESSION['pending_coverage_package_id'] = (int) $requestedPackageId;
+    } catch (Throwable $e) {
+        error_log('Coverage package validation failed: ' . $e->getMessage());
+        http_response_code(503);
+        exit('Paket belum dapat diperiksa. Silakan coba kembali.');
+    }
+}
+
 /*
 |--------------------------------------------------------------------------
 | KONFIGURASI SINKRONISASI TABEL ODP  <-- SESUAIKAN DI SINI
@@ -445,7 +464,7 @@ $pageTitle = 'Cek Coverage';
 
     <style>
         :root {
-            --ink: #0a1a33; --brand: #1677ff; --ok: #12b76a; --warn: #f79009; --err: #d92d20;
+            --ink: #071a36; --brand: #103b73; --ok: #12b76a; --warn: #f79009; --err: #d92d20;
             --paper: #f3f6fb; --card: #ffffff; --line: #e3e9f2; --text: #1d2939; --muted: #667085;
             --radius: 20px;
             --font: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -460,8 +479,8 @@ $pageTitle = 'Cek Coverage';
 
         .cv-header { background: var(--ink); color: #fff; padding-top: env(safe-area-inset-top, 0px); }
         .cv-header .in { max-width: 1080px; margin: 0 auto; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-        .cv-logo { font-weight: 800; font-size: 22px; letter-spacing: -.5px; text-decoration: none; color: #fff; }
-        .cv-logo span { color: #5aa2ff; }
+        .cv-logo { display: inline-flex; align-items: center; text-decoration: none; }
+        .cv-logo img { display: block; width: clamp(120px, 16vw, 150px); height: auto; max-height: 46px; padding: 4px 8px; border-radius: 8px; background: #fff; object-fit: contain; }
         .cv-back { font-size: 14px; font-weight: 600; text-decoration: none; color: #c9d7ee; padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); transition: background .15s, color .15s; }
         .cv-back:hover { background: rgba(255,255,255,.1); color: #fff; }
         .cv-footer { margin-top: auto; padding: 28px 20px calc(28px + env(safe-area-inset-bottom, 0px)); text-align: center; color: var(--muted); font-size: 13px; }
@@ -484,7 +503,7 @@ $pageTitle = 'Cek Coverage';
         }
         .cv-input::placeholder { color: #98a2b3; }
         .cv-input:hover { border-color: #aebad0; }
-        .cv-input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 4px rgba(22,119,255,.15); }
+        .cv-input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 4px rgba(16,59,115,.15); }
 
         .cv-tools { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 14px; }
         .cv-btn {
@@ -497,8 +516,8 @@ $pageTitle = 'Cek Coverage';
         .cv-btn:active { transform: translateY(1px); }
         .cv-btn[hidden] { display: none; }
         .cv-btn[disabled] { opacity: .65; cursor: progress; }
-        .cv-btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; box-shadow: 0 10px 20px -10px rgba(22,119,255,.7); }
-        .cv-btn.primary:hover { background: #0f67e6; }
+        .cv-btn.primary { background: linear-gradient(110deg, #103b73, #14528d 72%, #bd2035); border-color: transparent; color: #fff; box-shadow: 0 10px 20px -10px rgba(16,59,115,.7); }
+        .cv-btn.primary:hover { background: linear-gradient(110deg, #092c57, #103b73 72%, #a9162a); }
         .cv-btn.block { width: 100%; min-height: 52px; font-size: 16px; margin-top: 14px; }
         .cv-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
@@ -508,7 +527,7 @@ $pageTitle = 'Cek Coverage';
         .cv-seg { display: inline-flex; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 3px; }
         .cv-seg button { font: inherit; font-size: 13px; font-weight: 700; border: 0; background: transparent; color: var(--muted); padding: 7px 14px; border-radius: 9px; cursor: pointer; }
         .cv-seg button[aria-pressed="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(10,26,51,.15); }
-        .cv-map { height: min(66vh, 620px); min-height: 420px; border-radius: 10px; border: 1px solid #cbd5e1; overflow: hidden; isolation: isolate; background: #e8eef7; }
+        .cv-map { height: min(66vh, 620px); min-height: 420px; border-radius: 16px; border: 1px solid #cbd5e1; overflow: hidden; isolation: isolate; background: #e8eef7; }
         .cv-card { padding: 20px; }
         .cv-legend { gap: 8px 26px; font-size: 14px; color: #344054; }
         .cv-legend i { width: 14px; height: 14px; }
@@ -550,7 +569,7 @@ $pageTitle = 'Cek Coverage';
 
 <header class="cv-header">
     <div class="in">
-        <a href="index.php" class="cv-logo">YES<span>NET</span></a>
+        <a href="index.php" class="cv-logo" aria-label="YESNET beranda"><img src="logo-yesnet.png" alt="YESNET"></a>
         <a href="index.php" class="cv-back">← Kembali</a>
     </div>
 </header>

@@ -18,7 +18,7 @@
   var REGION_NAMES = { jakarta: 'Jakarta', surabaya: 'Surabaya' };
 
   /* penghubung antar modul (diisi saat init) */
-  var hooks = { pick: null, calc: null };
+  var hooks = { pick: null };
   var region = 'jakarta';
 
   function $(s, r) { return (r || d).querySelector(s); }
@@ -437,9 +437,18 @@
       function build() {
         clear(box);
         if (price) {
-          box.appendChild(mk('span', 'cur', 'Rp'));
-          box.appendChild(txt(price));
-          box.appendChild(mk('small', '', '/bulan'));
+          if (card.getAttribute('data-promo-active') === '1') {
+            var normal = parseFloat(card.getAttribute('data-price-normal'));
+            var promo = parseFloat(card.getAttribute('data-price-promo'));
+            box.appendChild(mk('del', 'price-normal', rupiah(normal)));
+            box.appendChild(mk('span', 'discount-chip', card.getAttribute('data-promo-label') || 'Promo'));
+            box.appendChild(mk('strong', 'price-current', rupiah(promo)));
+            box.appendChild(mk('small', '', '/bulan'));
+          } else {
+            box.appendChild(mk('span', 'cur', 'Rp'));
+            box.appendChild(txt(price));
+            box.appendChild(mk('small', '', '/bulan'));
+          }
         } else {
           box.appendChild(mk('span', 'cur', 'Hubungi kami'));
         }
@@ -512,7 +521,6 @@
 
       try { history.replaceState(null, '', '?wilayah=' + r + '#paket'); } catch (e) {}
       if (hooks.pick) hooks.pick();
-      if (hooks.calc) hooks.calc(true);
     }
 
     btns.forEach(function (b) {
@@ -571,122 +579,6 @@
     hooks.pick = function () { var act = $('.chip.active'); if (act) show(act, false); };
   }
 
-  /* ===================================================== PROMO + SIMULASI HEMAT */
-  function promoCalc() {
-    var box = $('#promo-calc');
-    if (!box) return;
-    var data;
-    try { data = JSON.parse(box.getAttribute('data-promos') || '{}'); } catch (e) { return; }
-    var keys = Object.keys(data);
-    if (!keys.length) return;
-
-    var selPromo = $('#calc-promo'), selTier = $('#calc-tier'), selPaket = $('#calc-paket');
-    var res = $('#calc-result'), note = $('#calc-note'), go = $('#calc-go'), wa = $('#calc-wa');
-    var regionLbl = $('.calc-region', box);
-    var base = {
-      bayar: $('#rs-bayar'), bayarBln: $('#rs-bayar-bln'),
-      dapat: $('#rs-dapat'), gratis: $('#rs-gratis'),
-      hemat: $('#rs-hemat'), eff: $('#rs-eff')
-    };
-    var NOTE_DEFAULT = note ? note.textContent : '';
-
-    function opt(value, label) { var o = d.createElement('option'); o.value = value; o.textContent = label; return o; }
-
-    keys.forEach(function (k) { selPromo.appendChild(opt(k, data[k].nama)); });
-
-    function fillTiers(keep) {
-      var cur = keep ? selTier.value : '0';
-      clear(selTier);
-      data[selPromo.value].tiers.forEach(function (t, i) { selTier.appendChild(opt(String(i), t.label + ' (total ' + t.total + ' bulan)')); });
-      selTier.value = (+cur < data[selPromo.value].tiers.length) ? cur : '0';
-    }
-
-    function fillPaket() {
-      var cur = selPaket.value;
-      clear(selPaket);
-      $$('.package-card').forEach(function (card) {
-        if (card.hidden) return;
-        selPaket.appendChild(opt(card.getAttribute('data-id'), card.getAttribute('data-name') + ' - ' + card.getAttribute('data-speed') + ' Mbps'));
-      });
-      if (cur && $('option[value="' + cur + '"]', selPaket)) selPaket.value = cur;
-    }
-
-    function markTier() {
-      $$('.tier').forEach(function (b) {
-        b.classList.toggle('on', b.getAttribute('data-promo') === selPromo.value && b.getAttribute('data-tier') === selTier.value);
-      });
-    }
-
-    function dash() {
-      ['bayar', 'hemat', 'dapat'].forEach(function (k) { base[k]._v = undefined; base[k].textContent = '-'; });
-      base.bayarBln.textContent = ''; base.gratis.textContent = ''; base.eff.textContent = '';
-    }
-
-    function calc(bump) {
-      if (regionLbl) regionLbl.textContent = REGION_NAMES[region] || region;
-      var pr = data[selPromo.value], t = pr && pr.tiers[+selTier.value];
-      var card = selPaket.value ? $('.package-card[data-id="' + selPaket.value + '"]') : null;
-      if (!t || !card) {
-        dash();
-        base.dapat.textContent = '-'; base.gratis.textContent = '';
-        if (note) note.textContent = 'Paket belum tersedia di wilayah ini. Pilih wilayah lain atau hubungi kami.';
-        return;
-      }
-      var gratis = t.total - t.bayar;
-      base.bayarBln.textContent = 'untuk ' + t.total + ' bulan layanan';
-      base.gratis.textContent = 'Bayar ' + t.bayar + ' bulan, bonus ' + gratis + ' bulan';
-
-      var raw = parseFloat(card.getAttribute('data-raw-' + region));
-      if (isNaN(raw) || raw <= 0) {
-        dash();
-        base.bayarBln.textContent = 'untuk ' + t.total + ' bulan layanan';
-        base.gratis.textContent = 'Bayar ' + t.bayar + ' bulan, bonus ' + gratis + ' bulan';
-        if (note) note.textContent = 'Harga paket ini belum tampil. Hubungi kami untuk total biaya promo.';
-      } else {
-        var total = raw * t.bayar, normal = raw * t.total;
-        tweenNum(base.bayar, normal, rupiah);
-        tweenNum(base.hemat, normal - total, rupiah);
-        tweenNum(base.dapat, total, rupiah);
-        base.eff.textContent = 'Setara ' + rupiah(total / t.total) + ' per bulan';
-        if (note) note.textContent = NOTE_DEFAULT;
-      }
-
-      var name = card.getAttribute('data-name');
-      var href = box.getAttribute('data-pilih') + '?paket=' + encodeURIComponent(card.getAttribute('data-id')) +
-        '&wilayah=' + encodeURIComponent(region);
-      if (go) go.setAttribute('href', href);
-      if (wa) {
-        var msg = 'Halo YesNet, saya tertarik promo ' + pr.nama + ' (' + t.label + ') untuk ' + name + ' wilayah ' + (REGION_NAMES[region] || region) + '. Mohon info pendaftarannya.';
-        wa.setAttribute('href', box.getAttribute('data-wa') + '?text=' + encodeURIComponent(msg));
-      }
-      markTier();
-      if (bump && !reduce) { res.classList.remove('bump'); void res.offsetWidth; res.classList.add('bump'); }
-    }
-
-    fillTiers(false);
-    fillPaket();
-    calc(false);
-
-    on(selPromo, 'change', function () { fillTiers(false); calc(true); });
-    on(selTier, 'change', function () { calc(true); });
-    on(selPaket, 'change', function () { calc(true); });
-
-    // klik skema pada kartu promo -> isi simulasi + sorot kotak simulasi
-    $$('.tier').forEach(function (b) {
-      on(b, 'click', function () {
-        selPromo.value = b.getAttribute('data-promo');
-        fillTiers(false);
-        selTier.value = b.getAttribute('data-tier');
-        calc(true);
-        box.classList.remove('flash'); void box.offsetWidth; box.classList.add('flash');
-        var r = box.getBoundingClientRect();
-        if (r.top < 80 || r.bottom > w.innerHeight) box.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
-      });
-    });
-
-    hooks.calc = function () { fillPaket(); calc(true); };
-  }
-
   /* ===================================================== COVERAGE */
   // Form coverage: validasi ringan + indikator loading agar tidak klik dua kali
   function coverageForms() {
@@ -743,7 +635,6 @@
     safe(buttons);
     safe(regionFilter);
     safe(picker);
-    safe(promoCalc);
     safe(coverageForms);
     safe(prepareSplit);
     safe(prepareCounters);

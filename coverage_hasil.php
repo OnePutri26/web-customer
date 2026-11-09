@@ -377,9 +377,9 @@ $requestTone = $isRejected ? 'warn' : ($stage === 3 ? 'ok' : 'wait');
 
     <style>
         :root {
-            --ink: #0a1a33;
+            --ink: #071a36;
             --ink-2: #13294b;
-            --brand: #1677ff;
+            --brand: #103b73;
             --ok: #12b76a;
             --warn: #f79009;
             --err: #d92d20;
@@ -406,7 +406,7 @@ $requestTone = $isRejected ? 'warn' : ($stage === 3 ? 'ok' : 'wait');
             line-height: 1.55;
         }
         a { color: inherit; }
-        :focus-visible { outline: 3px solid rgba(22,119,255,.45); outline-offset: 2px; }
+        :focus-visible { outline: 3px solid rgba(16,59,115,.45); outline-offset: 2px; }
 
         /* ---------- Header & footer ---------- */
         .cv-header { background: var(--ink); color: #fff; padding-top: env(safe-area-inset-top, 0px); }
@@ -414,8 +414,8 @@ $requestTone = $isRejected ? 'warn' : ($stage === 3 ? 'ok' : 'wait');
             max-width: 1080px; margin: 0 auto; padding: 16px 20px;
             display: flex; align-items: center; justify-content: space-between; gap: 16px;
         }
-        .cv-logo { font-weight: 800; font-size: 22px; letter-spacing: -.5px; text-decoration: none; color: #fff; }
-        .cv-logo span { color: #5aa2ff; }
+        .cv-logo { display: inline-flex; align-items: center; text-decoration: none; }
+        .cv-logo img { display: block; width: clamp(120px, 16vw, 150px); height: auto; max-height: 46px; padding: 4px 8px; border-radius: 8px; background: #fff; object-fit: contain; }
         .cv-back {
             font-size: 14px; font-weight: 600; text-decoration: none; color: #c9d7ee;
             padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18);
@@ -545,8 +545,8 @@ $requestTone = $isRejected ? 'warn' : ($stage === 3 ? 'ok' : 'wait');
         }
         .cv-btn:hover { background: var(--paper); }
         .cv-btn:active { transform: translateY(1px); }
-        .cv-btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; box-shadow: 0 10px 20px -10px rgba(22,119,255,.7); }
-        .cv-btn.primary:hover { background: #0f67e6; }
+        .cv-btn.primary { background: linear-gradient(110deg, #103b73, #14528d 72%, #bd2035); border-color: transparent; color: #fff; box-shadow: 0 10px 20px -10px rgba(16,59,115,.7); }
+        .cv-btn.primary:hover { background: linear-gradient(110deg, #092c57, #103b73 72%, #a9162a); }
         .cv-btn[disabled] { opacity: .65; cursor: progress; }
         .cv-btn.block { width: 100%; flex: none; margin-top: 8px; }
 
@@ -595,7 +595,7 @@ $requestTone = $isRejected ? 'warn' : ($stage === 3 ? 'ok' : 'wait');
 
 <header class="cv-header">
     <div class="in">
-        <a href="index.php" class="cv-logo">YES<span>NET</span></a>
+        <a href="index.php" class="cv-logo" aria-label="YESNET beranda"><img src="logo-yesnet.png" alt="YESNET"></a>
         <a href="<?= cov_h(COV_FORM_URL) ?>" class="cv-back">← Cek alamat lain</a>
     </div>
 </header>

@@ -138,6 +138,23 @@ footer{background:linear-gradient(135deg,#071a36,#0c2e57)}
 .footer-column a:hover{color:#fff}
 @media(max-width:700px){.brand-image{width:128px}.footer-brand-image{width:70px;height:70px}.promo-grid{grid-template-columns:minmax(0,1fr)}}
 
+.package-price{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px}
+.package-price .price-normal{width:100%;font-size:14px;font-weight:600;color:var(--muted);letter-spacing:0}
+.package-price .discount-chip{padding:3px 8px;border-radius:999px;background:#fff0f1;color:#a9162a;font-size:11px;font-weight:800;letter-spacing:0}
+.package-price .price-current{color:var(--blue);font-size:inherit;font-weight:800}
+.promo-packages{grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));max-width:none;justify-content:stretch}
+.promo-product{display:flex;flex-direction:column;gap:14px}
+.promo-prices{display:grid;gap:7px;padding:14px;border:1px solid rgba(16,59,115,.1);border-radius:14px;background:#f7f9fc}
+.promo-prices>span{display:flex;justify-content:space-between;align-items:baseline;gap:12px;color:var(--muted);font-size:13px}
+.promo-prices del{color:#7d8798}
+.promo-prices>strong.promo-final{color:var(--blue);font-size:25px;line-height:1.25}
+.promo-final small{margin-left:5px;color:var(--muted);font-size:13px;font-weight:600}
+.promo-period{margin:0;color:var(--muted);font-size:12px}
+.promo-select{margin-top:auto;justify-content:center}
+.promo-empty{display:flex;flex-direction:column;gap:5px;max-width:640px;margin:0 auto;padding:24px;border:1px solid var(--line);border-radius:18px;background:#fff;color:var(--ink);text-align:center;box-shadow:0 12px 30px rgba(7,26,54,.06)}
+.promo-empty span{color:var(--muted);font-size:14px}
+@media(max-width:700px){.promo-packages{grid-template-columns:1fr}}
+
 
 /* =========================================================
    YESNET UI refinement

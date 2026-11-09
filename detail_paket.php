@@ -10,6 +10,7 @@ $p = $selectedPackageId > 0 ? getPaket($conn, (int) $selectedPackageId) : null;
 if (!$p) {
     redirect('paket.php');
 }
+$pricing = packagePriceDetails($p);
 
 if (empty(flow('tersedia'))) {
     $_SESSION['pending_coverage_package_id'] = (int) $p['id'];
@@ -97,6 +98,9 @@ require __DIR__ . '/inc/header.php';
     .dp-priceline { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; }
     .dp-price { font-size: 32px; font-weight: 800; letter-spacing: -1px; color: var(--dp-ink); }
     .dp-price small { font-size: 15px; font-weight: 600; color: var(--dp-muted); letter-spacing: 0; }
+    .dp-price del { display: block; color: var(--dp-muted); font-size: 16px; font-weight: 600; letter-spacing: 0; }
+    .dp-price strong { color: #a9162a; }
+    .dp-promo-saving { display: inline-block; margin-left: 8px; padding: 3px 9px; border-radius: 999px; background: #fff0f1; color: #a9162a; font-size: 12px; font-weight: 800; letter-spacing: 0; }
     .dp-free { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; background: #ecfdf3; color: #067647; font-size: 13px; font-weight: 700; }
     .dp-desc { margin: 12px 0 0; color: #475467; font-size: 15px; line-height: 1.65; max-width: 62ch; }
 
@@ -183,7 +187,15 @@ require __DIR__ . '/inc/header.php';
 
             <div class="dp-body">
                 <div class="dp-priceline">
-                    <div class="dp-price"><?= e(rupiah($p['harga'])) ?> <small>/bulan</small></div>
+                    <div class="dp-price">
+                        <?php if ($pricing['promo_aktif']): ?>
+                            <del><?= e(rupiah($pricing['harga_normal'])) ?></del>
+                            <strong><?= e(rupiah($pricing['harga_akhir'])) ?></strong> <small>/bulan</small>
+                            <span class="dp-promo-saving">Hemat <?= e(rupiah($pricing['diskon'])) ?></span>
+                        <?php else: ?>
+                            <?= e(rupiah($pricing['harga_normal'])) ?> <small>/bulan</small>
+                        <?php endif; ?>
+                    </div>
                     <span class="dp-free">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>
                         Instalasi gratis
@@ -221,7 +233,11 @@ require __DIR__ . '/inc/header.php';
             <dl class="dp-rows">
                 <div><dt>Paket</dt><dd><?= e($namaPaket) ?> · <?= $speed ?> Mbps</dd></div>
                 <div><dt>Biaya instalasi</dt><dd>Gratis</dd></div>
-                <div class="total"><dt>Biaya bulanan</dt><dd><?= e(rupiah($p['harga'])) ?></dd></div>
+                <?php if ($pricing['promo_aktif']): ?>
+                    <div><dt>Harga normal</dt><dd><del><?= e(rupiah($pricing['harga_normal'])) ?></del></dd></div>
+                    <div><dt>Diskon promo</dt><dd>-<?= e(rupiah($pricing['diskon'])) ?></dd></div>
+                <?php endif; ?>
+                <div class="total"><dt>Biaya bulanan</dt><dd><?= e(rupiah($pricing['harga_akhir'])) ?></dd></div>
             </dl>
 
             <div class="dp-addr">

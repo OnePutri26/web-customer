@@ -299,6 +299,62 @@ if (!function_exists('getPaket')) {
     }
 }
 
+if (!function_exists('packagePriceDetails')) {
+    function packagePriceDetails(array $paket, ?DateTimeImmutable $today = null): array
+    {
+        $normal = max(0, (float) ($paket['harga'] ?? 0));
+        $type = strtolower(trim((string) ($paket['promo_jenis'] ?? '')));
+        $value = is_numeric($paket['promo_nilai'] ?? null)
+            ? (float) $paket['promo_nilai']
+            : 0.0;
+        $start = trim((string) ($paket['promo_mulai'] ?? ''));
+        $end = trim((string) ($paket['promo_berakhir'] ?? ''));
+        $today = $today ?? new DateTimeImmutable('today');
+        $todayDate = $today->format('Y-m-d');
+
+        $validDate = static function (string $date): bool {
+            if ($date === '') {
+                return true;
+            }
+            $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+            $errors = DateTimeImmutable::getLastErrors();
+            return $parsed !== false
+                && $parsed->format('Y-m-d') === $date
+                && ($errors === false || ($errors['warning_count'] === 0 && $errors['error_count'] === 0));
+        };
+
+        $validType = in_array($type, ['nominal', 'persentase'], true);
+        $validValue = $value > 0
+            && ($type === 'persentase' ? $value < 100 : $value < $normal);
+        $validPeriod = $validDate($start)
+            && $validDate($end)
+            && ($start === '' || $start <= $todayDate)
+            && ($end === '' || $end >= $todayDate)
+            && ($start === '' || $end === '' || $start <= $end);
+        $active = $normal > 0 && $validType && $validValue && $validPeriod;
+        $discount = 0.0;
+
+        if ($active) {
+            $discount = $type === 'persentase'
+                ? round($normal * $value / 100, 2)
+                : $value;
+            $discount = min($normal, max(0, $discount));
+            $active = $discount > 0;
+        }
+
+        return [
+            'harga_normal' => $normal,
+            'promo_aktif' => $active,
+            'promo_jenis' => $active ? $type : '',
+            'promo_nilai' => $active ? $value : 0.0,
+            'diskon' => $active ? $discount : 0.0,
+            'harga_akhir' => $normal - ($active ? $discount : 0.0),
+            'promo_mulai' => $start,
+            'promo_berakhir' => $end,
+        ];
+    }
+}
+
 /* ========================================================================
    COVERAGE DAN JARAK ODP
    Radius ODP diasumsikan menggunakan kilometer.
@@ -451,13 +507,14 @@ if (!function_exists('ensureOrder')) {
             );
         }
 
-        if (!isset($paket['harga']) || !is_numeric($paket['harga'])) {
+        $paket = getPaket($conn, $pid);
+        if (!$paket || !isset($paket['harga']) || !is_numeric($paket['harga'])) {
             throw new InvalidArgumentException(
-                'Harga paket tidak valid.'
+                'Paket atau harga paket tidak valid.'
             );
         }
 
-        $harga = (float) $paket['harga'];
+        $harga = (float) packagePriceDetails($paket)['harga_akhir'];
 
         /*
          * Cek order yang masih menunggu pembayaran.

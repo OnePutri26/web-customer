@@ -10,7 +10,8 @@ function paketAdminEscape(mixed $value): string
 
 try {
     $result = $conn->query("
-        SELECT id, nama_paket, speed_mbps, harga, deskripsi, status
+        SELECT id, nama_paket, speed_mbps, harga, deskripsi, status,
+               promo_jenis, promo_nilai, promo_mulai, promo_berakhir
         FROM paket_wifi
         ORDER BY harga ASC, id ASC
     ");
@@ -46,13 +47,14 @@ try {
                 <th>Nama Paket</th>
                 <th>Kecepatan</th>
                 <th>Harga / Bulan</th>
+                <th>Promo</th>
                 <th>Status</th>
                 <th>Aksi</th>
             </tr>
             </thead>
             <tbody>
             <?php if ($result->num_rows === 0): ?>
-                <tr><td colspan="5" class="text-center">Belum ada paket.</td></tr>
+                <tr><td colspan="6" class="text-center">Belum ada paket.</td></tr>
             <?php else: ?>
                 <?php while ($package = $result->fetch_assoc()): ?>
                     <tr>
@@ -64,6 +66,16 @@ try {
                         </td>
                         <td><?= (int) $package['speed_mbps'] ?> Mbps</td>
                         <td>Rp <?= number_format((float) $package['harga'], 0, ',', '.') ?></td>
+                        <td>
+                            <?php if (!empty($package['promo_jenis']) && (float) $package['promo_nilai'] > 0): ?>
+                                <?= $package['promo_jenis'] === 'persentase'
+                                    ? number_format((float) $package['promo_nilai'], 2, ',', '.') . '%'
+                                    : 'Rp ' . number_format((float) $package['promo_nilai'], 0, ',', '.') ?>
+                                <?php if (!empty($package['promo_mulai']) || !empty($package['promo_berakhir'])): ?>
+                                    <div class="small text-muted"><?= paketAdminEscape($package['promo_mulai'] ?: 'Sekarang') ?> – <?= paketAdminEscape($package['promo_berakhir'] ?: 'Tanpa batas') ?></div>
+                                <?php endif; ?>
+                            <?php else: ?>—<?php endif; ?>
+                        </td>
                         <td><?= paketAdminEscape($package['status'] ?: 'Belum diatur') ?></td>
                         <td>
                             <a class="btn btn-sm btn-outline-primary" href="edit.php?id=<?= (int) $package['id'] ?>">Ubah</a>

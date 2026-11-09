@@ -568,6 +568,23 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
             font-size: 25px;
         }
 
+        .price del {
+            display: block;
+            color: #64748b;
+            font-size: 14px;
+        }
+
+        .price .promo-badge {
+            display: inline-block;
+            margin: 3px 0 7px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: #fff0f1;
+            color: #a9162a;
+            font-size: 11px;
+            font-weight: 800;
+        }
+
         .price span {
             color: #64748b;
             font-size: 13px;
@@ -831,6 +848,7 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
 
                 $speed = (float) ($package['speed_mbps'] ?? 0);
                 $harga = (float) ($package['harga'] ?? 0);
+                $pricing = packagePriceDetails($package);
 
                 $deskripsi = trim(
                     (string) ($package['deskripsi'] ?? '')
@@ -915,7 +933,13 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
 
                     <div class="price">
                         <small>Harga langganan</small>
-                        <strong><?= e(rupiah($harga)) ?></strong>
+                        <?php if ($pricing['promo_aktif']): ?>
+                            <del><?= e(rupiah($pricing['harga_normal'])) ?></del>
+                            <span class="promo-badge">Hemat <?= e(rupiah($pricing['diskon'])) ?></span>
+                            <strong><?= e(rupiah($pricing['harga_akhir'])) ?></strong>
+                        <?php else: ?>
+                            <strong><?= e(rupiah($pricing['harga_normal'])) ?></strong>
+                        <?php endif; ?>
                         <span>/bulan</span>
                     </div>
 
