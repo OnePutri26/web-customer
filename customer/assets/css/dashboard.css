@@ -4065,3 +4065,226 @@ button {
     background: #fff7e6;
     color: #9a6700;
 }
+
+.live-status.is-historical {
+    color: #53647d;
+    background: #eef2f7;
+}
+
+.live-status.is-historical span {
+    background: #718096;
+    box-shadow: 0 0 0 3px rgba(113, 128, 150, .12);
+}
+
+.chart-container[hidden],
+.telemetry-empty[hidden] {
+    display: none !important;
+}
+
+.network-unavailable.network-status-normal {
+    color: #157347;
+    background: #e8f7ef;
+}
+
+.network-unavailable.network-status-outage {
+    color: #b42318;
+    background: #fff0ef;
+}
+
+.network-unavailable.network-status-maintenance {
+    color: #8a5700;
+    background: #fff5dd;
+}
+
+.network-check.network-normal {
+    color: #fff;
+    background: #22a861;
+}
+
+.network-check.network-outage {
+    color: #fff;
+    background: #dc4c43;
+}
+
+.network-check.network-maintenance {
+    color: #fff;
+    background: #d28a16;
+}
+
+.network-check.network-unknown {
+    color: #9a6700;
+    background: #fff7e6;
+}
+
+.notification-card {
+    min-height: 180px;
+}
+
+.dashboard-notification-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.dashboard-notification {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 9px;
+    border: 1px solid #edf1f6;
+    border-radius: 10px;
+    background: #fff;
+    transition: background .2s ease, border-color .2s ease;
+}
+
+.dashboard-notification:hover {
+    border-color: #d9e5fb;
+    background: #f8faff;
+}
+
+.dashboard-notification.is-unread {
+    border-left: 3px solid #2563eb;
+}
+
+.notification-icon {
+    width: 27px;
+    height: 27px;
+    flex: 0 0 27px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    background: #eff5ff;
+    color: #2563eb;
+}
+
+.notification-copy {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+}
+
+.notification-copy strong {
+    color: #25334b;
+    font-size: 9px;
+}
+
+.notification-copy > span {
+    overflow: hidden;
+    color: #718096;
+    font-size: 8px;
+    line-height: 1.5;
+    text-overflow: ellipsis;
+}
+
+.notification-copy small {
+    color: #9aa5b5;
+    font-size: 7px;
+}
+
+.notification-empty {
+    padding: 18px 10px;
+    color: #718096;
+    font-size: 9px;
+    text-align: center;
+}
+
+.theme-toggle {
+    width: 34px;
+    height: 34px;
+    display: inline-grid;
+    place-items: center;
+    border: 1px solid #e8edf5;
+    border-radius: 10px;
+    background: #fff;
+    color: #526179;
+    cursor: pointer;
+    transition: .2s ease;
+}
+
+.theme-toggle:hover {
+    border-color: #cbd9f1;
+    color: #2563eb;
+}
+
+.dashboard-page[data-theme="dark"] {
+    background: #0b1220;
+    color: #d5deeb;
+}
+
+.dashboard-page[data-theme="dark"] .sidebar,
+.dashboard-page[data-theme="dark"] .topbar,
+.dashboard-page[data-theme="dark"] .dashboard-card,
+.dashboard-page[data-theme="dark"] .stat-card,
+.dashboard-page[data-theme="dark"] .status-strip,
+.dashboard-page[data-theme="dark"] .state-card,
+.dashboard-page[data-theme="dark"] .dashboard-footer {
+    border-color: #26354a !important;
+    background: #121c2c !important;
+    color: #d5deeb;
+    box-shadow: none;
+}
+
+.dashboard-page[data-theme="dark"] .sidebar-brand,
+.dashboard-page[data-theme="dark"] .sidebar-user,
+.dashboard-page[data-theme="dark"] .topbar {
+    border-color: #26354a;
+}
+
+.dashboard-page[data-theme="dark"] .topbar h1,
+.dashboard-page[data-theme="dark"] .top-profile-info strong,
+.dashboard-page[data-theme="dark"] .card-heading h3,
+.dashboard-page[data-theme="dark"] .stat-value,
+.dashboard-page[data-theme="dark"] .package-info h4,
+.dashboard-page[data-theme="dark"] .network-main strong,
+.dashboard-page[data-theme="dark"] .notification-copy strong,
+.dashboard-page[data-theme="dark"] .dashboard-footer {
+    color: #e7eef9 !important;
+}
+
+.dashboard-page[data-theme="dark"] .menu-item,
+.dashboard-page[data-theme="dark"] .breadcrumb-text,
+.dashboard-page[data-theme="dark"] .stat-label,
+.dashboard-page[data-theme="dark"] .notification-copy > span,
+.dashboard-page[data-theme="dark"] .notification-copy small,
+.dashboard-page[data-theme="dark"] .telemetry-caption {
+    color: #9cadc2;
+}
+
+.dashboard-page[data-theme="dark"] .menu-item:hover,
+.dashboard-page[data-theme="dark"] .menu-item.active,
+.dashboard-page[data-theme="dark"] .chart-summary,
+.dashboard-page[data-theme="dark"] .network-info div,
+.dashboard-page[data-theme="dark"] .dashboard-notification,
+.dashboard-page[data-theme="dark"] .theme-toggle {
+    border-color: #2b3a51;
+    background: #182538;
+    color: #cbd7e8;
+}
+
+.dashboard-page[data-theme="dark"] .network-main,
+.dashboard-page[data-theme="dark"] .telemetry-empty {
+    border-color: #2b3a51;
+    background: #172437;
+}
+
+.dashboard-page[data-theme="dark"] .chart-summary strong,
+.dashboard-page[data-theme="dark"] .telemetry-empty strong {
+    color: #e7eef9;
+}
+
+.dashboard-page[data-theme="dark"] .top-profile-info span,
+.dashboard-page[data-theme="dark"] .telemetry-empty span,
+.dashboard-page[data-theme="dark"] .notification-empty {
+    color: #9cadc2;
+}
+
+@media (max-width: 600px) {
+    .dashboard-notification {
+        padding: 10px;
+    }
+
+    .theme-toggle {
+        width: 32px;
+        height: 32px;
+    }
+}

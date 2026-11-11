@@ -852,3 +852,56 @@ body {
     }
 
 }
+
+.status-maintenance {
+    color: #854d0e;
+    background: linear-gradient(125deg, #fef3c7, #fffbeb);
+    border-color: #fde68a;
+}
+
+.status-maintenance .main-status-info > span,
+.status-maintenance .main-status-info p {
+    color: #854d0e;
+}
+
+.status-maintenance .live-dot {
+    background: #a16207;
+}
+
+.network-history-list {
+    display: grid;
+    gap: 10px;
+    padding: 18px 23px 22px;
+}
+
+.network-history-item {
+    display: grid;
+    gap: 5px;
+    padding: 13px 15px;
+    border: 1px solid var(--network-border);
+    border-radius: 12px;
+    background: #fbfcfe;
+}
+
+.network-history-item strong {
+    color: var(--network-text);
+    font-size: 12px;
+}
+
+.network-history-item p {
+    margin: 0;
+    color: var(--network-text-soft);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.network-history-item small,
+.network-history-empty {
+    color: var(--network-text-soft);
+    font-size: 10px;
+}
+
+.network-history-empty {
+    margin: 0;
+    padding: 8px 0;
+}

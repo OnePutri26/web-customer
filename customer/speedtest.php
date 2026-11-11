@@ -54,12 +54,12 @@ $initial = strtoupper(
 $paketNama =
     $customer['paket'] ??
     $customer['nama_paket'] ??
-    'Internet Home';
+    'Paket belum tercatat';
 
 $paketSpeed =
     $customer['speed'] ??
     $customer['kecepatan'] ??
-    '100 Mbps';
+    'Belum tersedia';
 
 
 /* =====================================================
@@ -76,11 +76,11 @@ $customerId =
 
 $serverName =
     $_SERVER['SERVER_NAME'] ??
-    'Local Server';
+    'Server aplikasi YESNET';
 
 $serverIp =
     $_SERVER['SERVER_ADDR'] ??
-    '127.0.0.1';
+    'Tidak tersedia';
 
 ?>
 
@@ -388,7 +388,7 @@ $serverIp =
             </h4>
 
             <span>
-                Periksa kecepatan koneksi internet kamu
+                Uji koneksi browser ke server aplikasi YESNET, bukan kecepatan paket ISP
             </span>
 
         </div>
@@ -706,7 +706,8 @@ $serverIp =
                     </h5>
 
                     <p>
-                        Informasi koneksi dan paket internet kamu.
+                        Hasil mengukur jalur browser ke server aplikasi YESNET dan tidak mewakili
+                        kecepatan jaringan ISP secara menyeluruh.
                     </p>
 
                 </div>
@@ -716,7 +717,7 @@ $serverIp =
 
                     <span></span>
 
-                    Online
+                    Server uji aplikasi
 
                 </div>
 

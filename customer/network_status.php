@@ -566,6 +566,7 @@ function statusText(?bool $status)
                     : ($networkStatus === false ? 'status-danger' : 'status-unknown')
                 ?>
             "
+            id="areaNetworkStatus"
         >
 
 
@@ -597,11 +598,11 @@ function statusText(?bool $status)
                         STATUS JARINGAN
                     </span>
 
-                    <h2>
+                    <h2 id="areaNetworkLabel">
                         <?= htmlspecialchars($networkLabel) ?>
                     </h2>
 
-                    <p>
+                    <p id="areaNetworkDescription">
                         <?= htmlspecialchars($networkDescription) ?>
                     </p>
 
@@ -610,7 +611,7 @@ function statusText(?bool $status)
             </div>
 
 
-            <div class="status-live">
+            <div class="status-live" id="areaNetworkBadge">
 
                 <span class="live-dot"></span>
 
@@ -663,6 +664,7 @@ function statusText(?bool $status)
                 <div class="service-box">
 
                     <div
+                        id="internetTelemetryIcon"
                         class="service-icon
                         <?= $isOnline === true
                             ? 'icon-online'
@@ -689,6 +691,7 @@ function statusText(?bool $status)
 
 
                     <div
+                        id="internetTelemetryStatus"
                         class="<?= statusClass($isOnline) ?>"
                     >
 
@@ -805,7 +808,7 @@ function statusText(?bool $status)
                     CONNECTION SUMMARY
                 </span>
 
-                <h3>
+                <h3 id="areaNetworkSummaryTitle">
                     <?= $networkStatus === true
                         ? 'Jaringan area kamu berjalan normal'
                         : ($networkStatus === false
@@ -814,7 +817,7 @@ function statusText(?bool $status)
                     ?>
                 </h3>
 
-                <p>
+                <p id="areaNetworkSummaryDescription">
                     <?= $networkStatus === true
                         ? 'Informasi jaringan area tersedia dari sistem monitoring.'
                         : ($networkStatus === false
@@ -839,13 +842,24 @@ function statusText(?bool $status)
 
         </section>
 
+        <section class="dashboard-card network-history-card">
+            <div class="card-title">
+                <div>
+                    <h5>Riwayat gangguan area</h5>
+                    <span>Catatan insiden dari database jaringan YESNET</span>
+                </div>
+            </div>
+            <div class="network-history-list" id="areaNetworkHistory" aria-live="polite">
+                <p class="network-history-empty">Memuat riwayat area...</p>
+            </div>
+        </section>
 
 
         <!-- =================================================
              FOOTER INFO
         ================================================== -->
 
-        <div class="network-footer">
+        <div class="network-footer" id="areaNetworkUpdatedAt">
 
             <i class="bi bi-info-circle"></i>
 
@@ -859,6 +873,168 @@ function statusText(?bool $status)
 
 </main>
 
+<script>
+document.addEventListener('DOMContentLoaded', async function () {
+    const formatDate = function (value) {
+        if (!value) {
+            return 'Waktu tidak tersedia';
+        }
+
+        const normalized = String(value).replace(' ', 'T');
+        const date = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(normalized)
+            ? normalized
+            : normalized + '+07:00');
+        if (Number.isNaN(date.getTime())) {
+            return 'Waktu tidak tersedia';
+        }
+
+        return new Intl.DateTimeFormat('id-ID', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: 'Asia/Jakarta'
+        }).format(date) + ' WIB';
+    };
+
+    const historyList = document.getElementById('areaNetworkHistory');
+    const setText = function (id, value) {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = value;
+        }
+    };
+
+    try {
+        const response = await fetch('dashboard_data.php', {
+            headers: { Accept: 'application/json' },
+            cache: 'no-store',
+            credentials: 'same-origin'
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.data) {
+            throw new Error(payload.error || 'Data status jaringan gagal dimuat.');
+        }
+
+        const network = payload.data.network || {};
+        if (network.available) {
+            const state = network.status || 'unknown';
+            const statusClass = state === 'outage'
+                ? 'status-danger'
+                : (state === 'normal'
+                    ? 'status-normal'
+                    : (state === 'maintenance' ? 'status-maintenance' : 'status-unknown'));
+            const statusLabel = {
+                normal: 'NORMAL',
+                outage: 'GANGGUAN',
+                maintenance: 'MAINTENANCE',
+                unknown: 'BELUM TERSEDIA'
+            };
+            const statusIcon = {
+                normal: 'bi-check-lg',
+                outage: 'bi-exclamation-lg',
+                maintenance: 'bi-wrench-adjustable',
+                unknown: 'bi-question-lg'
+            };
+
+            const hero = document.getElementById('areaNetworkStatus');
+            if (hero) {
+                hero.classList.remove('status-normal', 'status-danger', 'status-maintenance', 'status-unknown');
+                hero.classList.add(statusClass);
+            }
+            setText('areaNetworkLabel', network.title || 'Status jaringan area belum tersedia');
+            setText('areaNetworkDescription', network.description || 'Informasi status area belum tersedia.');
+            setText('areaNetworkSummaryTitle', network.title || 'Status jaringan area belum tersedia');
+            setText(
+                'areaNetworkSummaryDescription',
+                network.area ? 'Wilayah layanan: ' + network.area : 'Wilayah pelanggan belum terhubung ke area jaringan.'
+            );
+            const badge = document.getElementById('areaNetworkBadge');
+            if (badge) {
+                const dot = badge.querySelector('.live-dot');
+                badge.textContent = '';
+                if (dot) {
+                    badge.appendChild(dot);
+                }
+                badge.appendChild(document.createTextNode(statusLabel[state] || statusLabel.unknown));
+            }
+
+            const heroIcon = document.querySelector('#areaNetworkStatus .main-status-icon i');
+            if (heroIcon) {
+                heroIcon.className = 'bi ' + (statusIcon[state] || statusIcon.unknown);
+            }
+        }
+
+        const telemetry = payload.data.telemetry || {};
+        const telemetryStatus = document.getElementById('internetTelemetryStatus');
+        const telemetryIcon = document.getElementById('internetTelemetryIcon');
+        if (telemetryStatus && telemetryIcon) {
+            const fresh = Boolean(telemetry.available && telemetry.is_live);
+            telemetryStatus.className = fresh ? 'service-online' : 'service-unknown';
+            const statusDot = telemetryStatus.querySelector('span');
+            telemetryStatus.textContent = '';
+            if (statusDot) {
+                telemetryStatus.appendChild(statusDot);
+            }
+            telemetryStatus.appendChild(document.createTextNode(
+                fresh ? ' Data terbaru' : ' Belum tersedia'
+            ));
+            telemetryIcon.className = 'service-icon ' + (fresh ? 'icon-online' : 'icon-unknown');
+        }
+
+        if (historyList) {
+            historyList.textContent = '';
+            const history = Array.isArray(network.history) ? network.history : [];
+            if (history.length === 0) {
+                const empty = document.createElement('p');
+                empty.className = 'network-history-empty';
+                empty.textContent = network.available
+                    ? 'Belum ada riwayat insiden yang tercatat untuk area ini.'
+                    : 'Riwayat belum tersedia karena area pelanggan belum terhubung.';
+                historyList.appendChild(empty);
+            } else {
+                history.forEach(function (incident) {
+                    const item = document.createElement('article');
+                    item.className = 'network-history-item';
+
+                    const title = document.createElement('strong');
+                    title.textContent = String(incident.title || 'Gangguan jaringan');
+                    const description = document.createElement('p');
+                    description.textContent = String(incident.description || 'Tidak ada keterangan tambahan.');
+                    const date = document.createElement('small');
+                    date.textContent = 'Mulai: ' + formatDate(incident.started_at);
+
+                    item.append(title, description, date);
+                    if (incident.estimated_resolution) {
+                        const estimate = document.createElement('small');
+                        estimate.textContent = ' · Estimasi: ' + formatDate(incident.estimated_resolution);
+                        item.appendChild(estimate);
+                    }
+                    historyList.appendChild(item);
+                });
+            }
+        }
+
+        const updatedAt = document.getElementById('areaNetworkUpdatedAt');
+        if (updatedAt) {
+            const infoIcon = updatedAt.querySelector('i');
+            updatedAt.textContent = '';
+            if (infoIcon) {
+                updatedAt.appendChild(infoIcon);
+            }
+            updatedAt.appendChild(document.createTextNode(
+                ' Status jaringan diperbarui ' + formatDate(payload.data.checked_at) + '.'
+            ));
+        }
+    } catch (error) {
+        console.error('Pembaruan status jaringan gagal:', error);
+        if (historyList) {
+            historyList.textContent = 'Data status jaringan gagal diperbarui. Silakan coba refresh.';
+        }
+    }
+});
+</script>
 
 </body>
 

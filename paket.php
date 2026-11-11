@@ -1,124 +1,186 @@
 
 <?php
+/**
+ * YESNET - Daftar Paket Internet
+ * Database: paket_wifi
+ * Kolom: id, nama_paket, speed_mbps, harga, wilayah, status, created_at
+ */
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
-
 require_once __DIR__ . '/config/database.php';
 
-/*
-|--------------------------------------------------------------------------
-| HELPER
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+   HELPER
+========================================================= */
+
 if (!function_exists('e')) {
     function e($value): string
     {
-        return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+        return htmlspecialchars((string)($value ?? ''), ENT_QUOTES, 'UTF-8');
     }
 }
 
 if (!function_exists('rupiah')) {
     function rupiah($nominal): string
     {
-        return 'Rp ' . number_format((float) $nominal, 0, ',', '.');
+        return 'Rp ' . number_format((float)$nominal, 0, ',', '.');
     }
 }
 
-/*
-|--------------------------------------------------------------------------
-| ALUR COVERAGE
-|--------------------------------------------------------------------------
-*/
-$modeCoverage = (string) ($_GET['mode'] ?? '') === 'coverage';
+function statusPaket($status): array
+{
+    $value = strtolower(trim((string)$status));
+
+    if (in_array($value, ['aktif', 'active', 'tersedia', 'available', '1'], true)) {
+        return ['label' => 'Aktif', 'class' => 'status-active'];
+    }
+
+    if (in_array($value, ['nonaktif', 'non-aktif', 'inactive', 'tidak aktif', '0'], true)) {
+        return ['label' => 'Nonaktif', 'class' => 'status-inactive'];
+    }
+
+    if ($value === '') {
+        return ['label' => 'Status belum diatur', 'class' => 'status-unknown'];
+    }
+
+    return ['label' => ucwords($value), 'class' => 'status-unknown'];
+}
+
+/**
+ * Normalisasi nilai wilayah database.
+ * JATIM, SURABAYA, SIDOARJO, dan JAWA TIMUR dianggap satu wilayah.
+ */
+function normalisasiWilayah($wilayah): string
+{
+    $value = strtoupper(trim((string)$wilayah));
+
+    if (in_array($value, [
+        'JATIM',
+        'JAWA TIMUR',
+        'SURABAYA',
+        'KOTA SURABAYA',
+        'SIDOARJO'
+    ], true)) {
+        return 'surabaya';
+    }
+
+    if (in_array($value, ['JAKARTA', 'DKI JAKARTA'], true)) {
+        return 'jakarta';
+    }
+
+    return '';
+}
+
+function formatWilayahPaket($wilayah): string
+{
+    $region = normalisasiWilayah($wilayah);
+
+    if ($region === 'jakarta') {
+        return 'Jakarta';
+    }
+
+    if ($region === 'surabaya') {
+        return 'Surabaya';
+    }
+
+    return trim((string)$wilayah) !== ''
+        ? ucwords(strtolower(trim((string)$wilayah)))
+        : 'Wilayah belum ditentukan';
+}
+
+function wilayahUntukUrl($wilayah): string
+{
+    $region = normalisasiWilayah($wilayah);
+
+    if ($region !== '') {
+        return $region;
+    }
+
+    return strtolower(trim((string)$wilayah));
+}
+
+/* =========================================================
+   PILIH WILAYAH
+========================================================= */
+
+$wilayahDipilih = strtolower(trim((string)($_GET['wilayah'] ?? 'jakarta')));
+
+if (!in_array($wilayahDipilih, ['jakarta', 'surabaya'], true)) {
+    $wilayahDipilih = 'jakarta';
+}
+
+$wilayahDb = $wilayahDipilih === 'jakarta' ? 'JAKARTA' : 'JATIM';
+$wilayahLabel = $wilayahDipilih === 'jakarta' ? 'Jakarta' : 'Surabaya';
+
+$modeCoverage = (string)($_GET['mode'] ?? '') === 'coverage';
+$modeQuery = $modeCoverage ? '&mode=coverage' : '';
+
+/* =========================================================
+   DATA COVERAGE DARI SESSION
+========================================================= */
+
 $coverageFlow = $modeCoverage && !empty($_SESSION['flow']['tersedia']);
 
 $flowAlamat = $coverageFlow
-    ? trim((string) ($_SESSION['flow']['alamat'] ?? ''))
+    ? trim((string)($_SESSION['flow']['alamat'] ?? ''))
     : '';
 
 $flowOdp = $coverageFlow
-    ? trim((string) ($_SESSION['flow']['odp'] ?? ''))
+    ? trim((string)($_SESSION['flow']['odp'] ?? ''))
     : '';
 
 $flowJarak = (
-    $coverageFlow
-    && isset($_SESSION['flow']['jarak'])
-    && is_numeric($_SESSION['flow']['jarak'])
-)
-    ? (float) $_SESSION['flow']['jarak']
-    : null;
+    $coverageFlow &&
+    isset($_SESSION['flow']['jarak']) &&
+    is_numeric($_SESSION['flow']['jarak'])
+) ? (float)$_SESSION['flow']['jarak'] : null;
 
-/*
-|--------------------------------------------------------------------------
-| WILAYAH
-|--------------------------------------------------------------------------
-| Database:
-| JAKARTA = Jakarta
-| JATIM   = Surabaya
-|
-| URL menerima:
-| jakarta, surabaya, sidoarjo, jatim, jawa-timur, jawa timur
-|--------------------------------------------------------------------------
-*/
-$wilayahParam = strtolower(
-    trim((string) ($_GET['wilayah'] ?? 'jakarta'))
-);
+/* =========================================================
+   AMBIL PAKET BERDASARKAN WILAYAH
+========================================================= */
 
-if (in_array(
-    $wilayahParam,
-    ['jatim', 'sidoarjo', 'surabaya', 'jawa-timur', 'jawa timur'],
-    true
-)) {
-    $wilayahDb = 'JATIM';
-    $wilayahLabel = 'Surabaya';
-    $wilayahUrl = 'surabaya';
-} elseif ($wilayahParam === 'jakarta') {
-    $wilayahDb = 'JAKARTA';
-    $wilayahLabel = 'Jakarta';
-    $wilayahUrl = 'jakarta';
-} else {
-    // Wilayah tidak dikenal: gunakan Jakarta sebagai default.
-    $wilayahDb = 'JAKARTA';
-    $wilayahLabel = 'Jakarta';
-    $wilayahUrl = 'jakarta';
-}
-
-/*
-|--------------------------------------------------------------------------
-| AMBIL PAKET DARI DATABASE
-|--------------------------------------------------------------------------
-*/
 $packages = [];
 $loadError = false;
-
-$sql = "
-    SELECT *
-    FROM paket_wifi
-    WHERE UPPER(TRIM(COALESCE(wilayah, ''))) = ?
-      AND (
-          status IS NULL
-          OR TRIM(status) = ''
-          OR LOWER(TRIM(status)) IN (
-              'aktif',
-              'active',
-              '1',
-              'tersedia',
-              'available'
-          )
-      )
-    ORDER BY
-        CAST(harga AS DECIMAL(15,2)) ASC,
-        CAST(speed_mbps AS DECIMAL(15,2)) ASC,
-        id ASC
-";
+$errorMessage = '';
 
 try {
+    if ($wilayahDipilih === 'jakarta') {
+        $wilayahAlias = ['JAKARTA', 'DKI JAKARTA'];
+    } else {
+        $wilayahAlias = [
+            'JATIM',
+            'JAWA TIMUR',
+            'SURABAYA',
+            'KOTA SURABAYA',
+            'SIDOARJO'
+        ];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($wilayahAlias), '?'));
+
+    $sql = "
+        SELECT
+            id,
+            nama_paket,
+            speed_mbps,
+            harga,
+            wilayah,
+            status,
+            created_at
+        FROM paket_wifi
+        WHERE UPPER(TRIM(COALESCE(wilayah, ''))) IN ($placeholders)
+        ORDER BY harga ASC, speed_mbps ASC, id ASC
+    ";
+
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param('s', $wilayahDb);
+
+    $types = str_repeat('s', count($wilayahAlias));
+    $stmt->bind_param($types, ...$wilayahAlias);
+
     $stmt->execute();
 
     $result = $stmt->get_result();
@@ -128,79 +190,29 @@ try {
     }
 
     $stmt->close();
+
 } catch (Throwable $ex) {
-    error_log('Paket gagal dimuat: ' . $ex->getMessage());
+    error_log('Paket YESNET gagal dimuat: ' . $ex->getMessage());
+
     $loadError = true;
+    $errorMessage = 'Terjadi kesalahan saat mengambil data paket dari database.';
 }
 
 $totalPackages = count($packages);
 
-/*
-|--------------------------------------------------------------------------
-| PENANDA PAKET POPULER
-|--------------------------------------------------------------------------
-*/
-$popularKeys = [
-    'is_populer',
-    'populer',
-    'unggulan',
-    'is_popular'
-];
-
-$popularKey = null;
-
-if ($totalPackages > 0) {
-    foreach ($popularKeys as $key) {
-        if (array_key_exists($key, $packages[0])) {
-            $popularKey = $key;
-            break;
-        }
-    }
-}
-
-$popularIndex = (
-    $popularKey === null && $totalPackages >= 3
-)
-    ? intdiv($totalPackages, 2)
-    : -1;
-
-$isTruthy = static function ($value): bool {
-    return in_array(
-        strtolower(trim((string) $value)),
-        ['1', 'ya', 'yes', 'true', 'y', 'aktif'],
-        true
-    );
-};
-
-$defaultFeatures = [
-    'Internet cepat & stabil',
-    'Customer Support',
-    'Customer Portal',
-    'Pembayaran mudah'
-];
-
-/*
-|--------------------------------------------------------------------------
-| URL PILIH PAKET
-|--------------------------------------------------------------------------
-| Menggunakan parameter yang diharapkan pilih_paket.php:
-| pilih_paket.php?paket=ID&wilayah=surabaya
-|
-| Wilayah dikirim dalam bentuk kanonis agar konsisten.
-|--------------------------------------------------------------------------
-*/
-$modeQuery = $modeCoverage ? '&mode=coverage' : '';
-
 ?>
-
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Pilih paket internet YesNet sesuai kebutuhan Anda">
 
-    <title>Paket Internet | YesNet</title>
+    <meta
+        name="description"
+        content="Daftar paket internet YESNET berdasarkan wilayah pemasangan."
+    >
+
+    <title>Paket Internet | YESNET</title>
 
     <link
         rel="stylesheet"
@@ -229,17 +241,24 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
             text-decoration: none;
         }
 
-        /* NAVBAR */
+        /* =====================================================
+           NAVBAR
+        ===================================================== */
+
         .navbar {
             position: sticky;
             top: 0;
             z-index: 1000;
             height: 76px;
+
             display: flex;
             align-items: center;
+
             padding: 0 7%;
-            background: rgba(255,255,255,.88);
+
+            background: rgba(255,255,255,.94);
             backdrop-filter: blur(18px);
+
             border-bottom: 1px solid #e2e8f0;
         }
 
@@ -281,12 +300,17 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
             font-weight: 700;
         }
 
-        /* HERO */
+        /* =====================================================
+           HERO
+        ===================================================== */
+
         .hero {
             position: relative;
             overflow: hidden;
+
             padding: 95px 7% 70px;
             text-align: center;
+
             background:
                 radial-gradient(
                     circle at 50% 0%,
@@ -298,12 +322,16 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
 
         .hero-badge {
             display: inline-flex;
+            align-items: center;
             gap: 6px;
+
             padding: 8px 15px;
             margin-bottom: 22px;
+
             border-radius: 50px;
             background: #dbeafe;
             color: #2563eb;
+
             font-size: 12px;
             font-weight: 800;
             letter-spacing: 1px;
@@ -312,6 +340,7 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
         .hero h1 {
             max-width: 800px;
             margin: auto;
+
             font-size: clamp(42px, 6vw, 68px);
             line-height: 1.05;
             letter-spacing: -3px;
@@ -325,20 +354,154 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
         .hero p {
             max-width: 650px;
             margin: 22px auto 0;
+
             color: #64748b;
             font-size: 17px;
             line-height: 1.8;
         }
 
-        /* BANNER COVERAGE */
+        /* =====================================================
+           PACKAGE SECTION
+        ===================================================== */
+
+        .package-section {
+            max-width: 1200px;
+            margin: auto;
+            padding: 35px 20px 100px;
+        }
+
+        /* =====================================================
+           REGION PICKER
+           Desain mengikuti gambar referensi
+        ===================================================== */
+
+        .region-picker {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+
+            margin: 0 auto 45px;
+            text-align: center;
+        }
+
+        .region-picker-title {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+
+            margin-bottom: 13px;
+
+            color: #102b50;
+            font-size: 14px;
+            font-weight: 800;
+        }
+
+        .region-picker-title i {
+            color: #17477f;
+            font-size: 14px;
+        }
+
+        .region-options {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .region-option {
+            position: relative;
+            isolation: isolate;
+            overflow: hidden;
+
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+
+            min-width: 135px;
+            height: 43px;
+            padding: 0 23px;
+
+            border: 1px solid #d3ddeb;
+            border-radius: 50px;
+
+            background: #fff;
+            color: #17365e;
+
+            font-size: 13px;
+            font-weight: 700;
+
+            transition:
+                background .25s ease,
+                color .25s ease,
+                border-color .25s ease,
+                box-shadow .25s ease,
+                transform .25s ease;
+        }
+
+        .region-option i {
+            position: relative;
+            z-index: 2;
+            font-size: 13px;
+        }
+
+        .region-option span {
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Tombol wilayah aktif */
+        .region-option.active {
+            border-color: transparent;
+
+            background: linear-gradient(
+                110deg,
+                #123f78 0%,
+                #164c85 75%,
+                #a51e4d 100%
+            );
+
+            color: #fff;
+
+            box-shadow: 0 8px 18px rgba(15, 50, 91, .18);
+        }
+
+        .region-option:not(.active):hover {
+            border-color: #17477f;
+            background: #f8fbff;
+            color: #17477f;
+            transform: translateY(-1px);
+        }
+
+        .region-option.active:hover {
+            box-shadow: 0 10px 22px rgba(15, 50, 91, .24);
+            transform: translateY(-1px);
+        }
+
+        .region-hint {
+            margin-top: 12px;
+            color: #64748b;
+            font-size: 12px;
+        }
+
+        .region-hint strong {
+            color: #17477f;
+        }
+
+        /* =====================================================
+           COVERAGE BANNER
+        ===================================================== */
+
         .cov-banner {
             display: flex;
             align-items: center;
             gap: 14px;
             flex-wrap: wrap;
-            max-width: 1200px;
-            margin: 0 auto 28px;
+
+            margin: 0 0 28px;
             padding: 16px 20px;
+
             border-radius: 16px;
             background: #ecfdf3;
             border: 1px solid #abefc6;
@@ -370,6 +533,7 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
             font-size: 13px;
             font-weight: 700;
             color: #067647;
+
             padding: 8px 14px;
             border-radius: 999px;
             border: 1px solid #abefc6;
@@ -391,75 +555,39 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
             border-color: #fedf89;
         }
 
-        /* PILIH WILAYAH */
-        .region-picker {
-            max-width: 760px;
-            margin: 0 auto 34px;
-            padding: 24px;
-            text-align: center;
-            background: #fff;
-            border: 1px solid #dbeafe;
-            border-radius: 22px;
-            box-shadow: 0 12px 35px rgba(15,23,42,.05);
-        }
+        /* =====================================================
+           PACKAGE HEADING
+        ===================================================== */
 
-        .region-picker h2 {
-            font-size: 17px;
-            margin-bottom: 16px;
-        }
-
-        .region-options {
+        .package-heading {
             display: flex;
-            justify-content: center;
-            gap: 12px;
+            align-items: end;
+            justify-content: space-between;
+            gap: 16px;
             flex-wrap: wrap;
+
+            margin-bottom: 28px;
         }
 
-        .region-option {
-            min-width: 165px;
-            padding: 13px 22px;
-            border: 1px solid #cbd5e1;
-            border-radius: 999px;
-            color: #334155;
-            background: #fff;
-            font-weight: 800;
-            transition: .2s;
+        .package-heading h2 {
+            font-size: 25px;
+            margin-bottom: 6px;
         }
 
-        .region-option:hover {
-            border-color: #2563eb;
-            color: #2563eb;
-        }
-
-        .region-option.active {
-            color: #fff;
-            border-color: #2563eb;
-            background: linear-gradient(100deg,#2563eb,#0ea5e9);
-            box-shadow: 0 8px 20px rgba(37,99,235,.2);
-        }
-
-        .region-hint {
-            margin-top: 13px;
-            color: #64748b;
-            font-size: 13px;
-        }
-
-        /* PACKAGE */
-        .package-section {
-            max-width: 1200px;
-            margin: auto;
-            padding: 30px 20px 100px;
-        }
-
+        .package-heading p,
         .package-count {
-            margin-bottom: 30px;
             color: #64748b;
             font-size: 14px;
+            line-height: 1.6;
         }
 
         .package-count strong {
             color: #0f172a;
         }
+
+        /* =====================================================
+           PACKAGE CARD
+        ===================================================== */
 
         .package-grid {
             display: grid;
@@ -469,14 +597,19 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
 
         .package-card {
             position: relative;
+
             display: flex;
             flex-direction: column;
-            padding: 32px;
-            min-height: 520px;
-            background: white;
+
+            min-height: 440px;
+            padding: 30px;
+
+            background: #fff;
             border: 1px solid #e2e8f0;
             border-radius: 25px;
+
             box-shadow: 0 15px 45px rgba(15,23,42,.06);
+
             transition: .3s;
         }
 
@@ -485,53 +618,67 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
             box-shadow: 0 25px 60px rgba(15,23,42,.12);
         }
 
-        .package-card.is-popular {
-            border: 2px solid #2563eb;
-            box-shadow: 0 20px 60px rgba(37,99,235,.14);
-        }
-
-        .badge-popular {
-            position: absolute;
-            top: 0;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            padding: 7px 15px;
-            border-radius: 50px;
-            background: #2563eb;
-            color: white;
-            font-size: 11px;
-            font-weight: 800;
-            white-space: nowrap;
-        }
-
         .package-icon {
             width: 58px;
             height: 58px;
+
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 25px;
+
+            margin-bottom: 22px;
             border-radius: 17px;
+
             background: #dbeafe;
             color: #2563eb;
             font-size: 25px;
         }
 
-        .package-card h2 {
-            margin-bottom: 5px;
-            font-size: 23px;
+        .package-card h3 {
+            margin: 12px 0 8px;
+            font-size: 22px;
             overflow-wrap: anywhere;
         }
 
-        .package-label {
+        .package-region {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+
             color: #64748b;
             font-size: 12px;
             font-weight: 700;
-            letter-spacing: 1px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+
+            width: fit-content;
+            padding: 6px 10px;
+
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 800;
+        }
+
+        .status-active {
+            color: #067647;
+            background: #dcfae6;
+        }
+
+        .status-inactive {
+            color: #b42318;
+            background: #fee4e2;
+        }
+
+        .status-unknown {
+            color: #475467;
+            background: #eaecf0;
         }
 
         .speed {
-            margin: 25px 0 12px;
+            margin: 22px 0 10px;
         }
 
         .speed strong {
@@ -546,43 +693,26 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
         }
 
         .description {
-            min-height: 50px;
+            min-height: 48px;
             color: #64748b;
             font-size: 14px;
             line-height: 1.7;
         }
 
         .price {
-            padding: 22px 0;
-            margin-top: 20px;
+            padding: 20px 0;
+            margin-top: 18px;
             border-top: 1px solid #e2e8f0;
         }
 
         .price small {
             display: block;
             color: #64748b;
-            margin-bottom: 4px;
+            margin-bottom: 5px;
         }
 
         .price strong {
             font-size: 25px;
-        }
-
-        .price del {
-            display: block;
-            color: #64748b;
-            font-size: 14px;
-        }
-
-        .price .promo-badge {
-            display: inline-block;
-            margin: 3px 0 7px;
-            padding: 3px 8px;
-            border-radius: 999px;
-            background: #fff0f1;
-            color: #a9162a;
-            font-size: 11px;
-            font-weight: 800;
         }
 
         .price span {
@@ -590,35 +720,23 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
             font-size: 13px;
         }
 
-        .features {
-            display: grid;
-            gap: 11px;
-            margin-bottom: 25px;
-        }
-
-        .features div {
-            color: #475569;
-            font-size: 13px;
-            overflow-wrap: anywhere;
-        }
-
-        .features i {
-            color: #16a34a;
-            margin-right: 7px;
-        }
-
         .choose-btn {
             display: block;
             width: 100%;
+
             margin-top: auto;
             padding: 14px;
+
             border: 0;
             border-radius: 12px;
+
             background: #2563eb;
-            color: white;
+            color: #fff;
+
             text-align: center;
             font-size: 14px;
             font-weight: 800;
+
             cursor: pointer;
             transition: .2s;
         }
@@ -628,10 +746,23 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
             transform: translateY(-2px);
         }
 
-        /* EMPTY / ERROR */
+        .choose-btn.disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* =====================================================
+           EMPTY STATE
+        ===================================================== */
+
         .empty {
             padding: 80px 20px;
             text-align: center;
+
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 22px;
         }
 
         .empty > i {
@@ -648,14 +779,21 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
             line-height: 1.7;
         }
 
-        .empty .choose-btn {
+        .retry-btn {
             display: inline-block;
-            width: auto;
             margin-top: 22px;
             padding: 12px 24px;
+
+            border-radius: 12px;
+            background: #2563eb;
+            color: white;
+            font-weight: 800;
         }
 
-        /* FOOTER */
+        /* =====================================================
+           FOOTER
+        ===================================================== */
+
         footer {
             padding: 50px 7%;
             background: #0f172a;
@@ -668,6 +806,10 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
             color: #94a3b8;
             font-size: 13px;
         }
+
+        /* =====================================================
+           RESPONSIVE
+        ===================================================== */
 
         @media (max-width: 900px) {
             .package-grid {
@@ -697,11 +839,41 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
             }
 
             .package-card {
-                padding: 28px;
+                padding: 26px;
+            }
+
+            .package-heading h2 {
+                font-size: 22px;
+            }
+
+            .package-section {
+                padding-left: 16px;
+                padding-right: 16px;
+            }
+
+            .region-options {
+                width: 100%;
+                gap: 9px;
+            }
+
+            .region-option {
+                flex: 1;
+                min-width: 0;
+                max-width: 160px;
+                height: 43px;
+                padding: 0 15px;
             }
 
             .region-picker {
-                padding: 20px 14px;
+                margin-bottom: 35px;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .region-option {
+                gap: 6px;
+                padding: 0 10px;
+                font-size: 12px;
             }
         }
     </style>
@@ -709,8 +881,15 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
 
 <body>
 
+<!-- =========================================================
+     NAVBAR
+========================================================= -->
+
 <header class="navbar">
-    <div class="logo">YES<span>NET</span></div>
+
+    <div class="logo">
+        YES<span>NET</span>
+    </div>
 
     <nav class="nav-links">
         <a href="index.php">Home</a>
@@ -719,56 +898,85 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
         <a href="index.php#keunggulan">Keunggulan</a>
     </nav>
 
-    <a href="login.php" class="login-btn">Login</a>
+    <a href="login.php" class="login-btn">
+        Login
+    </a>
+
 </header>
 
+<!-- =========================================================
+     HERO
+========================================================= -->
+
 <section class="hero">
+
     <div class="hero-badge">
         <i class="bi bi-wifi"></i>
         PAKET INTERNET YESNET
     </div>
 
-    <h1>Pilih Internet yang <span>Cocok Untukmu</span></h1>
+    <h1>
+        Pilih Internet yang
+        <span>Cocok Untukmu</span>
+    </h1>
 
     <p>
-        Paket internet cepat dan stabil untuk bekerja, belajar, streaming,
-        gaming, dan kebutuhan keluarga.
+        Pilih paket internet sesuai kebutuhan rumah, bekerja,
+        belajar, streaming, dan hiburan keluarga.
     </p>
+
 </section>
+
+<!-- =========================================================
+     DAFTAR PAKET
+========================================================= -->
 
 <section class="package-section" id="paket">
 
+    <!-- PILIH WILAYAH -->
+
     <div class="region-picker">
-        <h2>
+
+        <div class="region-picker-title">
             <i class="bi bi-geo-alt"></i>
-            Pilih wilayah pemasangan
-        </h2>
+            <span>Pilih wilayah pemasangan</span>
+        </div>
 
         <div class="region-options">
+
             <a
-                class="region-option <?= $wilayahDb === 'JAKARTA' ? 'active' : '' ?>"
                 href="paket.php?wilayah=jakarta<?= e($modeQuery) ?>#paket"
+                class="region-option <?= $wilayahDipilih === 'jakarta' ? 'active' : '' ?>"
+                aria-pressed="<?= $wilayahDipilih === 'jakarta' ? 'true' : 'false' ?>"
             >
-                <i class="bi bi-geo-alt"></i> Jakarta
+                <i class="bi bi-geo-alt"></i>
+                <span>Jakarta</span>
             </a>
 
             <a
-                class="region-option <?= $wilayahDb === 'JATIM' ? 'active' : '' ?>"
                 href="paket.php?wilayah=surabaya<?= e($modeQuery) ?>#paket"
+                class="region-option <?= $wilayahDipilih === 'surabaya' ? 'active' : '' ?>"
+                aria-pressed="<?= $wilayahDipilih === 'surabaya' ? 'true' : 'false' ?>"
             >
-                <i class="bi bi-geo-alt"></i> Surabaya
+                <i class="bi bi-geo-alt"></i>
+                <span>Surabaya</span>
             </a>
+
         </div>
 
         <p class="region-hint">
             Menampilkan paket khusus wilayah
             <strong><?= e($wilayahLabel) ?></strong>.
         </p>
+
     </div>
+
+    <!-- INFORMASI COVERAGE -->
 
     <?php if ($coverageFlow): ?>
 
         <div class="cov-banner" role="status">
+
             <i class="bi bi-geo-alt-fill"></i>
 
             <div>
@@ -783,176 +991,173 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
                         <?php if ($flowJarak !== null): ?>
                             (<?= e(number_format($flowJarak * 1000, 0, ',', '.')) ?> m)
                         <?php endif; ?>
+
                     <?php endif; ?>
                 </span>
             </div>
 
-            <a href="coverage.php">Ganti alamat</a>
+            <a href="coverage.php">
+                Ganti alamat
+            </a>
+
         </div>
 
     <?php elseif ($modeCoverage): ?>
 
         <div class="cov-banner warn" role="status">
+
             <i class="bi bi-exclamation-triangle-fill"></i>
 
             <div>
                 <strong>Lokasi Anda belum dicek</strong>
+
                 <span>
-                    Cek coverage dulu agar kami memastikan jaringan
-                    tersedia di rumah Anda.
+                    Cek coverage terlebih dahulu agar ketersediaan
+                    jaringan di rumah dapat dipastikan.
                 </span>
             </div>
 
-            <a href="coverage.php">Cek coverage</a>
+            <a href="coverage.php">
+                Cek coverage
+            </a>
+
         </div>
 
     <?php endif; ?>
 
+    <!-- HASIL PAKET -->
+
     <?php if ($loadError): ?>
 
         <div class="empty">
+
             <i class="bi bi-exclamation-circle"></i>
+
             <h2>Paket Belum Dapat Dimuat</h2>
 
             <p>
-                Terjadi gangguan saat mengambil daftar paket.
-                Ini bukan berarti paket tidak tersedia.
+                <?= e($errorMessage) ?>
+                Periksa konfigurasi database dan nama tabel.
             </p>
 
             <a
-                class="choose-btn"
-                href="paket.php?wilayah=<?= e($wilayahUrl) ?><?= e($modeQuery) ?>#paket"
+                class="retry-btn"
+                href="paket.php?wilayah=<?= e($wilayahDipilih) ?><?= e($modeQuery) ?>#paket"
             >
                 Muat Ulang
             </a>
+
         </div>
 
     <?php elseif ($totalPackages > 0): ?>
 
-        <div class="package-count">
-            Menampilkan <strong><?= $totalPackages ?></strong>
-            paket internet untuk wilayah
-            <strong><?= e($wilayahLabel) ?></strong>.
+        <div class="package-heading">
+
+            <div>
+                <h2>
+                    Paket Internet <?= e($wilayahLabel) ?>
+                </h2>
+
+                <p>
+                    Pilih paket internet yang sesuai dengan kebutuhan Anda.
+                </p>
+            </div>
+
+            <div class="package-count">
+                Total
+                <strong><?= (int)$totalPackages ?> paket</strong>
+            </div>
+
         </div>
 
         <div class="package-grid">
 
-            <?php foreach ($packages as $index => $package): ?>
+            <?php foreach ($packages as $package): ?>
 
                 <?php
-                $packageId = (int) ($package['id'] ?? 0);
+                    $packageId = (int)($package['id'] ?? 0);
 
-                $packageName = trim(
-                    (string) ($package['nama_paket'] ?? 'Paket Internet')
-                );
-
-                $speed = (float) ($package['speed_mbps'] ?? 0);
-                $harga = (float) ($package['harga'] ?? 0);
-                $pricing = packagePriceDetails($package);
-
-                $deskripsi = trim(
-                    (string) ($package['deskripsi'] ?? '')
-                );
-
-                if ($deskripsi === '') {
-                    $deskripsi = 'Internet cepat dan stabil untuk kebutuhan rumah.';
-                }
-
-                $label = trim(
-                    (string) ($package['kategori'] ?? '')
-                );
-
-                if ($label === '') {
-                    $label = 'INTERNET RUMAH';
-                }
-
-                $features = $defaultFeatures;
-
-                if (!empty($package['fitur'])) {
-                    $parsed = array_values(
-                        array_filter(
-                            array_map(
-                                'trim',
-                                preg_split(
-                                    '/[\r\n|;]+/',
-                                    (string) $package['fitur']
-                                ) ?: []
-                            )
-                        )
+                    $packageName = trim(
+                        (string)($package['nama_paket'] ?? 'Paket Internet')
                     );
 
-                    if ($parsed !== []) {
-                        $features = array_slice($parsed, 0, 6);
+                    $speed = (int)($package['speed_mbps'] ?? 0);
+                    $harga = (float)($package['harga'] ?? 0);
+
+                    $wilayahAsli = trim(
+                        (string)($package['wilayah'] ?? '')
+                    );
+
+                    $wilayahLabelPaket = formatWilayahPaket($wilayahAsli);
+                    $statusInfo = statusPaket($package['status'] ?? '');
+
+                    /*
+                     * URL pemilihan paket.
+                     * Parameter wilayah tetap dikirim ke pilih_paket.php.
+                     */
+                    $pilihPaketUrl = 'pilih_paket.php?paket=' . $packageId;
+
+                    $wilayahSlug = wilayahUntukUrl($wilayahAsli);
+
+                    if ($wilayahSlug !== '') {
+                        $pilihPaketUrl .= '&wilayah=' . rawurlencode($wilayahSlug);
                     }
-                }
 
-                $isPopular = $popularKey !== null
-                    ? $isTruthy($package[$popularKey] ?? '')
-                    : ($index === $popularIndex);
+                    if ($modeCoverage) {
+                        $pilihPaketUrl .= '&mode=coverage';
+                    }
 
-                /*
-                 * Parameter untuk halaman pilih_paket.php.
-                 * Kirim wilayah kanonis:
-                 * JAKARTA -> jakarta
-                 * JATIM   -> surabaya
-                 */
-                $pilihPaketUrl = 'pilih_paket.php?paket='
-                    . $packageId
-                    . '&wilayah='
-                    . rawurlencode($wilayahUrl);
-
-                if ($modeCoverage) {
-                    $pilihPaketUrl .= '&mode=coverage';
-                }
+                    $bisaDipilih = (
+                        $packageId > 0 &&
+                        $statusInfo['class'] === 'status-active'
+                    );
                 ?>
 
-                <article class="package-card <?= $isPopular ? 'is-popular' : '' ?>">
-
-                    <?php if ($isPopular): ?>
-                        <div class="badge-popular">
-                            <i class="bi bi-star-fill"></i> POPULER
-                        </div>
-                    <?php endif; ?>
+                <article class="package-card">
 
                     <div class="package-icon">
                         <i class="bi bi-wifi"></i>
                     </div>
 
-                    <span class="package-label">
-                        <?= e(strtoupper($label)) ?>
+                    <span class="package-region">
+                        <i class="bi bi-geo-alt"></i>
+                        <?= e($wilayahLabelPaket) ?>
                     </span>
 
-                    <h2><?= e($packageName) ?></h2>
+                    <h3>
+                        <?= e($packageName) ?>
+                    </h3>
+
+                    <span class="status-badge <?= e($statusInfo['class']) ?>">
+                        <?= e($statusInfo['label']) ?>
+                    </span>
 
                     <div class="speed">
-                        <strong><?= e(number_format($speed, 0, ',', '.')) ?></strong>
+                        <strong>
+                            <?= e(number_format($speed, 0, ',', '.')) ?>
+                        </strong>
                         <span>Mbps</span>
                     </div>
 
-                    <p class="description"><?= e($deskripsi) ?></p>
+                    <p class="description">
+                        Paket internet YESNET dengan kecepatan
+                        hingga <?= e(number_format($speed, 0, ',', '.')) ?> Mbps.
+                    </p>
 
                     <div class="price">
+
                         <small>Harga langganan</small>
-                        <?php if ($pricing['promo_aktif']): ?>
-                            <del><?= e(rupiah($pricing['harga_normal'])) ?></del>
-                            <span class="promo-badge">Hemat <?= e(rupiah($pricing['diskon'])) ?></span>
-                            <strong><?= e(rupiah($pricing['harga_akhir'])) ?></strong>
-                        <?php else: ?>
-                            <strong><?= e(rupiah($pricing['harga_normal'])) ?></strong>
-                        <?php endif; ?>
+
+                        <strong>
+                            <?= e(rupiah($harga)) ?>
+                        </strong>
+
                         <span>/bulan</span>
+
                     </div>
 
-                    <div class="features">
-                        <?php foreach ($features as $feature): ?>
-                            <div>
-                                <i class="bi bi-check-circle-fill"></i>
-                                <?= e($feature) ?>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
+                    <?php if ($bisaDipilih): ?>
 
-                    <?php if ($packageId > 0): ?>
                         <a
                             href="<?= e($pilihPaketUrl) ?>"
                             class="choose-btn"
@@ -960,10 +1165,19 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
                             Pilih Paket Ini
                             <i class="bi bi-arrow-right"></i>
                         </a>
+
                     <?php else: ?>
-                        <span class="choose-btn" aria-disabled="true">
-                            ID Paket Tidak Valid
+
+                        <span
+                            class="choose-btn disabled"
+                            aria-disabled="true"
+                        >
+                            <?= $packageId <= 0
+                                ? 'ID Paket Tidak Valid'
+                                : 'Paket Tidak Aktif'
+                            ?>
                         </span>
+
                     <?php endif; ?>
 
                 </article>
@@ -975,12 +1189,17 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
     <?php else: ?>
 
         <div class="empty">
+
             <i class="bi bi-wifi-off"></i>
-            <h2>Paket Belum Tersedia</h2>
+
+            <h2>
+                Paket <?= e($wilayahLabel) ?> Belum Tersedia
+            </h2>
 
             <p>
-                Saat ini belum ada paket aktif untuk wilayah
-                <?= e($wilayahLabel) ?>.
+                Belum ada paket internet untuk wilayah
+                <strong><?= e($wilayahLabel) ?></strong>
+                di database YESNET.
             </p>
 
         </div>
@@ -989,10 +1208,22 @@ $modeQuery = $modeCoverage ? '&mode=coverage' : '';
 
 </section>
 
+<!-- =========================================================
+     FOOTER
+========================================================= -->
+
 <footer>
+
     <strong>YESNET</strong>
-    <p>Internet cepat dan stabil untuk kebutuhanmu.</p>
-    <p>© <?= date('Y') ?> YesNet. All Rights Reserved.</p>
+
+    <p>
+        Internet cepat dan stabil untuk kebutuhanmu.
+    </p>
+
+    <p>
+        © <?= date('Y') ?> YESNET. All Rights Reserved.
+    </p>
+
 </footer>
 
 </body>

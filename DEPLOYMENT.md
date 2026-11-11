@@ -92,6 +92,25 @@ payment/tagihan status. Do not disable webhook-token validation. Apply the
 database migration before enabling the callback; a database/schema error
 returns a retryable 5xx instead of acknowledging an unrecorded payment.
 
+## Customer dashboard data
+
+The customer dashboard refreshes its read-only data endpoint every 30 seconds
+using the existing customer session. Bandwidth speed and latency are read only
+from `usage_data` rows keyed by `customer_id`, with `download_mbps`,
+`upload_mbps`, `ping_ms`, and `recorded_at`. Those values are throughput samples,
+not daily or monthly data-volume totals; volume totals remain unavailable until
+the network integration records byte counters.
+
+Area status and incident history are shown only when the deployed schema has an
+explicit `customers.network_area_id` or `customers.area_id` relationship to
+`network_areas`, and the corresponding area/incident tables are populated. The
+dashboard does not infer a customer's area from their address. No new database
+tables are required for dashboard polling.
+
+The built-in speed test transfers data between the customer's browser and the
+YESNET application server. Its result is not a measurement of the complete ISP
+access network or a guaranteed package speed.
+
 ## Test mode checklist
 
 1. Configure a test/development Secret API Key, webhook token, database, and

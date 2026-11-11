@@ -330,6 +330,7 @@ $jumlahTagihan =
     0;
 
 $tagihan = null;
+$tagihanDataAvailable = false;
 
 $jatuhTempo =
     '-';
@@ -342,6 +343,7 @@ $riwayatPembayaran =
     [];
 
 $unreadNotifications = 0;
+$latestNotifications = [];
 
 
 $downloadMbps = null;
@@ -812,6 +814,25 @@ if (
         $rows = statementFetchAll($stmt);
         $unreadNotifications = (int) ($rows[0]['total'] ?? 0);
         $stmt->close();
+
+        if (
+            columnExists($conn, 'notifications', 'judul') &&
+            columnExists($conn, 'notifications', 'message') &&
+            columnExists($conn, 'notifications', 'type') &&
+            columnExists($conn, 'notifications', 'created_at')
+        ) {
+            $stmt = $conn->prepare("
+                SELECT id, judul, message, type, dibaca, created_at
+                FROM notifications
+                WHERE id_user = ? OR id_user IS NULL
+                ORDER BY created_at DESC
+                LIMIT 4
+            ");
+            $stmt->bind_param("i", $userId);
+            $stmt->execute();
+            $latestNotifications = statementFetchAll($stmt);
+            $stmt->close();
+        }
     } catch (Throwable $e) {
         error_log('Dashboard YESNET notification count failed: ' . $e->getMessage());
     }
@@ -913,6 +934,7 @@ if (
         'id_customer'
     )
 ) {
+    $tagihanDataAvailable = true;
 
     $statusCondition = '';
 
@@ -1620,7 +1642,7 @@ $currentPage =
                 </strong>
 
                 <span>
-                    Customer
+                    ID pelanggan #<?= (int) $customerId; ?>
                 </span>
 
             </div>
@@ -1683,6 +1705,17 @@ $currentPage =
 
             <div class="topbar-right">
 
+                <button
+                    type="button"
+                    class="theme-toggle"
+                    id="themeToggle"
+                    aria-label="Aktifkan tema gelap"
+                    aria-pressed="false"
+                    title="Ganti tema"
+                >
+                    <i class="bi bi-moon-stars" id="themeToggleIcon"></i>
+                </button>
+
                 <a
                     href="notifikasi.php"
                     class="notification-button"
@@ -1691,11 +1724,11 @@ $currentPage =
 
                     <i class="bi bi-bell"></i>
 
-                    <?php if ($unreadNotifications > 0): ?>
-                        <span class="notification-count">
-                            <?= $unreadNotifications > 99 ? '99+' : $unreadNotifications; ?>
-                        </span>
-                    <?php endif; ?>
+                    <span
+                        class="notification-count"
+                        id="dashboardUnreadCount"
+                        <?= $unreadNotifications > 0 ? '' : 'hidden'; ?>
+                    ><?= $unreadNotifications > 99 ? '99+' : $unreadNotifications; ?></span>
 
                 </a>
 
@@ -1716,7 +1749,7 @@ $currentPage =
                         </strong>
 
                         <span>
-                            Customer
+                            ID pelanggan #<?= (int) $customerId; ?>
                         </span>
 
                     </div>
@@ -2048,7 +2081,7 @@ $currentPage =
 
                         <i class="bi bi-calendar3"></i>
 
-                        Data pelanggan
+                        <span id="dashboardRefreshStatus">Data pelanggan</span>
 
                     </span>
 
@@ -2080,15 +2113,17 @@ $currentPage =
 
                         <div class="stat-value">
 
-                            <?= rupiah(
-                                $jumlahTagihan
-                            ); ?>
+                            <span id="dashboardInvoiceAmount"><?= !empty($tagihan)
+                                ? rupiah($jumlahTagihan)
+                                : ($tagihanDataAvailable ? 'Tidak ada tagihan' : 'Tagihan belum tersedia'); ?></span>
 
                         </div>
 
 
-                        <div class="stat-label">
-                            Tagihan aktif
+                        <div class="stat-label" id="dashboardInvoiceStatus">
+                            <?= !empty($tagihan)
+                                ? 'Tagihan belum dibayar'
+                                : ($tagihanDataAvailable ? 'Tidak ada tagihan tertunda' : 'Status tagihan belum tersedia'); ?>
                         </div>
 
 
@@ -2098,9 +2133,10 @@ $currentPage =
 
                                 <i class="bi bi-calendar-event"></i>
 
-                                <?= formatTanggal(
-                                    $jatuhTempo
-                                ); ?>
+                                Jatuh tempo:
+                                <span id="dashboardInvoiceDueDate"><?= !empty($tagihan)
+                                    ? formatTanggal($jatuhTempo)
+                                    : '—'; ?></span>
 
                             </span>
 
@@ -2131,7 +2167,7 @@ $currentPage =
                             </div>
 
 
-                            <span class="stat-tag <?= $bandwidthIsLive ? 'green' : ''; ?>">
+                            <span id="dashboardSpeedStatus" class="stat-tag <?= $bandwidthIsLive ? 'green' : ''; ?>">
                                         <?= $bandwidthIsLive
                                             ? 'LIVE'
                                             : ($bandwidthTelemetryAvailable ? 'HISTORIS' : 'BELUM TERSEDIA'); ?>
@@ -2142,9 +2178,9 @@ $currentPage =
 
                         <div class="stat-value">
 
-                            <?= $downloadMbps !== null
+                            <span id="dashboardDownloadSummary"><?= $downloadMbps !== null
                                 ? number_format($downloadMbps, 1)
-                                : '—'; ?>
+                                : '—'; ?></span>
 
                             <small>
                                 Mbps
@@ -2160,7 +2196,7 @@ $currentPage =
 
                         <div class="stat-bottom">
 
-                            <span>
+                            <span id="dashboardSpeedUpdatedAt">
                                 <?= $bandwidthTelemetryAvailable
                                     ? 'Terakhir diperbarui ' . formatTanggal($bandwidthDataUpdatedAt)
                                     : 'Telemetri belum terhubung'; ?>
@@ -2321,13 +2357,13 @@ $currentPage =
                                 </div>
 
 
-                                <div class="live-status <?= $bandwidthIsLive
+                                <div id="bandwidthLiveStatus" class="live-status <?= $bandwidthIsLive
                                     ? 'is-live'
                                     : ($bandwidthTelemetryAvailable ? 'is-historical' : 'is-unavailable'); ?>">
                                     <span></span>
-                                    <?= $bandwidthIsLive
+                                    <span id="bandwidthLiveLabel"><?= $bandwidthIsLive
                                         ? 'LIVE'
-                                        : ($bandwidthTelemetryAvailable ? 'HISTORIS' : 'BELUM TERSEDIA'); ?>
+                                        : ($bandwidthTelemetryAvailable ? 'HISTORIS' : 'BELUM TERSEDIA'); ?></span>
                                 </div>
 
                             </div>
@@ -2344,9 +2380,9 @@ $currentPage =
 
                                     <strong>
 
-                                        <?= $downloadMbps !== null
+                                        <span id="dashboardDownloadValue"><?= $downloadMbps !== null
                                             ? number_format($downloadMbps, 1)
-                                            : '—'; ?>
+                                            : '—'; ?></span>
 
                                         <small>
                                             Mbps
@@ -2365,9 +2401,9 @@ $currentPage =
 
                                     <strong>
 
-                                        <?= $uploadMbps !== null
+                                        <span id="dashboardUploadValue"><?= $uploadMbps !== null
                                             ? number_format($uploadMbps, 1)
-                                            : '—'; ?>
+                                            : '—'; ?></span>
 
                                         <small>
                                             Mbps
@@ -2386,9 +2422,9 @@ $currentPage =
 
                                     <strong>
 
-                                        <?= $pingMs !== null
+                                        <span id="dashboardPingValue"><?= $pingMs !== null
                                             ? number_format($pingMs, 0)
-                                            : '—'; ?>
+                                            : '—'; ?></span>
 
                                         <small>
                                             ms
@@ -2401,29 +2437,38 @@ $currentPage =
                             </div>
 
 
-                            <?php if ($bandwidthTelemetryAvailable): ?>
-                                <div class="chart-container">
-                                    <canvas id="bandwidthChart"></canvas>
-                                </div>
-                                <p class="telemetry-caption">
-                                    <?= $bandwidthIsLive
-                                        ? 'Data telemetri diperbarui dalam 5 menit terakhir.'
-                                        : 'Menampilkan catatan telemetri, bukan pembacaan live.'; ?>
-                                    <?php if ($bandwidthDataUpdatedAt && strtotime((string) $bandwidthDataUpdatedAt) !== false): ?>
-                                        Terakhir: <?= e(date('d M Y, H:i', strtotime((string) $bandwidthDataUpdatedAt))); ?> WIB.
-                                    <?php endif; ?>
-                                </p>
-                            <?php else: ?>
-                                <div class="telemetry-empty">
-                                    <i class="bi bi-router"></i>
-                                    <strong>Data bandwidth belum tersedia</strong>
-                                    <span>
-                                        Grafik akan terisi setelah integrasi monitoring jaringan
-                                        menyimpan data ke layanan telemetri.
-                                    </span>
-                                    <a href="usage.php">Lihat riwayat pemakaian</a>
-                                </div>
-                            <?php endif; ?>
+                            <div
+                                class="chart-container"
+                                id="bandwidthChartContainer"
+                                <?= $bandwidthTelemetryAvailable ? '' : 'hidden'; ?>
+                            >
+                                <canvas id="bandwidthChart"></canvas>
+                            </div>
+                            <div
+                                class="telemetry-empty"
+                                id="bandwidthTelemetryEmpty"
+                                <?= $bandwidthTelemetryAvailable ? 'hidden' : ''; ?>
+                            >
+                                <i class="bi bi-router"></i>
+                                <strong>Data bandwidth belum tersedia</strong>
+                                <span>
+                                    Grafik akan terisi setelah integrasi monitoring jaringan
+                                    menyimpan data telemetri yang sebenarnya.
+                                </span>
+                                <a href="usage.php">Lihat riwayat pemakaian</a>
+                            </div>
+                            <p class="telemetry-caption" id="bandwidthTelemetryCaption">
+                                <span id="bandwidthTelemetryMessage">
+                                <?= $bandwidthIsLive
+                                    ? 'Data telemetri diperbarui dalam 5 menit terakhir.'
+                                    : ($bandwidthTelemetryAvailable
+                                        ? 'Menampilkan catatan telemetri, bukan pembacaan live.'
+                                        : 'Volume penggunaan harian/bulanan belum tersedia; grafik hanya menampilkan kecepatan telemetri.'); ?>
+                                </span>
+                                Terakhir: <span id="bandwidthUpdatedAt"><?= $bandwidthDataUpdatedAt && strtotime((string) $bandwidthDataUpdatedAt) !== false
+                                    ? e(date('d M Y, H:i', strtotime((string) $bandwidthDataUpdatedAt))) . ' WIB'
+                                    : 'Belum ada data'; ?></span>.
+                            </p>
 
                         </div>
 
@@ -2828,7 +2873,7 @@ $currentPage =
                                 </div>
 
 
-                                <span class="network-unavailable">
+                                <span class="network-unavailable" id="areaStatusBadge">
                                     BELUM TERHUBUNG
                                 </span>
 
@@ -2838,16 +2883,16 @@ $currentPage =
                             <div class="network-main">
 
 
-                                <div class="network-check network-unknown">
-                                    <i class="bi bi-question-lg"></i>
+                                <div class="network-check network-unknown" id="areaStatusIcon">
+                                    <i class="bi bi-question-lg" id="areaStatusIconGlyph"></i>
                                 </div>
 
 
                                 <div>
 
-                                    <strong>Status wilayah belum tersedia</strong>
+                                    <strong id="areaStatusTitle">Status wilayah belum tersedia</strong>
 
-                                    <span>
+                                    <span id="areaStatusDescription">
                                         Belum ada integrasi status gangguan atau pemeliharaan
                                         jaringan berdasarkan area pelanggan.
                                     </span>
@@ -2864,8 +2909,8 @@ $currentPage =
 
                                     <i class="bi bi-broadcast-pin"></i>
 
-                                    <span>
-                                        Status area belum dikonfigurasi
+                                    <span id="areaNameLabel">
+                                        Area pelanggan belum terhubung
                                     </span>
 
                                 </div>
@@ -2875,8 +2920,8 @@ $currentPage =
 
                                     <i class="bi bi-info-circle"></i>
 
-                                    <span>
-                                        Tidak menampilkan status jaringan contoh
+                                    <span id="areaIncidentLabel">
+                                        Data gangguan ditampilkan jika tersedia.
                                     </span>
 
                                 </div>
@@ -2895,6 +2940,53 @@ $currentPage =
 
                             </a>
 
+                        </div>
+
+
+                        <div class="dashboard-card notification-card">
+                            <div class="card-heading compact">
+                                <div>
+                                    <span class="card-kicker">INFO TERBARU</span>
+                                    <h3>Notifikasi terbaru</h3>
+                                </div>
+                                <a href="notifikasi.php" class="view-all">
+                                    Semua <i class="bi bi-arrow-right"></i>
+                                </a>
+                            </div>
+
+                            <div class="dashboard-notification-list" id="dashboardNotificationFeed">
+                                <?php if ($latestNotifications === []): ?>
+                                    <div class="notification-empty" role="status">
+                                        Belum ada notifikasi terbaru.
+                                    </div>
+                                <?php else: ?>
+                                    <?php foreach ($latestNotifications as $notification): ?>
+                                        <?php
+                                        $notificationTime = strtotime((string) ($notification['created_at'] ?? ''));
+                                        $notificationType = strtolower((string) ($notification['type'] ?? ''));
+                                        $notificationIcon = match ($notificationType) {
+                                            'gangguan' => 'bi-exclamation-triangle-fill',
+                                            'pembayaran' => 'bi-credit-card-fill',
+                                            'promo' => 'bi-gift-fill',
+                                            default => 'bi-info-circle-fill',
+                                        };
+                                        ?>
+                                        <a
+                                            class="dashboard-notification <?= (int) ($notification['dibaca'] ?? 1) === 0 ? 'is-unread' : ''; ?>"
+                                            href="notifikasi.php"
+                                        >
+                                            <span class="notification-icon">
+                                                <i class="bi <?= e($notificationIcon); ?>"></i>
+                                            </span>
+                                            <span class="notification-copy">
+                                                <strong><?= e($notification['judul'] ?? 'Informasi YESNET'); ?></strong>
+                                                <span><?= e($notification['message'] ?? ''); ?></span>
+                                                <small><?= $notificationTime !== false ? e(date('d M Y, H:i', $notificationTime)) . ' WIB' : 'Waktu tidak tersedia'; ?></small>
+                                            </span>
+                                        </a>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
                         </div>
 
 
@@ -3445,13 +3537,6 @@ document.addEventListener(
     'DOMContentLoaded',
     function () {
 
-        const hasOpenInvoice = <?= !empty($tagihan) ? 'true' : 'false'; ?>;
-        if (hasOpenInvoice) {
-            window.setTimeout(function () {
-                window.location.reload();
-            }, 60000);
-        }
-
         /*
         |--------------------------------------------------------------------------
         | BANDWIDTH CHART
@@ -3462,6 +3547,8 @@ document.addEventListener(
             document.getElementById(
                 'bandwidthChart'
             );
+
+        let bandwidthChart = null;
 
         const bandwidthSeries = <?= json_encode([
             'labels' => array_map(
@@ -3486,7 +3573,7 @@ document.addEventListener(
         ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
 
 
-        if (chartElement) {
+        if (chartElement && typeof Chart !== 'undefined') {
 
             const ctx =
                 chartElement.getContext(
@@ -3536,7 +3623,7 @@ document.addEventListener(
             );
 
 
-            new Chart(
+            bandwidthChart = new Chart(
                 ctx,
                 {
 
@@ -3962,6 +4049,375 @@ document.addEventListener(
                 closeSidebar
             );
         }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | THEME
+        |--------------------------------------------------------------------------
+        */
+
+        const themeToggle = document.getElementById('themeToggle');
+        const themeToggleIcon = document.getElementById('themeToggleIcon');
+
+        function applyTheme(theme) {
+            const isDark = theme === 'dark';
+            document.body.dataset.theme = isDark ? 'dark' : 'light';
+
+            if (themeToggle) {
+                themeToggle.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+                themeToggle.setAttribute(
+                    'aria-label',
+                    isDark ? 'Aktifkan tema terang' : 'Aktifkan tema gelap'
+                );
+            }
+
+            if (themeToggleIcon) {
+                themeToggleIcon.className = isDark
+                    ? 'bi bi-sun'
+                    : 'bi bi-moon-stars';
+            }
+        }
+
+        try {
+            applyTheme(localStorage.getItem('yesnet-customer-theme') || 'light');
+        } catch (error) {
+            console.warn('Preferensi tema tidak dapat dibaca.', error);
+            applyTheme('light');
+        }
+
+        if (themeToggle) {
+            themeToggle.addEventListener('click', function () {
+                const nextTheme = document.body.dataset.theme === 'dark'
+                    ? 'light'
+                    : 'dark';
+                applyTheme(nextTheme);
+
+                try {
+                    localStorage.setItem('yesnet-customer-theme', nextTheme);
+                } catch (error) {
+                    console.warn('Preferensi tema tidak dapat disimpan.', error);
+                }
+            });
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | DASHBOARD DATA POLLING
+        |--------------------------------------------------------------------------
+        */
+
+        const dashboardRefreshStatus =
+            document.getElementById('dashboardRefreshStatus');
+        let dashboardRequestPending = false;
+
+        function setDashboardText(id, value) {
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = value;
+            }
+        }
+
+        function formatDashboardDate(value) {
+            if (!value) {
+                return 'Belum ada data';
+            }
+
+            const normalized = String(value).replace(' ', 'T');
+            const date = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(normalized)
+                ? normalized
+                : normalized + '+07:00');
+
+            if (Number.isNaN(date.getTime())) {
+                return 'Belum ada data';
+            }
+
+            return new Intl.DateTimeFormat('id-ID', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZone: 'Asia/Jakarta'
+            }).format(date) + ' WIB';
+        }
+
+        function formatRupiah(value) {
+            const amount = Number(value);
+            if (!Number.isFinite(amount)) {
+                return 'Rp 0';
+            }
+
+            return new Intl.NumberFormat('id-ID', {
+                style: 'currency',
+                currency: 'IDR',
+                maximumFractionDigits: 0
+            }).format(amount);
+        }
+
+        function updateTelemetry(telemetry) {
+            const available = Boolean(telemetry && telemetry.available);
+            const live = available && Boolean(telemetry.is_live);
+            const status = document.getElementById('bandwidthLiveStatus');
+            const chartContainer = document.getElementById('bandwidthChartContainer');
+            const emptyState = document.getElementById('bandwidthTelemetryEmpty');
+            const caption = document.getElementById('bandwidthTelemetryMessage');
+
+            setDashboardText(
+                'dashboardDownloadValue',
+                available && telemetry.download_mbps !== null
+                    ? Number(telemetry.download_mbps).toFixed(1)
+                    : '—'
+            );
+            setDashboardText(
+                'dashboardDownloadSummary',
+                available && telemetry.download_mbps !== null
+                    ? Number(telemetry.download_mbps).toFixed(1)
+                    : '—'
+            );
+            setDashboardText(
+                'dashboardUploadValue',
+                available && telemetry.upload_mbps !== null
+                    ? Number(telemetry.upload_mbps).toFixed(1)
+                    : '—'
+            );
+            setDashboardText(
+                'dashboardPingValue',
+                available && telemetry.ping_ms !== null
+                    ? Number(telemetry.ping_ms).toFixed(0)
+                    : '—'
+            );
+            setDashboardText(
+                'bandwidthLiveLabel',
+                live ? 'LIVE' : (available ? 'HISTORIS' : 'BELUM TERSEDIA')
+            );
+            setDashboardText(
+                'dashboardSpeedUpdatedAt',
+                available
+                    ? 'Terakhir diperbarui ' + formatDashboardDate(telemetry.updated_at)
+                    : 'Telemetri belum terhubung'
+            );
+
+            const speedStatus = document.getElementById('dashboardSpeedStatus');
+            if (speedStatus) {
+                speedStatus.textContent = live
+                    ? 'LIVE'
+                    : (available ? 'HISTORIS' : 'BELUM TERSEDIA');
+                speedStatus.classList.toggle('green', live);
+            }
+
+            if (status) {
+                status.classList.toggle('is-live', live);
+                status.classList.toggle('is-historical', available && !live);
+                status.classList.toggle('is-unavailable', !available);
+            }
+
+            if (chartContainer) {
+                chartContainer.hidden = !available;
+            }
+            if (emptyState) {
+                emptyState.hidden = available;
+            }
+
+            const readings = Array.isArray(telemetry && telemetry.readings)
+                ? telemetry.readings
+                : [];
+            if (bandwidthChart && available) {
+                bandwidthChart.data.labels = readings.map(function (reading) {
+                    return formatDashboardDate(reading.recorded_at).replace(/ WIB$/, '');
+                });
+                bandwidthChart.data.datasets[0].data = readings.map(function (reading) {
+                    return reading.download_mbps;
+                });
+                bandwidthChart.data.datasets[1].data = readings.map(function (reading) {
+                    return reading.upload_mbps;
+                });
+                bandwidthChart.update('none');
+            }
+
+            if (caption) {
+                caption.textContent = live
+                    ? 'Data telemetri diperbarui dalam 5 menit terakhir. Volume penggunaan harian/bulanan belum tersedia. '
+                    : (available
+                        ? 'Menampilkan catatan telemetri, bukan pembacaan live. Volume penggunaan harian/bulanan belum tersedia. '
+                        : 'Volume penggunaan harian/bulanan belum tersedia; grafik hanya menampilkan kecepatan telemetri. ');
+            }
+            setDashboardText('bandwidthUpdatedAt', formatDashboardDate(telemetry && telemetry.updated_at));
+        }
+
+        function updateNetwork(network) {
+            if (!network) {
+                return;
+            }
+
+            const state = network.available ? network.status : 'unknown';
+            const labels = {
+                normal: 'NORMAL',
+                outage: 'GANGGUAN',
+                maintenance: 'MAINTENANCE',
+                unknown: 'BELUM TERSEDIA'
+            };
+            const icons = {
+                normal: 'bi-check-lg',
+                outage: 'bi-exclamation-lg',
+                maintenance: 'bi-wrench-adjustable',
+                unknown: 'bi-question-lg'
+            };
+            const badge = document.getElementById('areaStatusBadge');
+            const statusIcon = document.getElementById('areaStatusIcon');
+            const glyph = document.getElementById('areaStatusIconGlyph');
+
+            setDashboardText('areaStatusTitle', network.title || 'Status wilayah belum tersedia');
+            setDashboardText(
+                'areaStatusDescription',
+                network.description || 'Informasi status jaringan belum tersedia.'
+            );
+            setDashboardText(
+                'areaNameLabel',
+                network.area ? 'Wilayah: ' + network.area : 'Area pelanggan belum terhubung'
+            );
+            setDashboardText(
+                'areaIncidentLabel',
+                network.estimated_resolution
+                    ? 'Estimasi pemulihan: ' + formatDashboardDate(network.estimated_resolution)
+                    : (state === 'normal'
+                        ? 'Tidak ada gangguan aktif menurut data area.'
+                        : 'Estimasi pemulihan belum tersedia.')
+            );
+            setDashboardText('areaStatusBadge', labels[state] || labels.unknown);
+
+            if (badge) {
+                badge.className = 'network-unavailable network-status-' + state;
+            }
+            if (statusIcon) {
+                statusIcon.className = 'network-check network-' + state;
+            }
+            if (glyph) {
+                glyph.className = 'bi ' + (icons[state] || icons.unknown);
+            }
+        }
+
+        function updateNotifications(notifications, unreadCount) {
+            const feed = document.getElementById('dashboardNotificationFeed');
+            const badge = document.getElementById('dashboardUnreadCount');
+
+            if (badge) {
+                const count = Number(unreadCount) || 0;
+                badge.textContent = count > 99 ? '99+' : String(count);
+                badge.hidden = count === 0;
+            }
+
+            if (!feed) {
+                return;
+            }
+
+            feed.textContent = '';
+            if (!Array.isArray(notifications) || notifications.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'notification-empty';
+                empty.setAttribute('role', 'status');
+                empty.textContent = 'Belum ada notifikasi terbaru.';
+                feed.appendChild(empty);
+                return;
+            }
+
+            const icons = {
+                gangguan: 'bi-exclamation-triangle-fill',
+                pembayaran: 'bi-credit-card-fill',
+                promo: 'bi-gift-fill'
+            };
+
+            notifications.forEach(function (notification) {
+                const link = document.createElement('a');
+                link.className = 'dashboard-notification'
+                    + (Number(notification.dibaca) === 0 ? ' is-unread' : '');
+                link.href = 'notifikasi.php';
+
+                const icon = document.createElement('span');
+                icon.className = 'notification-icon';
+                const iconGlyph = document.createElement('i');
+                const type = String(notification.type || '').toLowerCase();
+                iconGlyph.className = 'bi ' + (icons[type] || 'bi-info-circle-fill');
+                icon.appendChild(iconGlyph);
+
+                const copy = document.createElement('span');
+                copy.className = 'notification-copy';
+
+                const title = document.createElement('strong');
+                title.textContent = String(notification.judul || 'Informasi YESNET');
+                const message = document.createElement('span');
+                message.textContent = String(notification.message || '');
+                const createdAt = document.createElement('small');
+                createdAt.textContent = formatDashboardDate(notification.created_at);
+
+                copy.append(title, message, createdAt);
+                link.append(icon, copy);
+                feed.appendChild(link);
+            });
+        }
+
+        async function refreshDashboardData() {
+            if (dashboardRequestPending) {
+                return;
+            }
+
+            dashboardRequestPending = true;
+            try {
+                const response = await fetch('dashboard_data.php', {
+                    headers: { Accept: 'application/json' },
+                    cache: 'no-store',
+                    credentials: 'same-origin'
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.data) {
+                    throw new Error(payload.error || 'Data dashboard gagal dimuat.');
+                }
+
+                updateTelemetry(payload.data.telemetry || {});
+                updateNetwork(payload.data.network || {});
+                updateNotifications(
+                    payload.data.notifications || [],
+                    payload.data.unread_notifications || 0
+                );
+
+                const invoice = payload.data.invoice || {};
+                setDashboardText(
+                    'dashboardInvoiceAmount',
+                    invoice.has_open
+                        ? formatRupiah(invoice.amount)
+                        : (invoice.available ? 'Tidak ada tagihan' : 'Tagihan belum tersedia')
+                );
+                setDashboardText(
+                    'dashboardInvoiceStatus',
+                    invoice.has_open
+                        ? 'Tagihan belum dibayar'
+                        : (invoice.available
+                            ? 'Tidak ada tagihan tertunda'
+                            : 'Status tagihan belum tersedia')
+                );
+                setDashboardText(
+                    'dashboardInvoiceDueDate',
+                    invoice.has_open && invoice.due_date
+                        ? formatDashboardDate(invoice.due_date)
+                        : '—'
+                );
+                if (dashboardRefreshStatus) {
+                    dashboardRefreshStatus.textContent = 'Diperbarui ' + formatDashboardDate(payload.data.checked_at);
+                }
+            } catch (error) {
+                console.error('Pembaruan dashboard gagal:', error);
+                if (dashboardRefreshStatus) {
+                    dashboardRefreshStatus.textContent = 'Gagal memperbarui data';
+                }
+            } finally {
+                dashboardRequestPending = false;
+            }
+        }
+
+        refreshDashboardData();
+        window.setInterval(refreshDashboardData, 30000);
+
 
     }
 );
