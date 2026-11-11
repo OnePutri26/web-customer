@@ -1,18 +1,51 @@
 <?php
 declare(strict_types=1);
 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+/*
+|--------------------------------------------------------------------------
+| YESNET ADMIN SESSION MANAGEMENT
+|--------------------------------------------------------------------------
+| Session khusus aplikasi internal YESNET.
+| Tidak mengubah session Customer.
+|--------------------------------------------------------------------------
+*/
+
+/*
+|--------------------------------------------------------------------------
+| SESSION PATH
+|--------------------------------------------------------------------------
+*/
+
 function adminSessionPath(): string
 {
-    $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+    $scriptName = str_replace(
+        '\\',
+        '/',
+        (string) ($_SERVER['SCRIPT_NAME'] ?? '')
+    );
+
     $adminPosition = strpos($scriptName, '/admin/');
-    $basePath = $adminPosition === false ? '' : substr($scriptName, 0, $adminPosition);
+
+    $basePath = $adminPosition === false
+        ? ''
+        : substr($scriptName, 0, $adminPosition);
 
     return rtrim($basePath, '/') . '/admin/';
 }
 
+/*
+|--------------------------------------------------------------------------
+| START SESSION
+|--------------------------------------------------------------------------
+*/
+
 function adminStartSession(): void
 {
     if (session_status() === PHP_SESSION_ACTIVE) {
+
         if (session_name() !== 'YESNET_ADMIN_SESSID') {
             http_response_code(500);
             exit('Sesi administrator tidak dapat diinisialisasi dengan aman.');
@@ -27,14 +60,17 @@ function adminStartSession(): void
     }
 
     session_name('YESNET_ADMIN_SESSID');
+
     ini_set('session.use_strict_mode', '1');
     ini_set('session.use_only_cookies', '1');
     ini_set('session.use_trans_sid', '0');
+
     session_set_cookie_params([
         'lifetime' => 0,
         'path' => adminSessionPath(),
         'domain' => '',
-        'secure' => isset($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off',
+        'secure' => isset($_SERVER['HTTPS'])
+            && strtolower((string) $_SERVER['HTTPS']) !== 'off',
         'httponly' => true,
         'samesite' => 'Lax',
     ]);
@@ -44,6 +80,68 @@ function adminStartSession(): void
         exit('Sesi administrator tidak dapat dimulai.');
     }
 }
+
+/*
+|--------------------------------------------------------------------------
+| CLEAR SESSION
+|--------------------------------------------------------------------------
+*/
+
+function adminClearSession(): void
+{
+    $_SESSION = [];
+
+    if (ini_get('session.use_cookies')) {
+
+        $params = session_get_cookie_params();
+
+        setcookie(
+            session_name(),
+            '',
+            [
+                'expires' => time() - 42000,
+                'path' => $params['path'],
+                'domain' => $params['domain'],
+                'secure' => $params['secure'],
+                'httponly' => $params['httponly'],
+                'samesite' => $params['samesite'] ?? 'Lax',
+            ]
+        );
+    }
+
+    session_destroy();
+}
+
+/*
+|--------------------------------------------------------------------------
+| ADMIN LOGIN CHECK
+|--------------------------------------------------------------------------
+*/
+
+function adminRequireLogin(): void
+{
+    $userId = $_SESSION['user_id'] ?? null;
+
+    $role = strtolower(
+        trim((string) ($_SESSION['role'] ?? ''))
+    );
+
+    if (
+        empty($userId) ||
+        !is_numeric($userId) ||
+        (int) $userId <= 0 ||
+        $role !== 'admin'
+    ) {
+        header('Location: ' . adminLoginUrl());
+        exit;
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| PERMISSIONS
+|--------------------------------------------------------------------------
+*/
 
 function adminPermissionsForRole(string $role): array
 {
@@ -77,36 +175,84 @@ function adminPermissionsForRole(string $role): array
     ];
 }
 
+/*
+|--------------------------------------------------------------------------
+| CHECK PERMISSION
+|--------------------------------------------------------------------------
+*/
+
 function adminHasPermission(string $permission): bool
 {
     $permissions = $_SESSION['admin_permissions'] ?? [];
 
-    return is_array($permissions) && in_array($permission, $permissions, true);
+    return is_array($permissions)
+        && in_array($permission, $permissions, true);
 }
 
 function adminRequirePermission(string $permission): void
 {
-    if (adminHasPermission($permission)) {
-        return;
-    }
+    adminRequireLogin();
 
-    http_response_code(403);
-    exit('Anda tidak memiliki izin untuk mengakses fitur ini.');
+    if (!adminHasPermission($permission)) {
+        http_response_code(403);
+        exit('Anda tidak memiliki izin untuk mengakses fitur ini.');
+    }
 }
+
+/*
+|--------------------------------------------------------------------------
+| LOGIN URL
+|--------------------------------------------------------------------------
+*/
+
+function adminLoginUrl(): string
+{
+    $scriptName = str_replace(
+        '\\',
+        '/',
+        (string) ($_SERVER['SCRIPT_NAME'] ?? '')
+    );
+
+    $adminPosition = strpos($scriptName, '/admin/');
+
+    $basePath = $adminPosition === false
+        ? ''
+        : substr($scriptName, 0, $adminPosition);
+
+    return rtrim($basePath, '/') . '/admin/login.php';
+}
+
+/*
+|--------------------------------------------------------------------------
+| REQUEST PERMISSION
+|--------------------------------------------------------------------------
+*/
 
 function adminPermissionForRequest(): string
 {
-    $scriptName = strtolower(str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '')));
+    $scriptName = strtolower(
+        str_replace(
+            '\\',
+            '/',
+            (string) ($_SERVER['SCRIPT_NAME'] ?? '')
+        )
+    );
+
     $adminPosition = strpos($scriptName, '/admin/');
+
     $route = $adminPosition === false
         ? ''
-        : substr($scriptName, $adminPosition + strlen('/admin/'));
+        : substr(
+            $scriptName,
+            $adminPosition + strlen('/admin/')
+        );
 
     if ($route === 'dashboard.php') {
         return 'dashboard.view';
     }
 
     if ($route === 'overview.php') {
+
         return match ((string) ($_GET['section'] ?? '')) {
             'customers' => 'customers.view',
             'packages' => 'packages.manage',
@@ -118,7 +264,10 @@ function adminPermissionForRequest(): string
         };
     }
 
-    if ($route === 'complaints.php' || $route === 'update_complaint.php') {
+    if (
+        $route === 'complaints.php' ||
+        $route === 'update_complaint.php'
+    ) {
         return 'complaints.manage';
     }
 
@@ -126,50 +275,61 @@ function adminPermissionForRequest(): string
         return 'coverage.manage';
     }
 
-    if (str_starts_with($route, 'admin/paket/')) {
+    /*
+    | Route di bawah sudah disesuaikan.
+    | $route tidak diawali dengan admin/.
+    */
+
+    if (
+        str_starts_with($route, 'paket/') ||
+        str_starts_with($route, 'packages/')
+    ) {
         return 'packages.manage';
     }
 
-    if (str_starts_with($route, 'admin/tagihan/')) {
+    if (
+        str_starts_with($route, 'tagihan/') ||
+        str_starts_with($route, 'billing/')
+    ) {
         return 'billing.manage';
     }
 
-    if (str_starts_with($route, 'admin/jaringan/')) {
+    if (
+        str_starts_with($route, 'jaringan/') ||
+        str_starts_with($route, 'network/')
+    ) {
         return 'network.manage';
     }
 
-    if (str_starts_with($route, 'admin/pelanggan/')) {
+    if (
+        str_starts_with($route, 'pelanggan/') ||
+        str_starts_with($route, 'customers/')
+    ) {
         return 'customers.view';
     }
 
-    if (str_starts_with($route, 'admin/admin/pengaduan/')) {
+    if (
+        str_starts_with($route, 'pengaduan/') ||
+        str_starts_with($route, 'admin/pengaduan/')
+    ) {
         return 'tickets.manage';
     }
 
     return 'portal.access';
 }
 
-function adminClearSession(): void
-{
-    $_SESSION = [];
-    session_regenerate_id(true);
-}
-
-function adminLoginUrl(): string
-{
-    $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
-    $adminPosition = strpos($scriptName, '/admin/');
-    $basePath = $adminPosition === false ? '' : substr($scriptName, 0, $adminPosition);
-
-    return rtrim($basePath, '/') . '/admin/login.php';
-}
+/*
+|--------------------------------------------------------------------------
+| CSRF TOKEN
+|--------------------------------------------------------------------------
+*/
 
 function adminCsrfToken(): string
 {
     if (
-        !isset($_SESSION['admin_csrf'])
-        || !is_string($_SESSION['admin_csrf'])
-        || $_SESSION['admin_csrf'] === ''
+        !isset($_SESSION['admin_csrf']) ||
+        !is_string($_SESSION['admin_csrf']) ||
+        $_SESSION['admin_csrf'] === ''
     ) {
         $_SESSION['admin_csrf'] = bin2hex(random_bytes(32));
     }
@@ -186,5 +346,11 @@ function adminVerifyCsrf(mixed $token): bool
         && $sessionToken !== ''
         && hash_equals($sessionToken, $token);
 }
+
+/*
+|--------------------------------------------------------------------------
+| INITIALIZE
+|--------------------------------------------------------------------------
+*/
 
 adminStartSession();
