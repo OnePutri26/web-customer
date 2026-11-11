@@ -111,6 +111,13 @@ The built-in speed test transfers data between the customer's browser and the
 YESNET application server. Its result is not a measurement of the complete ISP
 access network or a guaranteed package speed.
 
+Speed test history is stored per customer in
+`customer_speedtest_history`. Before enabling history, back up the database and
+apply [`database/migrasi_speedtest_history.sql`](./database/migrasi_speedtest_history.sql).
+The migration is safe to rerun and does not alter existing customer or payment
+tables. If it has not been applied, the speed test still runs, but saving and
+loading history will report that the feature is unavailable.
+
 ## Test mode checklist
 
 1. Configure a test/development Secret API Key, webhook token, database, and

@@ -1319,137 +1319,100 @@ $currentPage =
                 </a>
 
 
-                <?php if (
-                    $statusLangganan === 'active'
-                ): ?>
+                    <a
+                        href="usage.php"
+                        class="menu-item <?= $currentPage === 'usage.php' ? 'active' : ''; ?>"
+                    >
+
+                        <span class="menu-icon">
+
+                            <i class="bi bi-router-fill"></i>
+
+                        </span>
+
+
+                        <span class="menu-text">
+                            Internet Saya
+                        </span>
+
+                    </a>
 
                     <a
                         href="billing.php"
-                        class="menu-item"
+                        class="menu-item <?= $currentPage === 'billing.php' ? 'active' : ''; ?>"
                     >
-
                         <span class="menu-icon">
-
                             <i class="bi bi-receipt-cutoff"></i>
-
                         </span>
-
-
-                        <span class="menu-text">
-                            Tagihan
-                        </span>
-
+                        <span class="menu-text">Tagihan Saya</span>
                     </a>
-
 
                     <a
-                        href="usage.php"
+                        href="billing.php#riwayat-pembayaran"
                         class="menu-item"
                     >
-
                         <span class="menu-icon">
-
-                            <i class="bi bi-bar-chart-fill"></i>
-
+                            <i class="bi bi-clock-history"></i>
                         </span>
-
-
-                        <span class="menu-text">
-                            Pemakaian
-                        </span>
-
+                        <span class="menu-text">Riwayat Pembayaran</span>
                     </a>
-
 
                     <a
                         href="speedtest.php"
-                        class="menu-item"
+                        class="menu-item <?= $currentPage === 'speedtest.php' ? 'active' : ''; ?>"
                     >
-
                         <span class="menu-icon">
-
                             <i class="bi bi-speedometer2"></i>
-
                         </span>
-
-
-                        <span class="menu-text">
-                            Speed Test
-                        </span>
-
+                        <span class="menu-text">Speed Test</span>
                     </a>
-
 
                     <a
                         href="complaint.php"
-                        class="menu-item"
+                        class="menu-item <?= $currentPage === 'complaint.php' ? 'active' : ''; ?>"
                     >
-
                         <span class="menu-icon">
-
                             <i class="bi bi-tools"></i>
-
                         </span>
-
-
-                        <span class="menu-text">
-                            Gangguan
-                        </span>
-
-
+                        <span class="menu-text">Laporan Gangguan</span>
                         <?php if (
                             $totalGangguan > 0
                         ): ?>
-
                             <span class="menu-badge">
-
                                 <?= $totalGangguan; ?>
-
                             </span>
-
                         <?php endif; ?>
-
                     </a>
-
 
                     <a
                         href="network_status.php"
-                        class="menu-item"
+                        class="menu-item <?= $currentPage === 'network_status.php' ? 'active' : ''; ?>"
                     >
-
                         <span class="menu-icon">
-
                             <i class="bi bi-globe2"></i>
-
                         </span>
-
-
-                        <span class="menu-text">
-                            Status Jaringan
-                        </span>
-
+                        <span class="menu-text">Status Jaringan</span>
                     </a>
 
+                    <a
+                        href="upgrade.php"
+                        class="menu-item <?= $currentPage === 'upgrade.php' ? 'active' : ''; ?>"
+                    >
+                        <span class="menu-icon">
+                            <i class="bi bi-arrow-up-circle-fill"></i>
+                        </span>
+                        <span class="menu-text">Upgrade Paket</span>
+                    </a>
 
                     <a
                         href="chat.php"
-                        class="menu-item"
+                        class="menu-item <?= $currentPage === 'chat.php' ? 'active' : ''; ?>"
                     >
-
                         <span class="menu-icon">
-
                             <i class="bi bi-chat-dots-fill"></i>
-
                         </span>
-
-
-                        <span class="menu-text">
-                            Chat CS
-                        </span>
-
+                        <span class="menu-text">Bantuan / Live Chat</span>
                     </a>
-
-                <?php endif; ?>
 
             </div>
 

@@ -681,6 +681,140 @@ body {
     font-size: 10px;
 }
 
+.speed-result-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 20px;
+}
+
+.speed-result-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 17px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card);
+    box-shadow: 0 3px 15px rgba(25, 35, 60, .035);
+}
+
+.speed-result-card > div:last-child > span {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.speed-result-card .result-number {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    margin-top: 3px;
+}
+
+.speed-result-card .result-number strong {
+    color: var(--text);
+    font-size: 20px;
+}
+
+.speed-result-card .result-number small {
+    color: var(--muted);
+    font-size: 10px;
+}
+
+.speed-result-card p {
+    margin: 3px 0 0;
+    color: var(--muted);
+    font-size: 10px;
+}
+
+.speed-history-card {
+    margin-top: 20px;
+    padding: 22px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card);
+    box-shadow: 0 8px 30px rgba(20, 30, 60, .04);
+}
+
+.speed-history-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.speed-history-heading h2 {
+    margin: 0;
+    color: var(--text);
+    font-size: 17px;
+    font-weight: 750;
+}
+
+.speed-history-heading p,
+#speedHistoryStatus,
+.speed-history-empty {
+    margin: 5px 0 0;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.speed-history-list {
+    display: grid;
+    gap: 8px;
+}
+
+.speed-history-row {
+    display: grid;
+    grid-template-columns: 1.5fr repeat(4, 1fr);
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 11px;
+}
+
+.speed-history-row time {
+    color: var(--muted);
+}
+
+.speed-history-row i {
+    margin-right: 3px;
+    color: var(--primary);
+}
+
+@media (max-width: 900px) {
+    .speed-result-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .speed-history-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 520px) {
+    .speed-result-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .speed-history-card {
+        padding: 16px;
+    }
+
+    .speed-history-row {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    .speed-history-row time {
+        grid-column: 1 / -1;
+    }
+}
+
 
 /* =========================================================
    RESPONSIVE

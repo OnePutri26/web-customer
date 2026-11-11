@@ -685,6 +685,20 @@ $serverIp =
 
             </div>
 
+            <div class="speed-result-card">
+                <div class="result-icon ping">
+                    <i class="bi bi-activity"></i>
+                </div>
+                <div>
+                    <span>Jitter</span>
+                    <div class="result-number">
+                        <strong id="jitterValue">--</strong>
+                        <small>ms</small>
+                    </div>
+                    <p id="jitterStatus">Belum diuji</p>
+                </div>
+            </div>
+
 
         </div>
 
@@ -834,6 +848,18 @@ $serverIp =
 
         </div>
 
+        <section class="speed-history-card" aria-labelledby="speedHistoryTitle">
+            <div class="speed-history-heading">
+                <div>
+                    <h2 id="speedHistoryTitle">Riwayat Speed Test</h2>
+                    <p>Hasil pengujian browser ke server aplikasi YESNET.</p>
+                </div>
+                <span id="speedHistoryStatus" role="status" aria-live="polite"></span>
+            </div>
+            <div class="speed-history-list" id="speedHistoryList">
+                <p class="speed-history-empty">Memuat riwayat...</p>
+            </div>
+        </section>
 
 
         <!-- =================================================
@@ -911,6 +937,9 @@ const downloadValue =
 const uploadValue =
     document.getElementById("uploadValue");
 
+const jitterValue =
+    document.getElementById("jitterValue");
+
 const pingStatus =
     document.getElementById("pingStatus");
 
@@ -919,6 +948,9 @@ const downloadStatus =
 
 const uploadStatus =
     document.getElementById("uploadStatus");
+
+const jitterStatus =
+    document.getElementById("jitterStatus");
 
 const progressBar =
     document.getElementById("progressBar");
@@ -1063,9 +1095,146 @@ async function testPing()
             0
         ) / samples.length;
 
+    const jitter = samples.length > 1
+        ? samples.slice(1).reduce(
+            (total, sample, index) => total + Math.abs(sample - samples[index]),
+            0
+        ) / (samples.length - 1)
+        : null;
 
-    return average;
+    return {
+        ping: average,
+        jitter: jitter
+    };
 }
+
+function formatHistoryDate(value)
+{
+    const date = new Date(String(value).replace(' ', 'T') + '+07:00');
+    if (Number.isNaN(date.getTime())) {
+        return 'Waktu tidak tersedia';
+    }
+
+    return new Intl.DateTimeFormat('id-ID', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: 'Asia/Jakarta'
+    }).format(date) + ' WIB';
+}
+
+function renderSpeedHistory(history)
+{
+    const list = document.getElementById('speedHistoryList');
+    if (!list) {
+        return;
+    }
+
+    list.textContent = '';
+    if (!Array.isArray(history) || history.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'speed-history-empty';
+        empty.textContent = 'Belum ada hasil speed test tersimpan.';
+        list.appendChild(empty);
+        return;
+    }
+
+    history.forEach(function (item) {
+        const row = document.createElement('article');
+        row.className = 'speed-history-row';
+        const testedAt = document.createElement('time');
+        testedAt.textContent = formatHistoryDate(item.tested_at);
+
+        const download = document.createElement('span');
+        download.innerHTML = '<i class="bi bi-download" aria-hidden="true"></i> ';
+        download.appendChild(document.createTextNode(
+            Number(item.download_mbps).toFixed(2) + ' Mbps'
+        ));
+
+        const upload = document.createElement('span');
+        upload.innerHTML = '<i class="bi bi-upload" aria-hidden="true"></i> ';
+        upload.appendChild(document.createTextNode(
+            Number(item.upload_mbps).toFixed(2) + ' Mbps'
+        ));
+
+        const ping = document.createElement('span');
+        ping.innerHTML = '<i class="bi bi-broadcast-pin" aria-hidden="true"></i> ';
+        ping.appendChild(document.createTextNode(
+            Number(item.ping_ms).toFixed(0) + ' ms'
+        ));
+
+        const jitter = document.createElement('span');
+        jitter.innerHTML = '<i class="bi bi-activity" aria-hidden="true"></i> ';
+        jitter.appendChild(document.createTextNode(
+            item.jitter_ms === null ? '—' : Number(item.jitter_ms).toFixed(1) + ' ms'
+        ));
+
+        row.append(testedAt, download, upload, ping, jitter);
+        list.appendChild(row);
+    });
+}
+
+async function loadSpeedHistory()
+{
+    const status = document.getElementById('speedHistoryStatus');
+    try {
+        const response = await fetch('speedtest_history.php', {
+            headers: { Accept: 'application/json' },
+            cache: 'no-store',
+            credentials: 'same-origin'
+        });
+        const payload = await response.json();
+        if (!response.ok || !Array.isArray(payload.history)) {
+            throw new Error(payload.error || 'Riwayat speed test tidak dapat dimuat.');
+        }
+        renderSpeedHistory(payload.history);
+        if (status) {
+            status.textContent = '';
+        }
+    } catch (error) {
+        console.error('Gagal memuat riwayat speed test:', error);
+        if (status) {
+            status.textContent = 'Riwayat gagal dimuat. Pastikan migrasi database tersedia.';
+        }
+        const list = document.getElementById('speedHistoryList');
+        if (list) {
+            list.textContent = '';
+            const errorMessage = document.createElement('p');
+            errorMessage.className = 'speed-history-empty';
+            errorMessage.textContent = 'Riwayat belum dapat dimuat.';
+            list.appendChild(errorMessage);
+        }
+    }
+}
+
+async function saveSpeedHistory(result)
+{
+    const status = document.getElementById('speedHistoryStatus');
+    if (status) {
+        status.textContent = 'Menyimpan hasil...';
+    }
+
+    const response = await fetch('speedtest_history.php', {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'X-YESNET-CSRF': speedtestCsrf
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify(result)
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.saved) {
+        throw new Error(payload.error || 'Hasil speed test gagal disimpan.');
+    }
+
+    if (status) {
+        status.textContent = 'Hasil berhasil disimpan.';
+    }
+    await loadSpeedHistory();
+}
+
+loadSpeedHistory();
 
 
 /* =====================================================
@@ -1288,13 +1457,20 @@ startButton.addEventListener(
             );
 
 
-            const ping =
+            const pingResult =
                 await testPing();
+            const ping = pingResult.ping;
 
 
             pingValue.textContent =
                 ping.toFixed(0);
 
+            jitterValue.textContent = pingResult.jitter === null
+                ? '--'
+                : pingResult.jitter.toFixed(1);
+            jitterStatus.textContent = pingResult.jitter === null
+                ? 'Sampel tidak cukup'
+                : (pingResult.jitter < 10 ? 'Stabil' : 'Fluktuatif');
 
             pingStatus.textContent =
                 ping < 30
@@ -1407,7 +1583,22 @@ startButton.addEventListener(
 
 
             testDescription.textContent =
-                "Pengujian berhasil";
+                "Uji browser ke server aplikasi selesai";
+
+            try {
+                await saveSpeedHistory({
+                    download_mbps: download,
+                    upload_mbps: upload,
+                    ping_ms: ping,
+                    jitter_ms: pingResult.jitter
+                });
+            } catch (saveError) {
+                console.error('Gagal menyimpan hasil speed test:', saveError);
+                const historyStatus = document.getElementById('speedHistoryStatus');
+                if (historyStatus) {
+                    historyStatus.textContent = 'Hasil diuji, tetapi riwayat gagal disimpan.';
+                }
+            }
 
 
             startText.textContent =
