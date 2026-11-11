@@ -1,20 +1,14 @@
 <?php
+declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
+require_once __DIR__ . '/session.php';
 require_once __DIR__ . '/../config/database.php';
-$scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
-$adminPosition = strpos($scriptName, '/admin/');
-$basePath = $adminPosition === false ? '' : substr($scriptName, 0, $adminPosition);
 
 if (
     !isset($_SESSION['user_id']) ||
-    !isset($_SESSION['role']) ||
-    $_SESSION['role'] !== 'admin'
+    !isset($_SESSION['role'])
 ) {
-    header('Location: ' . $basePath . '/admin/login.php');
+    header('Location: ' . adminLoginUrl());
     exit;
 }
 
@@ -30,10 +24,17 @@ $status = strtolower(trim((string) ($user['status'] ?? '')));
 if (
     !$user ||
     $role !== 'admin' ||
-    !in_array($status, ['1', 'active', 'aktif'], true)
+    !in_array($status, ['1', 'active', 'aktif'], true) ||
+    strtolower(trim((string) ($_SESSION['role'] ?? ''))) !== $role
 ) {
-    unset($_SESSION['user_id'], $_SESSION['nama'], $_SESSION['username'], $_SESSION['role']);
-    $_SESSION['login_error'] = 'Sesi administrator tidak valid. Silakan masuk kembali.';
-    header('Location: ' . $basePath . '/admin/login.php');
+    adminClearSession();
+    $_SESSION['admin_login_error'] = 'Sesi administrator tidak valid. Silakan masuk kembali.';
+    header('Location: ' . adminLoginUrl());
     exit;
 }
+
+if (!isset($_SESSION['admin_permissions']) || !is_array($_SESSION['admin_permissions'])) {
+    $_SESSION['admin_permissions'] = adminPermissionsForRole($role);
+}
+
+adminRequirePermission(adminPermissionForRequest());

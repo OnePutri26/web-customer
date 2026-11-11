@@ -1,12 +1,11 @@
 <?php
+declare(strict_types=1);
 
-session_start();
+require_once __DIR__ . '/session.php';
+require_once __DIR__ . '/../config/database.php';
 
-require_once "../config/database.php";
-require_once "../config/auth.php";
-
-$error = (string) ($_SESSION['login_error'] ?? '');
-unset($_SESSION['login_error']);
+$error = (string) ($_SESSION['admin_login_error'] ?? '');
+unset($_SESSION['admin_login_error']);
 
 if (isset($_SESSION['user_id'], $_SESSION['role'])) {
     $existingUserId = (int) $_SESSION['user_id'];
@@ -18,23 +17,25 @@ if (isset($_SESSION['user_id'], $_SESSION['role'])) {
 
     if (
         $existingUser &&
-        normalizeAuthRole($existingUser['role'] ?? '') === 'admin' &&
+        strtolower(trim((string) ($existingUser['role'] ?? ''))) === 'admin' &&
+        strtolower(trim((string) ($_SESSION['role'] ?? ''))) === 'admin' &&
         in_array(strtolower(trim((string) ($existingUser['status'] ?? ''))), ['1', 'active', 'aktif'], true)
     ) {
         header('Location: dashboard.php');
         exit;
     }
 
-    $_SESSION = [];
-    session_regenerate_id(true);
+    adminClearSession();
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    $username = trim($_POST['username'] ?? '');
-    $password = $_POST['password'] ?? '';
+    $username = trim((string) ($_POST['username'] ?? ''));
+    $password = (string) ($_POST['password'] ?? '');
 
-    if ($username === '' || $password === '') {
+    if (!adminVerifyCsrf($_POST['csrf'] ?? null)) {
+        $error = 'Form login kedaluwarsa. Muat ulang halaman lalu coba kembali.';
+    } elseif ($username === '' || $password === '') {
 
         $error = "Username dan password wajib diisi.";
 
@@ -68,11 +69,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $error = "Username atau password salah.";
 
-        } elseif ((int)$user['status'] !== 1) {
+        } elseif (!in_array(strtolower(trim((string) ($user['status'] ?? ''))), ['1', 'active', 'aktif'], true)) {
 
             $error = "Akun sedang tidak aktif.";
 
-        } elseif ($user['role'] !== 'admin') {
+        } elseif (strtolower(trim((string) ($user['role'] ?? ''))) !== 'admin') {
 
             $error = "Akun tidak memiliki akses administrator.";
 
@@ -80,12 +81,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             session_regenerate_id(true);
 
-            $_SESSION['user_id'] = $user['id'];
+            $_SESSION['user_id'] = (int) $user['id'];
             $_SESSION['username'] = $user['username'];
             $_SESSION['nama'] = $user['nama'];
             $_SESSION['email'] = $user['email'];
-            $_SESSION['role'] = $user['role'];
+            $_SESSION['role'] = 'admin';
             $_SESSION['user_status'] = $user['status'];
+            $_SESSION['admin_permissions'] = adminPermissionsForRole('admin');
+            $_SESSION['admin_csrf'] = bin2hex(random_bytes(32));
 
             header("Location: dashboard.php");
             exit;
@@ -133,6 +136,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?php endif; ?>
 
                     <form method="POST">
+
+                        <input
+                            type="hidden"
+                            name="csrf"
+                            value="<?= htmlspecialchars(adminCsrfToken(), ENT_QUOTES, 'UTF-8') ?>"
+                        >
 
                         <div class="mb-3">
                             <label class="form-label">

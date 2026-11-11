@@ -1,9 +1,8 @@
 <?php
+declare(strict_types=1);
 
-require_once "../config/database.php";
-require_once "../config/auth.php";
-
-requireRole('admin');
+require_once __DIR__ . '/auth_check.php';
+require_once __DIR__ . '/../config/database.php';
 
 if (empty($_SESSION['complaint_admin_csrf'])) {
     $_SESSION['complaint_admin_csrf'] = bin2hex(random_bytes(32));
