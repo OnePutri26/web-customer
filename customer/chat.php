@@ -53,6 +53,47 @@ function findAutoReply(mysqli $conn, string $message, string $topic): string
     }
 }
 
+/*
+|--------------------------------------------------------------------------
+| FUNGSI ROOM CHAT (tabel chat_rooms)
+|--------------------------------------------------------------------------
+*/
+function findRoomId(mysqli $conn, int $customerId): ?int
+{
+    $stmt = $conn->prepare("
+        SELECT id
+        FROM chat_rooms
+        WHERE id_customer = ?
+        AND status <> 'closed'
+        ORDER BY id DESC
+        LIMIT 1
+    ");
+    $stmt->bind_param("i", $customerId);
+    $stmt->execute();
+
+    $row = $stmt->get_result()->fetch_assoc();
+
+    return $row ? (int) $row['id'] : null;
+}
+
+function getOrCreateRoomId(mysqli $conn, int $customerId): int
+{
+    $roomId = findRoomId($conn, $customerId);
+
+    if ($roomId !== null) {
+        return $roomId;
+    }
+
+    $stmt = $conn->prepare("
+        INSERT INTO chat_rooms (id_customer, status, created_at)
+        VALUES (?, 'open', NOW())
+    ");
+    $stmt->bind_param("i", $customerId);
+    $stmt->execute();
+
+    return (int) $conn->insert_id;
+}
+
 $userId = $_SESSION['user_id'];
 
 $stmt = $conn->prepare("
@@ -137,27 +178,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         try {
 
+            // 0. Ambil room customer (buat baru jika belum ada)
+            $roomId = getOrCreateRoomId($conn, (int) $customerId);
+
             // 1. Simpan pesan customer
             $stmt = $conn->prepare("
                 INSERT INTO chat_messages
-                (id_customer, sender, message, topic, created_at)
-                VALUES (?, 'customer', ?, ?, NOW())
+                (id_room, sender_type, sender_id, message, topic, created_at)
+                VALUES (?, 'customer', ?, ?, ?, NOW())
             ");
 
-            $stmt->bind_param("iss", $customerId, $postMessage, $postTopic);
+            $stmt->bind_param("iiss", $roomId, $customerId, $postMessage, $postTopic);
             $stmt->execute();
 
-            // 2. Cari & simpan balasan otomatis
+            // 2. Cari & simpan balasan otomatis (sender_id 0 = sistem)
             $autoReply = findAutoReply($conn, $postMessage, $postTopic);
 
             $replyStmt = $conn->prepare("
                 INSERT INTO chat_messages
-                (id_customer, sender, message, topic, created_at)
-                VALUES (?, 'cs', ?, ?, NOW())
+                (id_room, sender_type, sender_id, message, topic, created_at)
+                VALUES (?, 'cs', 0, ?, ?, NOW())
             ");
 
-            $replyStmt->bind_param("iss", $customerId, $autoReply, $postTopic);
+            $replyStmt->bind_param("iss", $roomId, $autoReply, $postTopic);
             $replyStmt->execute();
+
+            // 3. Update waktu pesan terakhir di room
+            $roomStmt = $conn->prepare("
+                UPDATE chat_rooms
+                SET last_message_at = NOW()
+                WHERE id = ?
+            ");
+
+            $roomStmt->bind_param("i", $roomId);
+            $roomStmt->execute();
 
             header("Location: chat.php?topic=" . urlencode($postTopic));
             exit;
@@ -178,21 +232,26 @@ $messages = [];
 
 try {
 
-    $stmt = $conn->prepare("
-        SELECT id, sender, message, topic, created_at
-        FROM chat_messages
-        WHERE id_customer = ?
-        AND topic = ?
-        ORDER BY created_at ASC, id ASC
-    ");
+    $currentRoomId = findRoomId($conn, (int) $customerId);
 
-    $stmt->bind_param("is", $customerId, $topic);
-    $stmt->execute();
+    if ($currentRoomId !== null) {
 
-    $result = $stmt->get_result();
+        $stmt = $conn->prepare("
+            SELECT id, sender_type AS sender, message, topic, created_at
+            FROM chat_messages
+            WHERE id_room = ?
+            AND topic = ?
+            ORDER BY created_at ASC, id ASC
+        ");
 
-    while ($row = $result->fetch_assoc()) {
-        $messages[] = $row;
+        $stmt->bind_param("is", $currentRoomId, $topic);
+        $stmt->execute();
+
+        $result = $stmt->get_result();
+
+        while ($row = $result->fetch_assoc()) {
+            $messages[] = $row;
+        }
     }
 
 } catch (Exception $e) {
