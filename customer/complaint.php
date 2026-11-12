@@ -356,6 +356,9 @@ $stmtComplaint->close();
         href="assets/css/complaint.css?v=10"
     >
 
+    <link rel="stylesheet" href="assets/css/portal-unified.css">
+    <script defer src="assets/js/portal-ui.js"></script>
+
 </head>
 
 

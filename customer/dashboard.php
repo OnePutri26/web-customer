@@ -1225,6 +1225,9 @@ $currentPage =
         href="assets/css/dashboard.css"
     >
 
+    <link rel="stylesheet" href="assets/css/portal-unified.css">
+    <script defer src="assets/js/portal-ui.js"></script>
+
 </head>
 
 

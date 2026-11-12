@@ -877,7 +877,9 @@ $totalPackages = count($packages);
             }
         }
     </style>
-</head>
+        <link rel="stylesheet" href="customer/assets/css/portal-unified.css">
+        <script defer src="customer/assets/js/portal-ui.js"></script>
+    </head>
 
 <body>
 

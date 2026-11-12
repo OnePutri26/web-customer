@@ -69,6 +69,8 @@ $initial = strtoupper(substr(trim($customer['username']), 0, 1));
 
     <!-- CSS Profile -->
     <link rel="stylesheet" href="assets/css/profile.css">
+    <link rel="stylesheet" href="assets/css/portal-unified.css">
+    <script defer src="assets/js/portal-ui.js"></script>
 </head>
 
 <body>
