@@ -30,6 +30,7 @@
     padding: 0;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
 .chat-panel:hover,
@@ -246,6 +247,13 @@
     font-size: 8px;
 }
 
+.message-status {
+    margin-top: 3px;
+    color: #16a34a;
+    font-size: 8px;
+    text-align: right;
+}
+
 .customer-message .message-time {
     text-align: right;
 }
@@ -396,6 +404,11 @@
     opacity: .6;
 }
 
+.message-form[aria-busy="true"] .send-button {
+    cursor: wait;
+    opacity: .7;
+}
+
 .character-count {
     position: absolute;
     right: 11px;
@@ -431,6 +444,13 @@
     opacity: .55;
     cursor: not-allowed;
     box-shadow: none;
+}
+
+.send-button:focus-visible,
+.quick-question:focus-visible,
+.chat-topic:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, .35);
+    outline-offset: 2px;
 }
 
 .chat-footer-info {
@@ -624,6 +644,7 @@
 
 .dashboard-page[data-theme="dark"] .message-name,
 .dashboard-page[data-theme="dark"] .message-time,
+.dashboard-page[data-theme="dark"] .message-status,
 .dashboard-page[data-theme="dark"] .chat-quick > span,
 .dashboard-page[data-theme="dark"] .chat-footer-info,
 .dashboard-page[data-theme="dark"] .character-count,
@@ -645,6 +666,10 @@
 .dashboard-page[data-theme="dark"] .chat-error {
     color: #ff9a92;
     background: rgba(239, 68, 68, .12);
+}
+
+.dashboard-page[data-theme="dark"] .message-status {
+    color: #6ee7a5;
 }
 
 
@@ -706,6 +731,11 @@
 
     .message-row {
         max-width: 94%;
+    }
+
+    .chat-empty {
+        min-height: 160px;
+        padding: 18px;
     }
 
     .message-bubble {

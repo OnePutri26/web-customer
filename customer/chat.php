@@ -172,7 +172,7 @@ function senderLabel(string $senderType, int $senderId): string
     }
 
     return $senderId === 0
-        ? 'Asisten Otomatis'
+        ? 'Panduan FAQ'
         : 'Customer Service';
 }
 
@@ -185,8 +185,8 @@ function senderLabel(string $senderType, int $senderId): string
 
 function findAutoReply(mysqli $conn, string $message, string $topic): string
 {
-    $fallback = 'Terima kasih, pesan kamu sudah kami terima. '
-              . 'Tim Customer Service akan membalas secepatnya.';
+    $fallback = 'Maaf, FAQ yang tersedia belum memuat jawaban untuk pertanyaan ini. '
+              . 'Silakan lanjutkan melalui Customer Service agar kami dapat membantu dengan tepat.';
 
     if (
         !tableExists($conn, 'faq_auto_replies') ||
@@ -547,6 +547,8 @@ if (
 
 $messageError = '';
 $draftMessage = '';
+$isAjaxRequest = strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? ''))
+    === 'xmlhttprequest';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
@@ -621,6 +623,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ");
                     $stmt->bind_param("iiss", $roomId, $customerId, $postMessage, $postTopic);
                     $stmt->execute();
+                    $customerMessageId = (int) $conn->insert_id;
                     $stmt->close();
 
                     // 2. Balasan otomatis (sender_id 0 = sistem)
@@ -631,6 +634,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ");
                     $stmt->bind_param("iss", $roomId, $autoReply, $postTopic);
                     $stmt->execute();
+                    $autoReplyMessageId = (int) $conn->insert_id;
                     $stmt->close();
 
                     // 3. Waktu pesan terakhir di room
@@ -651,6 +655,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw $inner;
                 }
 
+                if ($isAjaxRequest) {
+                    $messageTime = formatWaktuChat(date('Y-m-d H:i:s'));
+                    jsonResponse([
+                        'messages' => [
+                            [
+                                'id' => $customerMessageId,
+                                'sender' => 'customer',
+                                'label' => 'Anda',
+                                'is_auto' => false,
+                                'message' => $postMessage,
+                                'time_label' => $messageTime
+                            ],
+                            [
+                                'id' => $autoReplyMessageId,
+                                'sender' => 'cs',
+                                'label' => senderLabel('cs', 0),
+                                'is_auto' => true,
+                                'message' => $autoReply,
+                                'time_label' => $messageTime
+                            ]
+                        ]
+                    ]);
+                }
+
                 header("Location: chat.php?topic=" . urlencode($postTopic));
                 exit;
             }
@@ -662,6 +690,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $draftMessage = $postMessage;
         }
     }
+}
+
+if ($isAjaxRequest && $messageError !== '') {
+    jsonResponse(['error' => $messageError], 422);
 }
 
 
@@ -1184,8 +1216,8 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                     </div>
 
                     <span class="chat-mode-badge">
-                        <i class="bi bi-robot"></i>
-                        Balasan otomatis + CS
+                        <i class="bi bi-journal-text"></i>
+                        FAQ & Customer Service
                     </span>
 
                 </div>
@@ -1232,14 +1264,14 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                             <div class="message-row cs-message is-placeholder" id="chatPlaceholder">
 
                                 <div class="message-avatar">
-                                    <i class="bi bi-robot"></i>
+                                    <i class="bi bi-journal-text"></i>
                                 </div>
 
                                 <div class="message-content">
 
-                                    <div class="message-name">Asisten Otomatis</div>
+                                    <div class="message-name">Panduan FAQ</div>
 
-                                    <div class="message-bubble">Halo <?= e($nama); ?>! 👋 Ada yang bisa kami bantu terkait layanan internet kamu? Tulis pertanyaan di bawah atau pilih pertanyaan cepat.</div>
+                                    <div class="message-bubble">Halo <?= e($nama); ?>! Ada yang bisa kami bantu terkait layanan internet kamu? Pilih topik atau tulis pesan untuk Customer Service.</div>
 
                                 </div>
 
@@ -1256,12 +1288,13 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
                                 <div
                                     class="message-row <?= $isCustomer ? 'customer-message' : 'cs-message'; ?>"
+                                    id="chat-message-<?= (int) $msg['id']; ?>"
                                     data-id="<?= (int) $msg['id']; ?>"
                                 >
 
                                     <?php if (!$isCustomer): ?>
                                         <div class="message-avatar">
-                                            <i class="bi <?= $isAuto ? 'bi-robot' : 'bi-headset'; ?>"></i>
+                                            <i class="bi <?= $isAuto ? 'bi-journal-text' : 'bi-headset'; ?>"></i>
                                         </div>
                                     <?php endif; ?>
 
@@ -1391,7 +1424,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
                         <span>
                             <i class="bi bi-shield-check"></i>
-                            Percakapan tersimpan di akun kamu
+                            Pesan tersimpan di akun kamu
                         </span>
 
                         <span>Enter untuk kirim · Shift+Enter baris baru</span>
@@ -1451,10 +1484,10 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                     <div class="chat-info-list">
 
                         <div>
-                            <i class="bi bi-robot"></i>
+                            <i class="bi bi-journal-text"></i>
                             <span>
-                                <strong>Balasan otomatis</strong>
-                                Pesan kamu dijawab dulu oleh asisten otomatis berdasarkan kata kunci.
+                                <strong>Panduan FAQ</strong>
+                                Jawaban otomatis hanya merujuk FAQ yang tersedia. Pertanyaan di luar FAQ perlu ditindaklanjuti oleh Customer Service.
                             </span>
                         </div>
 
@@ -1668,16 +1701,98 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Cegah kirim ganda.
+    function showSendError(message) {
+        let errorMessage = document.querySelector('.chat-error');
+
+        if (!errorMessage) {
+            errorMessage = document.createElement('div');
+            errorMessage.className = 'chat-error';
+            errorMessage.setAttribute('role', 'alert');
+            messageForm.parentNode.insertBefore(errorMessage, messageForm);
+        }
+
+        while (errorMessage.firstChild) {
+            errorMessage.removeChild(errorMessage.firstChild);
+        }
+
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-exclamation-circle';
+        const text = document.createElement('span');
+        text.textContent = message;
+        errorMessage.append(icon, text);
+        errorMessage.hidden = false;
+    }
+
+    // Kirim melalui Fetch; halaman tetap dapat dipakai bila JavaScript tidak aktif.
     if (messageForm) {
-        messageForm.addEventListener('submit', function (event) {
-            if (!messageInput || messageInput.value.trim() === '') {
-                event.preventDefault();
+        messageForm.addEventListener('submit', async function (event) {
+            event.preventDefault();
+
+            if (
+                !messageInput ||
+                messageInput.value.trim() === '' ||
+                (sendButton && sendButton.disabled)
+            ) {
                 return;
+            }
+
+            const formData = new FormData(messageForm);
+
+            const previousError = document.querySelector('.chat-error');
+
+            if (previousError) {
+                previousError.remove();
             }
 
             if (sendButton) {
                 sendButton.disabled = true;
+            }
+
+            messageInput.disabled = true;
+            messageForm.setAttribute('aria-busy', 'true');
+
+            try {
+                const response = await fetch(messageForm.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    cache: 'no-store',
+                    credentials: 'same-origin'
+                });
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(payload.error || 'Pesan gagal dikirim. Silakan coba lagi.');
+                }
+
+                const placeholder = document.getElementById('chatPlaceholder');
+
+                if (placeholder) {
+                    placeholder.remove();
+                }
+
+                (Array.isArray(payload.messages) ? payload.messages : []).forEach(function (item) {
+                    appendMessage(item, item.sender === 'customer' ? 'Terkirim' : '');
+                });
+
+                messageInput.value = '';
+                updateCharacterCount();
+                autoResize();
+                scrollToBottom();
+            } catch (error) {
+                showSendError(error.message || 'Pesan gagal dikirim. Silakan coba lagi.');
+            } finally {
+                messageInput.disabled = false;
+                messageForm.removeAttribute('aria-busy');
+
+                if (sendButton) {
+                    sendButton.disabled = false;
+                }
+
+                messageInput.focus();
             }
         });
     }
@@ -1689,8 +1804,27 @@ document.addEventListener('DOMContentLoaded', function () {
     |--------------------------------------------------------------------------
     */
 
-    function appendMessage(item) {
+    function appendMessage(item, deliveryStatus) {
         if (!chatMessages) {
+            return;
+        }
+
+        const messageId = Number(item.id) || 0;
+        const existingMessage = document.getElementById('chat-message-' + messageId);
+
+        if (existingMessage) {
+            if (deliveryStatus) {
+                let status = existingMessage.querySelector('.message-status');
+
+                if (!status) {
+                    status = document.createElement('div');
+                    status.className = 'message-status';
+                    existingMessage.querySelector('.message-content').appendChild(status);
+                }
+
+                status.textContent = deliveryStatus;
+            }
+
             return;
         }
 
@@ -1698,13 +1832,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const row = document.createElement('div');
         row.className = 'message-row ' + (isCustomer ? 'customer-message' : 'cs-message');
-        row.dataset.id = String(item.id);
+        row.id = 'chat-message-' + messageId;
+        row.dataset.id = String(messageId);
 
         if (!isCustomer) {
             const avatar = document.createElement('div');
             avatar.className = 'message-avatar';
             const icon = document.createElement('i');
-            icon.className = 'bi ' + (item.is_auto ? 'bi-robot' : 'bi-headset');
+            icon.className = 'bi ' + (item.is_auto ? 'bi-journal-text' : 'bi-headset');
             avatar.appendChild(icon);
             row.appendChild(avatar);
         }
@@ -1725,6 +1860,14 @@ document.addEventListener('DOMContentLoaded', function () {
         time.textContent = String(item.time_label || '');
 
         content.append(name, bubble, time);
+
+        if (deliveryStatus) {
+            const status = document.createElement('div');
+            status.className = 'message-status';
+            status.textContent = deliveryStatus;
+            content.appendChild(status);
+        }
+
         row.appendChild(content);
 
         if (isCustomer) {
