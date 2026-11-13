@@ -1,907 +1,716 @@
 @import url('theme.css');
 
 /* =========================================================
-   SPEEDTEST
-   ========================================================= */
+   SPEEDTEST PAGE
+   Melengkapi dashboard.css. Pastikan dashboard.css dimuat
+   lebih dulu di speedtest.php, lalu file ini.
+   Semua class khusus halaman ini memakai prefix "st-".
+   (Tidak memakai .progress-bar agar tidak bentrok dengan Bootstrap.)
+========================================================= */
 
-:root {
-    --primary: #2563eb;
-    --primary-dark: #1d4ed8;
 
-    --bg: #f6f8fc;
-    --card: #ffffff;
-
-    --text: #172033;
-    --muted: #7b8497;
-
-    --border: #e8ebf2;
-
-    --green: #16a34a;
-    --orange: #ea8b00;
-    --red: #dc2626;
-
-    --radius: 18px;
+.st-head {
+    margin-top: 0;
 }
 
-
-/* =========================================================
-   BODY
-   ========================================================= */
-
-body {
-    margin: 0;
-
-    background: var(--bg);
-
-    color: var(--text);
-
-    font-family:
-        Inter,
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        sans-serif;
-}
-
-
-/* =========================================================
-   PAGE
-   ========================================================= */
-
-.speedtest-page {
-    width: 100%;
-    max-width: 1250px;
-
-    margin: 0 auto;
-
-    padding: 32px;
-}
-
-
-/* =========================================================
-   HEADER
-   ========================================================= */
-
-.speedtest-header {
-    display: flex;
-
-    align-items: flex-start;
-    justify-content: space-between;
-
-    gap: 25px;
-
-    margin-bottom: 25px;
-}
-
-.breadcrumb {
-    color: var(--muted);
-
-    font-size: 13px;
-
-    margin-bottom: 6px;
-}
-
-.speedtest-header h1 {
-    margin: 0;
-
-    font-size: 30px;
-
-    font-weight: 750;
-
-    letter-spacing: -0.6px;
-}
-
-.speedtest-header p {
-    margin: 7px 0 0;
-
-    color: var(--muted);
-
-    font-size: 14px;
-}
-
-
-/* =========================================================
-   SERVER INFO
-   ========================================================= */
-
-.server-info {
-    display: flex;
-
-    align-items: center;
-
-    gap: 11px;
-
-    padding: 11px 14px;
-
-    background: white;
-
-    border: 1px solid var(--border);
-
-    border-radius: 12px;
-}
-
-.server-icon {
-    width: 38px;
-    height: 38px;
-
-    display: flex;
-
-    align-items: center;
-    justify-content: center;
-
-    border-radius: 10px;
-
-    background: #eff6ff;
-
-    color: var(--primary);
-}
-
-.server-info span {
-    display: block;
-
-    color: var(--muted);
-
-    font-size: 10px;
-}
-
-.server-info strong {
-    display: block;
-
-    margin-top: 2px;
-
-    font-size: 12px;
-}
-
-
-/* =========================================================
-   MAIN SPEEDTEST CARD
-   ========================================================= */
-
-.speedtest-card {
-    display: flex;
-
-    flex-direction: column;
-
-    align-items: center;
-
-    padding: 42px 30px 32px;
-
-    background: var(--card);
-
-    border: 1px solid var(--border);
-
-    border-radius: var(--radius);
-
-    box-shadow:
-        0 8px 30px rgba(20, 30, 60, 0.05);
-}
-
-
-/* =========================================================
-   SPEEDOMETER
-   ========================================================= */
-
-.speedometer-wrapper {
-    position: relative;
-
-    margin-bottom: 28px;
-}
-
-.speedometer {
-    width: 260px;
-    height: 260px;
-
-    display: flex;
-
-    align-items: center;
-    justify-content: center;
-
-    border-radius: 50%;
-
-    background:
-        conic-gradient(
-            var(--primary) 0deg,
-            #dbeafe 0deg
-        );
-
-    position: relative;
-
-    padding: 10px;
-
-    box-sizing: border-box;
-}
-
-.speedometer::before {
-    content: "";
-
+.st-sr-only {
     position: absolute;
-
-    inset: 9px;
-
-    border-radius: 50%;
-
-    background: white;
-}
-
-.speedometer-ring {
-    position: relative;
-
-    z-index: 2;
-
-    width: 100%;
-    height: 100%;
-
-    display: flex;
-
-    align-items: center;
-    justify-content: center;
-
-    border-radius: 50%;
-}
-
-.speedometer-center {
-    text-align: center;
-}
-
-.test-status {
-    display: block;
-
-    color: var(--primary);
-
-    font-size: 11px;
-
-    font-weight: 800;
-
-    letter-spacing: 1.4px;
-}
-
-.speed-value {
-    display: flex;
-
-    align-items: baseline;
-    justify-content: center;
-
-    gap: 5px;
-
-    margin-top: 5px;
-}
-
-.speed-value strong {
-    font-size: 46px;
-
-    line-height: 1;
-
-    font-weight: 800;
-
-    letter-spacing: -2px;
-}
-
-.speed-value span {
-    color: var(--muted);
-
-    font-size: 13px;
-
-    font-weight: 600;
-}
-
-.speedometer-center small {
-    display: block;
-
-    margin-top: 10px;
-
-    color: #9aa3b2;
-
-    font-size: 11px;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 
 /* =========================================================
-   START BUTTON
-   ========================================================= */
+   CATATAN CAKUPAN
+========================================================= */
 
-.start-test-btn {
-    display: inline-flex;
+.st-scope {
+    margin-bottom: 14px;
+    padding: 13px 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    border: 1px solid #dbeafe;
+    border-radius: 13px;
+    background: linear-gradient(135deg, #eff6ff, #f7faff);
+}
 
+.st-scope i {
+    margin-top: 1px;
+    color: #2563eb;
+    font-size: 15px;
+}
+
+.st-scope span {
+    color: #64748b;
+    font-size: 10px;
+    line-height: 1.65;
+}
+
+
+/* =========================================================
+   KARTU PENGUJIAN
+========================================================= */
+
+.st-test {
+    padding: 38px 24px 30px;
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-
-    gap: 9px;
-
-    min-width: 210px;
-
-    padding: 13px 20px;
-
-    border: none;
-
-    border-radius: 11px;
-
-    background: var(--primary);
-
-    color: white;
-
-    font-size: 14px;
-
-    font-weight: 700;
-
-    cursor: pointer;
-
-    box-shadow:
-        0 8px 20px rgba(37, 99, 235, 0.2);
-
-    transition:
-        transform 0.2s ease,
-        background 0.2s ease,
-        box-shadow 0.2s ease;
 }
 
-.start-test-btn:hover {
-    background: var(--primary-dark);
-
-    transform: translateY(-2px);
-
-    box-shadow:
-        0 12px 25px rgba(37, 99, 235, 0.25);
-}
-
-.start-test-btn:disabled {
-    opacity: 0.65;
-
-    cursor: wait;
-
+.st-test:hover {
     transform: none;
 }
 
-.btn-icon {
-    font-size: 16px;
-}
-
 
 /* =========================================================
-   PROGRESS
-   ========================================================= */
+   GAUGE
+========================================================= */
 
-.test-progress {
-    width: min(500px, 100%);
+.st-gauge {
+    --st-deg: 0deg;
+    --st-fill: #2563eb;
+    --st-track: #e3ecfb;
+    --st-surface: #ffffff;
 
-    margin-top: 27px;
-}
-
-.progress-track {
-    width: 100%;
-    height: 7px;
-
-    overflow: hidden;
-
-    border-radius: 999px;
-
-    background: #edf1f7;
-}
-
-.progress-bar {
-    width: 0;
-    height: 100%;
-
-    border-radius: inherit;
-
-    background: var(--primary);
-
-    transition:
-        width 0.4s ease;
-}
-
-.progress-text {
+    position: relative;
+    width: 250px;
+    height: 250px;
     display: flex;
-
-    justify-content: space-between;
-
-    margin-top: 8px;
-
-    color: #9aa3b2;
-
-    font-size: 10px;
-}
-
-
-/* =========================================================
-   RESULT GRID
-   ========================================================= */
-
-.result-grid {
-    display: grid;
-
-    grid-template-columns:
-        repeat(3, minmax(0, 1fr));
-
-    gap: 17px;
-
-    margin-top: 20px;
-}
-
-.result-card {
-    display: flex;
-
-    align-items: center;
-
-    gap: 14px;
-
-    padding: 21px;
-
-    background: white;
-
-    border: 1px solid var(--border);
-
-    border-radius: var(--radius);
-
-    box-shadow:
-        0 3px 15px rgba(25, 35, 60, 0.035);
-}
-
-.result-icon {
-    width: 48px;
-    height: 48px;
-
-    min-width: 48px;
-
-    display: flex;
-
     align-items: center;
     justify-content: center;
-
-    border-radius: 13px;
-
-    font-size: 20px;
+    border-radius: 50%;
+    background: conic-gradient(var(--st-fill) var(--st-deg), var(--st-track) 0);
+    transition: background .35s ease;
 }
 
-.ping-icon {
-    color: #7c3aed;
-
-    background: #f5f3ff;
+.st-gauge::before {
+    content: "";
+    position: absolute;
+    inset: 12px;
+    border-radius: 50%;
+    background: var(--st-surface);
+    box-shadow: inset 0 2px 14px rgba(15, 23, 42, .05);
 }
 
-.download-icon {
-    color: #16a34a;
-
-    background: #ecfdf3;
+.st-gauge.is-running {
+    --st-fill: #2563eb;
 }
 
-.upload-icon {
-    color: #2563eb;
-
-    background: #eff6ff;
+.st-gauge.is-running::after {
+    content: "";
+    position: absolute;
+    inset: -7px;
+    border: 2px solid rgba(37, 99, 235, .18);
+    border-radius: 50%;
+    animation: stPulse 1.6s ease-out infinite;
 }
 
-.result-content > span {
+.st-gauge.is-done {
+    --st-fill: #16a34a;
+}
+
+.st-gauge.is-error {
+    --st-fill: #dc2626;
+    --st-track: #fde4e4;
+}
+
+@keyframes stPulse {
+    0% {
+        opacity: .9;
+        transform: scale(.985);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(1.06);
+    }
+}
+
+.st-gauge-inner {
+    position: relative;
+    z-index: 1;
+    max-width: 170px;
+    text-align: center;
+}
+
+.st-state {
     display: block;
-
-    color: var(--muted);
-
-    font-size: 12px;
+    color: #2563eb;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
 }
 
-.result-number {
+.st-gauge.is-done .st-state {
+    color: #16a34a;
+}
+
+.st-gauge.is-error .st-state {
+    color: #dc2626;
+}
+
+.st-speed {
+    margin-top: 6px;
     display: flex;
-
     align-items: baseline;
-
-    gap: 4px;
-
-    margin-top: 2px;
+    justify-content: center;
+    gap: 5px;
 }
 
-.result-number strong {
-    color: var(--text);
-
-    font-size: 25px;
-
-    font-weight: 750;
+.st-speed strong {
+    color: #172033;
+    font-size: 44px;
+    line-height: 1;
+    font-weight: 800;
+    letter-spacing: -1.8px;
+    font-variant-numeric: tabular-nums;
 }
 
-.result-number small {
-    color: var(--muted);
-
-    font-size: 11px;
+.st-speed span {
+    color: #7b8798;
+    font-size: 12px;
+    font-weight: 700;
 }
 
-.result-content p {
-    margin: 2px 0 0;
+.st-gauge-inner small {
+    display: block;
+    margin-top: 9px;
+    color: #94a3b8;
+    font-size: 10px;
+    line-height: 1.5;
+}
 
-    color: #a0a7b5;
+.st-scale {
+    margin: 12px 0 0;
+    color: #a0aaba;
+    font-size: 9px;
+    font-weight: 600;
+}
 
+
+/* =========================================================
+   TOMBOL MULAI
+========================================================= */
+
+.st-start {
+    min-width: 220px;
+    min-height: 46px;
+    margin-top: 20px;
+    padding: 0 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    border: 0;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #2563eb, #397be4);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 10px 24px rgba(37, 99, 235, .22);
+    transition: transform .2s ease, box-shadow .2s ease, opacity .2s ease;
+}
+
+.st-start:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 28px rgba(37, 99, 235, .28);
+}
+
+.st-start:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, .35);
+    outline-offset: 3px;
+}
+
+.st-start:disabled {
+    opacity: .7;
+    cursor: progress;
+}
+
+
+/* =========================================================
+   PROGRES
+========================================================= */
+
+.st-progress {
+    width: min(520px, 100%);
+    margin-top: 24px;
+}
+
+.st-progress-track {
+    height: 7px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #e9eef6;
+}
+
+.st-progress-track span {
+    display: block;
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #2563eb, #5a95f7);
+    transition: width .4s ease;
+}
+
+.st-progress-info {
+    margin-top: 8px;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    color: #94a3b8;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+
+/* =========================================================
+   HASIL
+========================================================= */
+
+.st-results {
+    margin-top: 14px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 13px;
+}
+
+.st-result .stat-value {
+    font-size: 22px;
+    font-variant-numeric: tabular-nums;
+}
+
+.st-result .stat-label {
     font-size: 10px;
 }
 
-
-/* =========================================================
-   CONNECTION CARD
-   ========================================================= */
-
-.connection-card {
-    margin-top: 20px;
-
-    padding: 23px;
-
-    background: white;
-
-    border: 1px solid var(--border);
-
-    border-radius: var(--radius);
-
-    box-shadow:
-        0 3px 15px rgba(25, 35, 60, 0.035);
-}
-
-.connection-header {
-    display: flex;
-
-    align-items: center;
-
-    justify-content: space-between;
-
-    padding-bottom: 17px;
-
-    border-bottom: 1px solid var(--border);
-}
-
-.connection-header h3 {
-    margin: 0;
-
-    font-size: 16px;
-}
-
-.connection-header p {
-    margin: 4px 0 0;
-
-    color: var(--muted);
-
-    font-size: 11px;
-}
-
-.connection-status {
-    display: flex;
-
-    align-items: center;
-
-    gap: 7px;
-
-    color: var(--green);
-
-    font-size: 11px;
-
-    font-weight: 650;
-}
-
-.online-dot {
-    width: 7px;
-    height: 7px;
-
-    border-radius: 50%;
-
-    background: var(--green);
-
-    box-shadow:
-        0 0 0 4px #ecfdf3;
+.st-result .stat-tag {
+    font-size: 7px;
 }
 
 
 /* =========================================================
-   CONNECTION GRID
-   ========================================================= */
+   INFORMASI PENGUJIAN
+========================================================= */
 
-.connection-grid {
-    display: grid;
-
-    grid-template-columns:
-        repeat(4, minmax(0, 1fr));
-
-    gap: 20px;
-
-    padding-top: 19px;
+.st-info {
+    margin-top: 14px;
 }
 
-.connection-item span {
-    display: flex;
+.card-heading h3 {
+    font-size: 13px;
+}
 
+.card-heading p {
+    font-size: 9px;
+}
+
+.st-server-pill {
+    padding: 5px 10px;
+    display: inline-flex;
     align-items: center;
-
     gap: 6px;
-
-    color: var(--muted);
-
-    font-size: 11px;
+    border-radius: 999px;
+    color: #159957;
+    background: #ecfdf3;
+    font-size: 9px;
+    font-weight: 800;
 }
 
-.connection-item strong {
-    display: block;
+.st-server-pill span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, .12);
+}
 
-    margin-top: 6px;
+.st-info-grid {
+    margin: 16px 0 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
 
-    color: var(--text);
+.st-info-grid > div {
+    min-width: 0;
+    padding: 11px 12px;
+    border-radius: 10px;
+    background: #f8fafc;
+}
 
-    font-size: 12px;
+.st-info-grid dt {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #94a3b8;
+    font-size: 9px;
+    font-weight: 600;
+}
 
-    font-weight: 650;
+.st-info-grid dt i {
+    color: #2563eb;
+}
 
-    word-break: break-word;
+.st-info-grid dd {
+    margin: 5px 0 0;
+    color: #263246;
+    font-size: 11px;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+
+/* =========================================================
+   RIWAYAT
+========================================================= */
+
+.st-history {
+    margin-top: 14px;
+}
+
+.st-history .card-heading p {
+    margin-top: 4px;
+}
+
+.st-history-status {
+    color: #94a3b8;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.st-history-head,
+.st-history-row {
+    display: grid;
+    grid-template-columns: 1.6fr repeat(4, 1fr);
+    align-items: center;
+    gap: 12px;
+}
+
+.st-history-head {
+    margin-top: 14px;
+    padding: 0 12px 9px;
+    border-bottom: 1px solid #edf1f5;
+    color: #a0aaba;
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.st-history-list {
+    display: grid;
+}
+
+.st-history-row {
+    padding: 12px;
+    border-bottom: 1px solid #f1f3f7;
+    color: #64748b;
+    font-size: 10px;
+    transition: background .15s ease;
+}
+
+.st-history-row:last-child {
+    border-bottom: 0;
+}
+
+.st-history-row:hover {
+    background: #f8fbff;
+}
+
+.st-history-row time {
+    color: #7b8798;
+}
+
+.st-history-row i {
+    margin-right: 2px;
+    color: #94a3b8;
+}
+
+.st-cell-download {
+    color: #16a34a;
+    font-weight: 700;
+}
+
+.st-cell-download i {
+    color: #16a34a;
+}
+
+.st-cell-upload {
+    color: #2563eb;
+    font-weight: 700;
+}
+
+.st-cell-upload i {
+    color: #2563eb;
+}
+
+.st-history-empty {
+    margin: 0;
+    padding: 34px 12px;
+    color: #94a3b8;
+    font-size: 10px;
+    text-align: center;
 }
 
 
 /* =========================================================
    TIPS
-   ========================================================= */
+========================================================= */
 
-.speedtest-tips {
-    display: flex;
-
-    align-items: center;
-
-    gap: 12px;
-
-    margin-top: 20px;
-
-    padding: 15px 18px;
-
-    background: #eff6ff;
-
-    border: 1px solid #dbeafe;
-
-    border-radius: 13px;
-}
-
-.tips-icon {
-    width: 34px;
-    height: 34px;
-
-    min-width: 34px;
-
-    display: flex;
-
-    align-items: center;
-    justify-content: center;
-
-    border-radius: 9px;
-
-    background: white;
-
-    color: var(--primary);
-}
-
-.speedtest-tips strong {
-    display: block;
-
-    color: #1e40af;
-
-    font-size: 12px;
-}
-
-.speedtest-tips p {
-    margin: 3px 0 0;
-
-    color: #64748b;
-
-    font-size: 10px;
-}
-
-.speed-result-grid {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 14px;
-    margin-top: 20px;
-}
-
-.speed-result-card {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-width: 0;
-    padding: 17px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--card);
-    box-shadow: 0 3px 15px rgba(25, 35, 60, .035);
-}
-
-.speed-result-card > div:last-child > span {
-    color: var(--muted);
-    font-size: 11px;
-}
-
-.speed-result-card .result-number {
-    display: flex;
-    align-items: baseline;
-    gap: 4px;
-    margin-top: 3px;
-}
-
-.speed-result-card .result-number strong {
-    color: var(--text);
-    font-size: 20px;
-}
-
-.speed-result-card .result-number small {
-    color: var(--muted);
-    font-size: 10px;
-}
-
-.speed-result-card p {
-    margin: 3px 0 0;
-    color: var(--muted);
-    font-size: 10px;
-}
-
-.speed-history-card {
-    margin-top: 20px;
-    padding: 22px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--card);
-    box-shadow: 0 8px 30px rgba(20, 30, 60, .04);
-}
-
-.speed-history-heading {
+.st-tips {
+    margin-top: 14px;
+    padding: 14px 16px;
     display: flex;
     align-items: flex-start;
-    justify-content: space-between;
     gap: 12px;
-    margin-bottom: 14px;
+    border: 1px solid #fde9bd;
+    border-radius: 13px;
+    background: linear-gradient(135deg, #fffaf0, #fffdf8);
 }
 
-.speed-history-heading h2 {
-    margin: 0;
-    color: var(--text);
-    font-size: 17px;
-    font-weight: 750;
-}
-
-.speed-history-heading p,
-#speedHistoryStatus,
-.speed-history-empty {
-    margin: 5px 0 0;
-    color: var(--muted);
-    font-size: 11px;
-}
-
-.speed-history-list {
-    display: grid;
-    gap: 8px;
-}
-
-.speed-history-row {
-    display: grid;
-    grid-template-columns: 1.5fr repeat(4, 1fr);
+.st-tips-icon {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px;
-    border: 1px solid var(--border);
+    justify-content: center;
     border-radius: 10px;
-    color: var(--text);
+    color: #d97706;
+    background: #fff3d6;
+    font-size: 14px;
+}
+
+.st-tips strong {
+    display: block;
+    color: #5f4a1c;
     font-size: 11px;
+    font-weight: 800;
 }
 
-.speed-history-row time {
-    color: var(--muted);
+.st-tips p {
+    margin: 4px 0 0;
+    color: #7c6a45;
+    font-size: 10px;
+    line-height: 1.65;
 }
 
-.speed-history-row i {
-    margin-right: 3px;
-    color: var(--primary);
+
+/* =========================================================
+   DARK THEME
+========================================================= */
+
+.dashboard-page[data-theme="dark"] .st-gauge {
+    --st-track: #1f2f47;
+    --st-surface: #121c2c;
 }
 
-@media (max-width: 900px) {
-    .speed-result-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .speed-history-row {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
+.dashboard-page[data-theme="dark"] .st-gauge::before {
+    box-shadow: none;
 }
 
-@media (max-width: 520px) {
-    .speed-result-grid {
-        grid-template-columns: 1fr;
-    }
+.dashboard-page[data-theme="dark"] .st-gauge.is-error {
+    --st-track: #3b1c1f;
+}
 
-    .speed-history-card {
-        padding: 16px;
-    }
+.dashboard-page[data-theme="dark"] .st-state {
+    color: #8bb7ff;
+}
 
-    .speed-history-row {
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-    }
+.dashboard-page[data-theme="dark"] .st-gauge.is-done .st-state {
+    color: #6ee7a0;
+}
 
-    .speed-history-row time {
-        grid-column: 1 / -1;
-    }
+.dashboard-page[data-theme="dark"] .st-gauge.is-error .st-state {
+    color: #ff9c96;
+}
+
+.dashboard-page[data-theme="dark"] .st-speed strong,
+.dashboard-page[data-theme="dark"] .st-info-grid dd,
+.dashboard-page[data-theme="dark"] .section-title-row h2 {
+    color: #e7eef9;
+}
+
+.dashboard-page[data-theme="dark"] .st-speed span,
+.dashboard-page[data-theme="dark"] .st-gauge-inner small,
+.dashboard-page[data-theme="dark"] .st-scale,
+.dashboard-page[data-theme="dark"] .st-progress-info,
+.dashboard-page[data-theme="dark"] .st-info-grid dt,
+.dashboard-page[data-theme="dark"] .st-history-status,
+.dashboard-page[data-theme="dark"] .st-history-empty,
+.dashboard-page[data-theme="dark"] .st-history-row time,
+.dashboard-page[data-theme="dark"] .card-heading p {
+    color: #8fa1b8;
+}
+
+.dashboard-page[data-theme="dark"] .st-progress-track {
+    background: #26354a;
+}
+
+.dashboard-page[data-theme="dark"] .st-scope,
+.dashboard-page[data-theme="dark"] .st-info-grid > div {
+    border-color: #2b3a51;
+    background: #172437;
+}
+
+.dashboard-page[data-theme="dark"] .st-scope span,
+.dashboard-page[data-theme="dark"] .st-history-row {
+    color: #9cadc2;
+}
+
+.dashboard-page[data-theme="dark"] .st-history-head {
+    border-color: #26354a;
+    color: #7f90a8;
+}
+
+.dashboard-page[data-theme="dark"] .st-history-row {
+    border-color: #1f2d42;
+}
+
+.dashboard-page[data-theme="dark"] .st-history-row:hover {
+    background: #162234;
+}
+
+.dashboard-page[data-theme="dark"] .st-cell-download,
+.dashboard-page[data-theme="dark"] .st-cell-download i {
+    color: #6ee7a0;
+}
+
+.dashboard-page[data-theme="dark"] .st-cell-upload,
+.dashboard-page[data-theme="dark"] .st-cell-upload i {
+    color: #8bb7ff;
+}
+
+.dashboard-page[data-theme="dark"] .st-tips {
+    border-color: #4a3b1c;
+    background: #2a2314;
+}
+
+.dashboard-page[data-theme="dark"] .st-tips strong {
+    color: #f0d899;
+}
+
+.dashboard-page[data-theme="dark"] .st-tips p {
+    color: #c9b98c;
+}
+
+.dashboard-page[data-theme="dark"] .st-tips-icon {
+    color: #f0c36a;
+    background: #3a2f16;
+}
+
+.dashboard-page[data-theme="dark"] .st-server-pill {
+    color: #6ee7a0;
+    background: #12301f;
 }
 
 
 /* =========================================================
    RESPONSIVE
-   ========================================================= */
+========================================================= */
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
 
-    .speedtest-page {
-        padding: 24px;
+    .st-results {
+        grid-template-columns: repeat(2, 1fr);
     }
 
-    .result-grid {
-        grid-template-columns:
-            1fr;
-    }
-
-    .connection-grid {
-        grid-template-columns:
-            repeat(2, minmax(0, 1fr));
+    .st-info-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
 }
 
+@media (max-width: 700px) {
 
-@media (max-width: 650px) {
-
-    .speedtest-page {
-        padding: 15px;
+    .st-test {
+        padding: 30px 16px 26px;
     }
 
-    .speedtest-header {
-        flex-direction: column;
-    }
-
-    .server-info {
-        width: 100%;
-
-        box-sizing: border-box;
-    }
-
-    .speedtest-header h1 {
-        font-size: 25px;
-    }
-
-    .speedometer {
+    .st-gauge {
         width: 220px;
         height: 220px;
     }
 
-    .speed-value strong {
-        font-size: 39px;
+    .st-speed strong {
+        font-size: 38px;
     }
 
-    .connection-header {
-        align-items: flex-start;
+    .st-history-head {
+        display: none;
+    }
 
-        flex-direction: column;
+    .st-history-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        border: 1px solid #edf1f5;
+        border-radius: 10px;
+        margin-bottom: 8px;
+    }
 
-        gap: 12px;
+    .st-history-row:last-child {
+        margin-bottom: 0;
+        border-bottom: 1px solid #edf1f5;
+    }
+
+    .st-history-row time {
+        grid-column: 1 / -1;
+    }
+
+    .dashboard-page[data-theme="dark"] .st-history-row,
+    .dashboard-page[data-theme="dark"] .st-history-row:last-child {
+        border-color: #26354a;
     }
 
 }
 
+@media (max-width: 500px) {
 
-@media (max-width: 450px) {
-
-    .speedtest-card {
-        padding:
-            30px 15px 25px;
+    .st-results {
+        grid-template-columns: 1fr;
     }
 
-    .speedometer {
+    .st-info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .st-gauge {
         width: 200px;
         height: 200px;
     }
 
-    .speed-value strong {
+    .st-gauge-inner {
+        max-width: 140px;
+    }
+
+    .st-speed strong {
         font-size: 34px;
     }
 
-    .connection-grid {
-        grid-template-columns:
-            1fr;
+    .st-start {
+        width: 100%;
     }
 
-    .speedtest-tips {
-        align-items: flex-start;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .st-gauge,
+    .st-progress-track span,
+    .st-start {
+        transition: none;
+    }
+
+    .st-gauge.is-running::after {
+        animation: none;
     }
 
 }
