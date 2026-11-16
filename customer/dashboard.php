@@ -32,9 +32,15 @@ function tableExists(mysqli $conn, string $table): bool
 {
     static $cache = [];
     if (!isset($cache[$table])) {
-        $t = $conn->real_escape_string($table);
-        $r = $conn->query("SHOW TABLES LIKE '{$t}'");
-        $cache[$table] = $r && $r->num_rows > 0;
+        $stmt = $conn->prepare(
+            'SELECT 1 FROM information_schema.tables
+             WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1'
+        );
+        $stmt->bind_param('s', $table);
+        $stmt->execute();
+        $stmt->store_result();
+        $cache[$table] = $stmt->num_rows > 0;
+        $stmt->close();
     }
     return $cache[$table];
 }
@@ -47,10 +53,15 @@ function columnExists(mysqli $conn, string $table, string $column): bool
         if (!tableExists($conn, $table)) {
             return $cache[$key] = false;
         }
-        $t = $conn->real_escape_string($table);
-        $c = $conn->real_escape_string($column);
-        $r = $conn->query("SHOW COLUMNS FROM `{$t}` LIKE '{$c}'");
-        $cache[$key] = $r && $r->num_rows > 0;
+        $stmt = $conn->prepare(
+            'SELECT 1 FROM information_schema.columns
+             WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1'
+        );
+        $stmt->bind_param('ss', $table, $column);
+        $stmt->execute();
+        $stmt->store_result();
+        $cache[$key] = $stmt->num_rows > 0;
+        $stmt->close();
     }
     return $cache[$key];
 }
@@ -130,10 +141,11 @@ function normalizeSubscriptionStatus($status): string
     $status = strtolower(trim((string) $status));
 
     $map = [
-        'active'     => ['active', 'aktif'],
-        'pending'    => ['pending', 'proses', 'menunggu_pemasangan', 'menunggu pemasangan'],
-        'suspended'  => ['suspended', 'ditangguhkan'],
-        'terminated' => ['terminated', 'berakhir', 'nonaktif'],
+        'active'             => ['active', 'aktif'],
+        'pending'            => ['pending', 'proses', 'menunggu_pemasangan', 'menunggu pemasangan', 'menunggu_aktivasi', 'menunggu aktivasi'],
+        'suspended'          => ['suspended', 'ditangguhkan'],
+        'terminated'         => ['terminated', 'berakhir', 'nonaktif'],
+        'belum_berlangganan' => ['belum_berlangganan', 'belum berlangganan', 'not_subscribed', 'not subscribed'],
     ];
 
     foreach ($map as $normalized => $aliases) {
@@ -141,7 +153,7 @@ function normalizeSubscriptionStatus($status): string
             return $normalized;
         }
     }
-    return 'belum_berlangganan';
+    return 'unknown';
 }
 
 /* ======================== CEK LOGIN ======================== */
@@ -156,22 +168,28 @@ if ($userId <= 0) {
 
 $customer = null;
 $customerId = 0;
-$paketNama = 'Belum Memilih Paket';
-$paketSpeed = '-';
-$paketHarga = 0;
+$paketNama = 'Data paket belum tersedia';
+$paketSpeed = 'Belum tersedia';
+$paketHarga = null;
 $totalInstalasi = 0;
+$instalasiDataAvailable = false;
 $totalGangguan = 0;
+$gangguanDataAvailable = false;
 $tagihan = null;
 $tagihanDataAvailable = false;
-$jumlahTagihan = 0;
+$tagihanAmountAvailable = false;
+$jumlahTagihan = null;
 $jatuhTempo = '-';
 $tagihanId = 0;
 $riwayatPembayaran = [];
+$riwayatPembayaranDataAvailable = false;
 $unreadNotifications = 0;
 $latestNotifications = [];
+$notificationFeedAvailable = false;
 $downloadMbps = $uploadMbps = $pingMs = null;
 $bandwidthReadings = [];
 $bandwidthTelemetryAvailable = false;
+$bandwidthSpeedAvailable = false;
 $bandwidthIsLive = false;
 $bandwidthDataUpdatedAt = null;
 
@@ -239,11 +257,13 @@ $statusLangganan = normalizeSubscriptionStatus($customer['status_langganan'] ?? 
 
 if (!empty($customer['nama_paket'])) {
     $paketNama = $customer['nama_paket'];
+} elseif (array_key_exists('paket_id', $customer) && empty($customer['paket_id'])) {
+    $paketNama = 'Belum memilih paket';
 }
-if (isset($customer['speed_mbps'])) {
+if (is_numeric($customer['speed_mbps'] ?? null)) {
     $paketSpeed = $customer['speed_mbps'] . ' Mbps';
 }
-if (isset($customer['harga_paket'])) {
+if (is_numeric($customer['harga_paket'] ?? null)) {
     $paketHarga = (float) $customer['harga_paket'];
 }
 
@@ -271,7 +291,11 @@ if (allColumnsExist($conn, 'usage_data', ['customer_id', 'download_mbps', 'uploa
             $bandwidthDataUpdatedAt = $latest['recorded_at'] ?? null;
 
             $ts = strtotime((string) $bandwidthDataUpdatedAt);
-            $bandwidthIsLive = $ts !== false && $ts <= time() && $ts >= time() - 300;
+            $bandwidthSpeedAvailable = $downloadMbps !== null || $uploadMbps !== null;
+            $bandwidthIsLive = $bandwidthSpeedAvailable
+                && $ts !== false
+                && $ts <= time()
+                && $ts >= time() - 300;
             $bandwidthTelemetryAvailable = $downloadMbps !== null || $uploadMbps !== null || $pingMs !== null;
             $bandwidthReadings = array_reverse($bandwidthReadings);
         }
@@ -288,16 +312,19 @@ $statusMap = [
     'suspended'          => ['Layanan Ditangguhkan', 'suspended', 'bi-pause-circle-fill'],
     'terminated'         => ['Layanan Berakhir', 'terminated', 'bi-x-circle-fill'],
     'belum_berlangganan' => ['Belum Berlangganan', 'pending', 'bi-cart3'],
+    'unknown'            => ['Status Belum Tersedia', 'unknown', 'bi-question-circle'],
 ];
 [$statusLabel, $statusClass, $statusIcon] = $statusMap[$statusLangganan];
 
 /* ======================== TOTAL INSTALASI ======================== */
 
 if ($customerId > 0 && allColumnsExist($conn, 'instalasi', ['id_customer'])) {
+    $instalasiDataAvailable = true;
     try {
         $rows = queryRows($conn, "SELECT COUNT(*) AS total FROM instalasi WHERE id_customer = ?", 'i', [$customerId]);
         $totalInstalasi = (int) ($rows[0]['total'] ?? 0);
     } catch (Throwable $e) {
+        $instalasiDataAvailable = false;
         error_log('Dashboard YESNET instalasi failed: ' . $e->getMessage());
     }
 }
@@ -315,7 +342,8 @@ if (allColumnsExist($conn, 'notifications', ['id_user', 'dibaca'])) {
         );
         $unreadNotifications = (int) ($rows[0]['total'] ?? 0);
 
-        if (allColumnsExist($conn, 'notifications', ['judul', 'message', 'type', 'created_at'])) {
+        if (allColumnsExist($conn, 'notifications', ['id', 'judul', 'message', 'type', 'created_at'])) {
+            $notificationFeedAvailable = true;
             $latestNotifications = queryRows(
                 $conn,
                 "SELECT id, judul, message, type, dibaca, created_at
@@ -327,6 +355,7 @@ if (allColumnsExist($conn, 'notifications', ['id_user', 'dibaca'])) {
             );
         }
     } catch (Throwable $e) {
+        $notificationFeedAvailable = false;
         error_log('Dashboard YESNET notification failed: ' . $e->getMessage());
     }
 }
@@ -334,6 +363,7 @@ if (allColumnsExist($conn, 'notifications', ['id_user', 'dibaca'])) {
 /* ======================== TOTAL GANGGUAN ======================== */
 
 if ($customerId > 0 && allColumnsExist($conn, 'complaint', ['id_customer'])) {
+    $gangguanDataAvailable = true;
     try {
         $sql = "SELECT COUNT(*) AS total FROM complaint WHERE id_customer = ?";
         if (columnExists($conn, 'complaint', 'status')) {
@@ -342,19 +372,21 @@ if ($customerId > 0 && allColumnsExist($conn, 'complaint', ['id_customer'])) {
         $rows = queryRows($conn, $sql, 'i', [$customerId]);
         $totalGangguan = (int) ($rows[0]['total'] ?? 0);
     } catch (Throwable $e) {
+        $gangguanDataAvailable = false;
         error_log('Dashboard YESNET complaint failed: ' . $e->getMessage());
     }
 }
 
 /* ======================== TAGIHAN AKTIF ======================== */
 
-if ($customerId > 0 && allColumnsExist($conn, 'tagihan', ['id_customer'])) {
+if (
+    $customerId > 0 &&
+    allColumnsExist($conn, 'tagihan', ['id_customer', 'status'])
+) {
     $tagihanDataAvailable = true;
 
     $sql = "SELECT * FROM tagihan WHERE id_customer = ?";
-    if (columnExists($conn, 'tagihan', 'status')) {
-        $sql .= " AND LOWER(status) IN ('unpaid', 'pending', 'belum bayar', 'belum dibayar')";
-    }
+    $sql .= " AND LOWER(status) IN ('unpaid', 'pending', 'belum bayar', 'belum dibayar')";
     if (columnExists($conn, 'tagihan', 'jatuh_tempo')) {
         $sql .= " ORDER BY jatuh_tempo ASC";
     }
@@ -365,10 +397,13 @@ if ($customerId > 0 && allColumnsExist($conn, 'tagihan', ['id_customer'])) {
         if ($rows !== []) {
             $tagihan = $rows[0];
             $tagihanId = (int) ($tagihan['id'] ?? 0);
-            $jumlahTagihan = pick($tagihan, ['jumlah', 'total', 'nominal', 'amount'], 0);
+            $amount = pick($tagihan, ['jumlah', 'total', 'nominal', 'amount']);
+            $tagihanAmountAvailable = is_numeric($amount);
+            $jumlahTagihan = $tagihanAmountAvailable ? (float) $amount : null;
             $jatuhTempo = pick($tagihan, ['jatuh_tempo', 'tanggal_jatuh_tempo'], '-');
         }
     } catch (Throwable $e) {
+        $tagihanDataAvailable = false;
         error_log('Dashboard YESNET tagihan failed: ' . $e->getMessage());
     }
 }
@@ -376,6 +411,7 @@ if ($customerId > 0 && allColumnsExist($conn, 'tagihan', ['id_customer'])) {
 /* ======================== RIWAYAT PEMBAYARAN ======================== */
 
 if ($customerId > 0 && allColumnsExist($conn, 'pembayaran', ['id_customer'])) {
+    $riwayatPembayaranDataAvailable = true;
     $order = '';
     if (columnExists($conn, 'pembayaran', 'created_at')) {
         $order = ' ORDER BY created_at DESC';
@@ -391,6 +427,7 @@ if ($customerId > 0 && allColumnsExist($conn, 'pembayaran', ['id_customer'])) {
             [$customerId]
         );
     } catch (Throwable $e) {
+        $riwayatPembayaranDataAvailable = false;
         error_log('Dashboard YESNET pembayaran failed: ' . $e->getMessage());
     }
 }
@@ -416,7 +453,6 @@ $menuService = match ($statusLangganan) {
     'belum_berlangganan' => [['../paket.php?mode=direct', 'bi-box-seam-fill', 'Pilih Paket']],
     'pending'            => [['installation.php', 'bi-hammer', 'Status Pemasangan']],
     'active'             => [
-        ['upgrade.php',         'bi-arrow-up-circle-fill', 'Upgrade Paket'],
         ['service_request.php', 'bi-plus-circle-fill',     'Layanan Tambahan'],
     ],
     default => [],
@@ -427,7 +463,8 @@ $heroText = match ($statusLangganan) {
     'pending'    => 'Pengajuan pemasangan kamu sedang diproses oleh tim kami.',
     'suspended'  => 'Layanan internet kamu sedang ditangguhkan. Silakan hubungi Customer Service.',
     'terminated' => 'Layanan internet kamu sudah berakhir. Hubungi Customer Service untuk informasi lebih lanjut.',
-    default      => 'Belum berlangganan? Pilih paket internet yang sesuai dan mulai perjalanan internet kamu.',
+    'belum_berlangganan' => 'Belum berlangganan? Pilih paket internet yang sesuai dan mulai perjalanan internet kamu.',
+    default      => 'Status langganan belum tersedia. Hubungi Customer Service untuk memastikan kondisi layanan kamu.',
 };
 
 [$heroLink, $heroIcon, $heroButton] = match ($statusLangganan) {
@@ -437,8 +474,19 @@ $heroText = match ($statusLangganan) {
     default              => ['chat.php', 'bi-headset', 'Hubungi CS'],
 };
 
-$telemetryLabel = $bandwidthIsLive ? 'LIVE' : ($bandwidthTelemetryAvailable ? 'HISTORIS' : 'BELUM TERSEDIA');
-$telemetryClass = $bandwidthIsLive ? 'is-live' : ($bandwidthTelemetryAvailable ? 'is-historical' : 'is-unavailable');
+$telemetryLabel = $bandwidthIsLive
+    ? 'LIVE'
+    : ($bandwidthSpeedAvailable ? 'HISTORIS' : 'BELUM TERSEDIA');
+$telemetryClass = $bandwidthIsLive
+    ? 'is-live'
+    : ($bandwidthSpeedAvailable ? 'is-historical' : 'is-unavailable');
+$bandwidthChartAvailable = false;
+foreach ($bandwidthReadings as $reading) {
+    if (is_numeric($reading['download_mbps'] ?? null) || is_numeric($reading['upload_mbps'] ?? null)) {
+        $bandwidthChartAvailable = true;
+        break;
+    }
+}
 
 $chartSeries = [
     'labels' => array_map(static function (array $r): string {
@@ -474,10 +522,10 @@ $quickServices = [
 <body class="dashboard-page">
 <div class="customer-layout">
 
-    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+    <div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
 
     <!-- ===================== SIDEBAR ===================== -->
-    <aside class="sidebar" id="sidebar">
+    <aside class="sidebar" id="sidebar" aria-label="Navigasi pelanggan">
         <div class="sidebar-brand">
             <div class="brand-logo"><i class="bi bi-wifi"></i></div>
             <div class="brand-text">
@@ -494,7 +542,8 @@ $quickServices = [
                 <div class="menu-label">Utama</div>
                 <?php foreach ($menuMain as [$href, $icon, $label]): ?>
                     <a href="<?= e($href); ?>"
-                       class="menu-item <?= $currentPage === $href ? 'active' : ''; ?>">
+                       class="menu-item <?= $currentPage === $href ? 'active' : ''; ?>"
+                       <?= $currentPage === $href ? 'aria-current="page"' : ''; ?>>
                         <span class="menu-icon"><i class="bi <?= e($icon); ?>"></i></span>
                         <span class="menu-text"><?= e($label); ?></span>
                         <?php if ($href === 'complaint.php' && $totalGangguan > 0): ?>
@@ -547,7 +596,8 @@ $quickServices = [
 
         <header class="topbar">
             <div class="topbar-left">
-                <button type="button" class="mobile-menu-button" id="mobileMenuButton" aria-label="Buka menu">
+                <button type="button" class="mobile-menu-button" id="mobileMenuButton"
+                        aria-label="Buka menu" aria-controls="sidebar" aria-expanded="false">
                     <i class="bi bi-list"></i>
                 </button>
                 <div>
@@ -609,18 +659,22 @@ $quickServices = [
             <!-- ---------- STATUS STRIP ---------- -->
             <section class="status-strip">
                 <div class="status-strip-item">
-                    <div class="status-strip-icon blue"><i class="bi bi-shield-check"></i></div>
+                    <div class="status-strip-icon <?= e($statusClass); ?>">
+                        <i class="bi <?= e($statusIcon); ?>"></i>
+                    </div>
                     <div><span>Status layanan</span><strong><?= e($statusLabel); ?></strong></div>
                 </div>
                 <div class="status-divider"></div>
                 <div class="status-strip-item">
-                    <div class="status-strip-icon green"><i class="bi bi-router"></i></div>
-                    <div><span>Paket saat ini</span><strong><?= e($paketNama); ?></strong></div>
+                    <div class="status-strip-icon <?= e($statusLangganan === 'active' ? 'green' : 'unknown'); ?>">
+                        <i class="bi bi-router"></i>
+                    </div>
+                    <div><span>Paket saat ini</span><strong><?= e($statusLangganan === 'active' ? $paketNama : 'Layanan belum aktif'); ?></strong></div>
                 </div>
                 <div class="status-divider"></div>
                 <div class="status-strip-item">
                     <div class="status-strip-icon purple"><i class="bi bi-lightning-charge"></i></div>
-                    <div><span>Kecepatan</span><strong><?= e($paketSpeed); ?></strong></div>
+                    <div><span>Kecepatan</span><strong><?= e($statusLangganan === 'active' ? $paketSpeed : '—'); ?></strong></div>
                 </div>
             </section>
 
@@ -648,8 +702,10 @@ $quickServices = [
                     </div>
 
                     <div class="stat-value">
-                        <span id="dashboardInvoiceAmount"><?= !empty($tagihan)
-                            ? rupiah($jumlahTagihan)
+                        <span id="dashboardInvoiceAmount"
+                              data-status-available="<?= $tagihanDataAvailable ? 'true' : 'false'; ?>"
+                              data-amount-available="<?= $tagihanAmountAvailable ? 'true' : 'false'; ?>"><?= !empty($tagihan)
+                            ? ($tagihanAmountAvailable ? rupiah($jumlahTagihan) : 'Nominal belum tersedia')
                             : ($tagihanDataAvailable ? 'Tidak ada tagihan' : 'Tagihan belum tersedia'); ?></span>
                     </div>
 
@@ -704,12 +760,16 @@ $quickServices = [
                 <div class="stat-card">
                     <div class="stat-top">
                         <div class="stat-icon orange"><i class="bi bi-tools"></i></div>
-                        <span class="stat-tag">Aktif</span>
+                        <span class="stat-tag"><?= $gangguanDataAvailable ? 'Laporan' : 'Belum tersedia'; ?></span>
                     </div>
-                    <div class="stat-value"><?= $totalGangguan; ?></div>
+                    <div class="stat-value"><?= $gangguanDataAvailable ? $totalGangguan : '—'; ?></div>
                     <div class="stat-label">Laporan gangguan</div>
                     <div class="stat-bottom">
-                        <span><i class="bi bi-activity"></i> Perlu ditangani</span>
+                        <span><i class="bi bi-activity"></i>
+                            <?= $gangguanDataAvailable && columnExists($conn, 'complaint', 'status')
+                                ? 'Perlu ditangani'
+                                : ($gangguanDataAvailable ? 'Total tercatat' : 'Data belum tersedia'); ?>
+                        </span>
                         <a href="complaint.php">Detail <i class="bi bi-arrow-up-right"></i></a>
                     </div>
                 </div>
@@ -718,12 +778,16 @@ $quickServices = [
                 <div class="stat-card">
                     <div class="stat-top">
                         <div class="stat-icon green"><i class="bi bi-hammer"></i></div>
-                        <span class="stat-tag green">Total</span>
+                        <span class="stat-tag <?= $instalasiDataAvailable ? 'green' : ''; ?>">
+                            <?= $instalasiDataAvailable ? 'Total' : 'Belum tersedia'; ?>
+                        </span>
                     </div>
-                    <div class="stat-value"><?= $totalInstalasi; ?></div>
+                    <div class="stat-value"><?= $instalasiDataAvailable ? $totalInstalasi : '—'; ?></div>
                     <div class="stat-label">Riwayat instalasi</div>
                     <div class="stat-bottom">
-                        <span><i class="bi bi-check2-circle"></i> Tercatat</span>
+                        <span><i class="bi bi-check2-circle"></i>
+                            <?= $instalasiDataAvailable ? 'Tercatat' : 'Data belum tersedia'; ?>
+                        </span>
                         <a href="installation.php">Detail <i class="bi bi-arrow-up-right"></i></a>
                     </div>
                 </div>
@@ -773,12 +837,12 @@ $quickServices = [
                         </div>
 
                         <div class="chart-container" id="bandwidthChartContainer"
-                             <?= $bandwidthTelemetryAvailable ? '' : 'hidden'; ?>>
+                             <?= $bandwidthChartAvailable ? '' : 'hidden'; ?>>
                             <canvas id="bandwidthChart"></canvas>
                         </div>
 
                         <div class="telemetry-empty" id="bandwidthTelemetryEmpty"
-                             <?= $bandwidthTelemetryAvailable ? 'hidden' : ''; ?>>
+                             <?= $bandwidthChartAvailable ? 'hidden' : ''; ?>>
                             <i class="bi bi-router"></i>
                             <strong>Data bandwidth belum tersedia</strong>
                             <span>Grafik akan terisi setelah integrasi monitoring jaringan menyimpan data telemetri yang sebenarnya.</span>
@@ -818,23 +882,30 @@ $quickServices = [
                             <?php if ($riwayatPembayaran === []): ?>
                                 <div class="payment-empty">
                                     <div class="empty-icon"><i class="bi bi-receipt"></i></div>
-                                    <strong>Belum ada pembayaran</strong>
-                                    <span>Riwayat pembayaran kamu akan muncul di sini.</span>
+                                    <strong><?= $riwayatPembayaranDataAvailable
+                                        ? 'Belum ada pembayaran'
+                                        : 'Riwayat belum tersedia'; ?></strong>
+                                    <span><?= $riwayatPembayaranDataAvailable
+                                        ? 'Riwayat pembayaran kamu akan muncul di sini.'
+                                        : 'Data riwayat pembayaran belum terhubung.'; ?></span>
                                 </div>
                             <?php else: ?>
                                 <?php foreach ($riwayatPembayaran as $payment): ?>
                                     <?php
                                     $paymentDate = pick($payment, ['tanggal_bayar', 'created_at', 'tanggal'], '-');
                                     $invoice = pick($payment, ['nomor_tagihan', 'invoice', 'nomor_pembayaran', 'kode_pembayaran'], '-');
-                                    $amount = pick($payment, ['jumlah', 'nominal', 'total', 'amount'], 0);
-                                    $paymentStatus = (string) ($payment['status'] ?? 'Tidak diketahui');
+                                    $amount = pick($payment, ['jumlah', 'nominal', 'total', 'amount']);
+                                    $paymentStatus = trim((string) ($payment['status'] ?? 'Tidak diketahui'));
+                                    if ($paymentStatus === '') {
+                                        $paymentStatus = 'Tidak diketahui';
+                                    }
                                     $isSuccess = in_array(strtolower($paymentStatus), ['paid', 'lunas', 'success', 'berhasil'], true);
                                     ?>
                                     <div class="payment-row">
-                                        <span><?= formatTanggal($paymentDate); ?></span>
-                                        <strong><?= e($invoice); ?></strong>
-                                        <span><?= rupiah($amount); ?></span>
-                                        <span>
+                                        <span data-label="Tanggal"><?= formatTanggal($paymentDate); ?></span>
+                                        <strong data-label="Invoice"><?= e($invoice); ?></strong>
+                                        <span data-label="Jumlah"><?= is_numeric($amount) ? rupiah($amount) : '—'; ?></span>
+                                        <span data-label="Status">
                                             <span class="payment-badge <?= $isSuccess ? 'success' : 'warning'; ?>">
                                                 <i class="bi <?= $isSuccess ? 'bi-check-circle-fill' : 'bi-clock-history'; ?>"></i>
                                                 <?= e(ucfirst($paymentStatus)); ?>
@@ -856,7 +927,9 @@ $quickServices = [
                                 <span class="card-kicker">Langganan</span>
                                 <h3>Paket internet</h3>
                             </div>
-                            <span class="active-pill"><i class="bi bi-check-circle-fill"></i> Aktif</span>
+                            <span class="active-pill status-<?= e($statusClass); ?>">
+                                <i class="bi <?= e($statusIcon); ?>"></i> <?= e($statusLabel); ?>
+                            </span>
                         </div>
 
                         <div class="package-visual" aria-hidden="true">
@@ -871,7 +944,7 @@ $quickServices = [
                                 <strong><?= e($paketSpeed); ?></strong>
                                 <span>Kecepatan internet</span>
                             </div>
-                            <?php if ($paketHarga > 0): ?>
+                            <?php if ($paketHarga !== null && is_numeric($paketHarga)): ?>
                                 <div class="package-price">
                                     <strong><?= rupiah($paketHarga); ?></strong>
                                     <span>/ bulan</span>
@@ -907,6 +980,10 @@ $quickServices = [
                         <div class="network-info">
                             <div><i class="bi bi-broadcast-pin"></i><span id="areaNameLabel">Area pelanggan belum terhubung</span></div>
                             <div><i class="bi bi-info-circle"></i><span id="areaIncidentLabel">Data gangguan ditampilkan jika tersedia.</span></div>
+                            <div>
+                                <i class="bi bi-clock-history"></i>
+                                <span>Terakhir diperbarui: <span id="areaStatusUpdatedAt">Menunggu pembaruan</span></span>
+                            </div>
                         </div>
 
                         <a href="network_status.php" class="network-link">
@@ -924,9 +1001,14 @@ $quickServices = [
                             <a href="notifikasi.php" class="view-all">Semua <i class="bi bi-arrow-right"></i></a>
                         </div>
 
-                        <div class="dashboard-notification-list" id="dashboardNotificationFeed">
+                        <div class="dashboard-notification-list" id="dashboardNotificationFeed"
+                             data-source-available="<?= $notificationFeedAvailable ? 'true' : 'false'; ?>">
                             <?php if ($latestNotifications === []): ?>
-                                <div class="notification-empty" role="status">Belum ada notifikasi terbaru.</div>
+                                <div class="notification-empty" role="status">
+                                    <?= $notificationFeedAvailable
+                                        ? 'Belum ada notifikasi terbaru.'
+                                        : 'Notifikasi belum tersedia.'; ?>
+                                </div>
                             <?php else: ?>
                                 <?php foreach ($latestNotifications as $notification): ?>
                                     <?php
@@ -1032,6 +1114,18 @@ $quickServices = [
                 </a>
             </section>
 
+<?php elseif ($statusLangganan === 'unknown'): ?>
+
+            <section class="state-card unknown-state">
+                <div class="state-icon"><i class="bi bi-question-circle"></i></div>
+                <span class="state-label">Status langganan</span>
+                <h2>Status layanan belum tersedia</h2>
+                <p>Kami belum dapat memastikan status langganan dari data akun. Hubungi Customer Service untuk mendapatkan informasi yang akurat.</p>
+                <a href="chat.php" class="state-button">
+                    <i class="bi bi-headset"></i> Hubungi Customer Service
+                </a>
+            </section>
+
 <?php else: ?>
 
             <section class="state-card subscription-state">
@@ -1067,117 +1161,178 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const chartElement = document.getElementById('bandwidthChart');
     let bandwidthChart = null;
+    const chartContainer = document.getElementById('bandwidthChartContainer');
+    const telemetryEmptyState = document.getElementById('bandwidthTelemetryEmpty');
+    const telemetryEmptyTitle = telemetryEmptyState ? telemetryEmptyState.querySelector('strong') : null;
+    const telemetryEmptyMessage = telemetryEmptyState ? telemetryEmptyState.querySelector('span') : null;
 
     const bandwidthSeries = <?= json_encode(
         $chartSeries,
         JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT
     ); ?>;
 
-    if (chartElement && typeof Chart !== 'undefined') {
+    function hasMetric(value) {
+        return value !== null && value !== undefined && value !== ''
+            && Number.isFinite(Number(value));
+    }
+
+    function initializeBandwidthChart(series) {
+        if (!chartElement || typeof Chart === 'undefined') { return false; }
+        if (bandwidthChart) { return true; }
+
         const ctx = chartElement.getContext('2d');
+        if (!ctx) { return false; }
 
-        const gradient = function (rgb, alpha) {
-            const g = ctx.createLinearGradient(0, 0, 0, 260);
-            g.addColorStop(0, 'rgba(' + rgb + ',' + alpha + ')');
-            g.addColorStop(1, 'rgba(' + rgb + ',0)');
-            return g;
-        };
-
-        const dataset = function (label, data, color, rgb, alpha, width) {
-            return {
-                label: label,
-                data: data,
-                borderColor: color,
-                backgroundColor: gradient(rgb, alpha),
-                borderWidth: width,
-                pointRadius: 0,
-                pointHoverRadius: 5,
-                tension: 0.4,
-                fill: true
+        try {
+            const gradient = function (rgb, alpha) {
+                const g = ctx.createLinearGradient(0, 0, 0, 260);
+                g.addColorStop(0, 'rgba(' + rgb + ',' + alpha + ')');
+                g.addColorStop(1, 'rgba(' + rgb + ',0)');
+                return g;
             };
-        };
 
-        bandwidthChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: bandwidthSeries.labels,
-                datasets: [
-                    dataset('Download', bandwidthSeries.download, '#2563eb', '37,99,235', 0.2, 2.5),
-                    dataset('Upload', bandwidthSeries.upload, '#8b5cf6', '139,92,246', 0.12, 2)
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { intersect: false, mode: 'index' },
-                plugins: {
-                    legend: {
-                        position: 'top',
-                        align: 'end',
-                        labels: {
-                            usePointStyle: true,
-                            pointStyle: 'circle',
-                            padding: 16,
-                            boxWidth: 8,
-                            font: { family: 'Inter', size: 12, weight: '600' }
+            const dataset = function (label, data, color, rgb, alpha, width) {
+                return {
+                    label: label,
+                    data: data,
+                    borderColor: color,
+                    backgroundColor: gradient(rgb, alpha),
+                    borderWidth: width,
+                    pointRadius: 0,
+                    pointHoverRadius: 5,
+                    tension: 0.4,
+                    fill: true
+                };
+            };
+
+            bandwidthChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: series.labels,
+                    datasets: [
+                        dataset('Download', series.download, '#2563eb', '37,99,235', 0.2, 2.5),
+                        dataset('Upload', series.upload, '#8b5cf6', '139,92,246', 0.12, 2)
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            align: 'end',
+                            labels: {
+                                usePointStyle: true,
+                                pointStyle: 'circle',
+                                padding: 16,
+                                boxWidth: 8,
+                                font: { family: 'Inter', size: 12, weight: '600' }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: '#172033',
+                            titleColor: '#ffffff',
+                            bodyColor: '#dbe5f4',
+                            padding: 12,
+                            cornerRadius: 10,
+                            callbacks: {
+                                label: function (item) {
+                                    return item.dataset.label + ': ' + item.formattedValue + ' Mbps';
+                                }
+                            }
                         }
                     },
-                    tooltip: {
-                        backgroundColor: '#172033',
-                        titleColor: '#ffffff',
-                        bodyColor: '#dbe5f4',
-                        padding: 12,
-                        cornerRadius: 10,
-                        callbacks: {
-                            label: function (item) {
-                                return item.dataset.label + ': ' + item.formattedValue + ' Mbps';
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            border: { display: false },
+                            ticks: { color: '#94a3b8', font: { family: 'Inter', size: 11 }, maxTicksLimit: 8 }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            suggestedMax: 100,
+                            grid: { color: 'rgba(148,163,184,.14)', drawTicks: false },
+                            border: { display: false },
+                            ticks: {
+                                color: '#94a3b8',
+                                padding: 8,
+                                font: { family: 'Inter', size: 11 },
+                                callback: function (value) { return value + ' Mbps'; }
                             }
                         }
                     }
-                },
-                scales: {
-                    x: {
-                        grid: { display: false },
-                        border: { display: false },
-                        ticks: { color: '#94a3b8', font: { family: 'Inter', size: 11 }, maxTicksLimit: 8 }
-                    },
-                    y: {
-                        beginAtZero: true,
-                        suggestedMax: 100,
-                        grid: { color: 'rgba(148,163,184,.14)', drawTicks: false },
-                        border: { display: false },
-                        ticks: {
-                            color: '#94a3b8',
-                            padding: 8,
-                            font: { family: 'Inter', size: 11 },
-                            callback: function (value) { return value + ' Mbps'; }
-                        }
-                    }
                 }
-            }
-        });
+            });
+        } catch (error) {
+            bandwidthChart = null;
+            console.error('Grafik bandwidth gagal dibuat:', error);
+            return false;
+        }
+
+        return true;
+    }
+
+    const initialChartHasData = bandwidthSeries.download.some(hasMetric)
+        || bandwidthSeries.upload.some(hasMetric);
+    const initialChartReady = initialChartHasData && initializeBandwidthChart(bandwidthSeries);
+    if (chartContainer) { chartContainer.hidden = !initialChartReady; }
+    if (telemetryEmptyState) { telemetryEmptyState.hidden = initialChartReady; }
+    if (initialChartHasData && !initialChartReady) {
+        if (telemetryEmptyTitle) { telemetryEmptyTitle.textContent = 'Grafik tidak tersedia'; }
+        if (telemetryEmptyMessage) {
+            telemetryEmptyMessage.textContent = 'Library grafik gagal dimuat. Coba muat ulang halaman.';
+        }
     }
 
     /* ---------------- SIDEBAR MOBILE ---------------- */
 
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('sidebarOverlay');
+    const mobileButton = document.getElementById('mobileMenuButton');
+    const closeButton = document.getElementById('sidebarClose');
 
     function toggleSidebar(open) {
         if (!sidebar) { return; }
         sidebar.classList.toggle('show', open);
         if (overlay) { overlay.classList.toggle('show', open); }
         document.body.classList.toggle('sidebar-open', open);
+        if (mobileButton) { mobileButton.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+        if (overlay) { overlay.setAttribute('aria-hidden', open ? 'false' : 'true'); }
+
+        const isMobile = window.matchMedia
+            ? window.matchMedia('(max-width: 900px)').matches
+            : window.innerWidth <= 900;
+        if (isMobile) {
+            sidebar.setAttribute('aria-hidden', open ? 'false' : 'true');
+            if (open) {
+                sidebar.removeAttribute('inert');
+            } else {
+                sidebar.setAttribute('inert', '');
+            }
+        } else {
+            sidebar.removeAttribute('aria-hidden');
+            sidebar.removeAttribute('inert');
+        }
+
+        if (!open && document.activeElement === closeButton && mobileButton) {
+            mobileButton.focus();
+        }
     }
 
-    const mobileButton = document.getElementById('mobileMenuButton');
-    const closeButton = document.getElementById('sidebarClose');
     if (mobileButton) { mobileButton.addEventListener('click', function () { toggleSidebar(true); }); }
     if (closeButton) { closeButton.addEventListener('click', function () { toggleSidebar(false); }); }
     if (overlay) { overlay.addEventListener('click', function () { toggleSidebar(false); }); }
     document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape') { toggleSidebar(false); }
     });
+    window.addEventListener('resize', function () {
+        const isMobile = window.matchMedia
+            ? window.matchMedia('(max-width: 900px)').matches
+            : window.innerWidth <= 900;
+        if (!isMobile) { toggleSidebar(false); }
+    });
+    toggleSidebar(false);
 
     /* ---------------- TEMA ---------------- */
 
@@ -1241,22 +1396,21 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function formatRupiah(value) {
         const amount = Number(value);
-        if (!Number.isFinite(amount)) { return 'Rp 0'; }
+        if (!Number.isFinite(amount)) { return '—'; }
         return new Intl.NumberFormat('id-ID', {
             style: 'currency', currency: 'IDR', maximumFractionDigits: 0
         }).format(amount);
     }
 
     function metric(available, value, digits) {
-        return available && value !== null && value !== undefined
-            ? Number(value).toFixed(digits)
-            : '—';
+        return available && hasMetric(value) ? Number(value).toFixed(digits) : '—';
     }
 
     function updateTelemetry(telemetry) {
         const available = Boolean(telemetry && telemetry.available);
-        const live = available && Boolean(telemetry.is_live);
-        const label = live ? 'LIVE' : (available ? 'HISTORIS' : 'BELUM TERSEDIA');
+        const speedAvailable = hasMetric(telemetry.download_mbps) || hasMetric(telemetry.upload_mbps);
+        const live = speedAvailable && Boolean(telemetry.is_live);
+        const label = live ? 'LIVE' : (speedAvailable ? 'HISTORIS' : 'BELUM TERSEDIA');
 
         setText('dashboardDownloadValue', metric(available, telemetry.download_mbps, 1));
         setText('dashboardDownloadSummary', metric(available, telemetry.download_mbps, 1));
@@ -1276,30 +1430,50 @@ document.addEventListener('DOMContentLoaded', function () {
         const status = document.getElementById('bandwidthLiveStatus');
         if (status) {
             status.classList.toggle('is-live', live);
-            status.classList.toggle('is-historical', available && !live);
-            status.classList.toggle('is-unavailable', !available);
+            status.classList.toggle('is-historical', speedAvailable && !live);
+            status.classList.toggle('is-unavailable', !speedAvailable);
         }
 
-        const chartContainer = document.getElementById('bandwidthChartContainer');
-        const emptyState = document.getElementById('bandwidthTelemetryEmpty');
-        if (chartContainer) { chartContainer.hidden = !available; }
-        if (emptyState) { emptyState.hidden = available; }
-
         const readings = Array.isArray(telemetry && telemetry.readings) ? telemetry.readings : [];
-        if (bandwidthChart && available) {
-            bandwidthChart.data.labels = readings.map(function (r) {
-                return formatDate(r.recorded_at).replace(/ WIB$/, '');
-            });
-            bandwidthChart.data.datasets[0].data = readings.map(function (r) { return r.download_mbps; });
-            bandwidthChart.data.datasets[1].data = readings.map(function (r) { return r.upload_mbps; });
+        const chartHasData = readings.some(function (reading) {
+            return hasMetric(reading.download_mbps) || hasMetric(reading.upload_mbps);
+        });
+        const chartSeries = {
+            labels: readings.map(function (reading) {
+                return formatDate(reading.recorded_at).replace(/ WIB$/, '');
+            }),
+            download: readings.map(function (reading) { return reading.download_mbps; }),
+            upload: readings.map(function (reading) { return reading.upload_mbps; })
+        };
+        const chartReady = chartHasData && initializeBandwidthChart(chartSeries);
+
+        if (chartReady && bandwidthChart) {
+            bandwidthChart.data.labels = chartSeries.labels;
+            bandwidthChart.data.datasets[0].data = chartSeries.download;
+            bandwidthChart.data.datasets[1].data = chartSeries.upload;
             bandwidthChart.update('none');
+        }
+
+        if (chartContainer) { chartContainer.hidden = !chartReady; }
+        if (telemetryEmptyState) { telemetryEmptyState.hidden = chartReady; }
+        if (!chartReady) {
+            if (telemetryEmptyTitle) {
+                telemetryEmptyTitle.textContent = chartHasData
+                    ? 'Grafik tidak tersedia'
+                    : 'Data bandwidth belum tersedia';
+            }
+            if (telemetryEmptyMessage) {
+                telemetryEmptyMessage.textContent = chartHasData
+                    ? 'Library grafik gagal dimuat. Coba muat ulang halaman.'
+                    : 'Grafik membutuhkan data download atau upload dari telemetri yang tersimpan.';
+            }
         }
 
         setText('bandwidthTelemetryMessage', live
             ? 'Data telemetri diperbarui dalam 5 menit terakhir.'
             : (available
                 ? 'Menampilkan catatan telemetri, bukan pembacaan live.'
-                : 'Volume penggunaan harian/bulanan belum tersedia; grafik hanya menampilkan kecepatan telemetri.'));
+                : 'Volume pemakaian belum tersedia; grafik membutuhkan telemetri download atau upload.'));
         setText('bandwidthUpdatedAt', formatDate(telemetry && telemetry.updated_at));
     }
 
@@ -1343,6 +1517,7 @@ document.addEventListener('DOMContentLoaded', function () {
             badge.hidden = count === 0;
         }
         if (!feed) { return; }
+        if (feed.dataset.sourceAvailable !== 'true') { return; }
 
         feed.textContent = '';
 
@@ -1388,9 +1563,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function updateInvoice(invoice) {
-        setText('dashboardInvoiceAmount', invoice.has_open
-            ? formatRupiah(invoice.amount)
-            : (invoice.available ? 'Tidak ada tagihan' : 'Tagihan belum tersedia'));
+        const amountElement = document.getElementById('dashboardInvoiceAmount');
+        if (!amountElement || amountElement.dataset.statusAvailable !== 'true') { return; }
+
+        const hasAmount = amountElement.dataset.amountAvailable === 'true'
+            && hasMetric(invoice.amount);
+        amountElement.textContent = invoice.has_open
+            ? (hasAmount ? formatRupiah(invoice.amount) : 'Nominal belum tersedia')
+            : (invoice.available ? 'Tidak ada tagihan' : 'Tagihan belum tersedia');
         setText('dashboardInvoiceStatus', invoice.has_open
             ? 'Tagihan belum dibayar'
             : (invoice.available ? 'Tidak ada tagihan tertunda' : 'Status tagihan belum tersedia'));
@@ -1427,6 +1607,7 @@ document.addEventListener('DOMContentLoaded', function () {
             updateNetwork(payload.data.network || {});
             updateNotifications(payload.data.notifications || [], payload.data.unread_notifications || 0);
             updateInvoice(payload.data.invoice || {});
+            setText('areaStatusUpdatedAt', formatDate(payload.data.checked_at));
 
             if (dashboardRefreshStatus) {
                 dashboardRefreshStatus.textContent = 'Diperbarui ' + formatDate(payload.data.checked_at);
