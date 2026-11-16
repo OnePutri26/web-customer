@@ -2,15 +2,19 @@
 <?php
 declare(strict_types=1);
 
+<<<<<<< HEAD
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+=======
+>>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
 /*
 |--------------------------------------------------------------------------
 | YESNET ADMIN SESSION MANAGEMENT
 |--------------------------------------------------------------------------
 | Session khusus aplikasi internal YESNET.
 | Tidak mengubah session Customer.
+<<<<<<< HEAD
 |--------------------------------------------------------------------------
 */
 
@@ -37,6 +41,82 @@ function adminSessionPath(): string
     return rtrim($basePath, '/') . '/admin/';
 }
 
+=======
+|
+| PENTING:
+| - Jangan memanggil session_start() di tempat lain sebelum file ini.
+| - Muat file ini dengan require_once paling awal di setiap halaman admin.
+|--------------------------------------------------------------------------
+*/
+
+if (defined('YESNET_ADMIN_SESSION_LOADED')) {
+    return;
+}
+define('YESNET_ADMIN_SESSION_LOADED', true);
+
+const ADMIN_SESSION_NAME         = 'YESNET_ADMIN_SESSID';
+const ADMIN_SESSION_IDLE_TIMEOUT = 7200; // detik (2 jam tanpa aktivitas)
+
+/*
+|--------------------------------------------------------------------------
+| BASE PATH (dipakai untuk cookie path dan URL login)
+|--------------------------------------------------------------------------
+*/
+
+function adminScriptName(): string
+{
+    return str_replace(
+        '\\',
+        '/',
+        (string) ($_SERVER['SCRIPT_NAME'] ?? '')
+    );
+}
+
+function adminBasePath(): string
+{
+    $scriptName    = adminScriptName();
+    $adminPosition = stripos($scriptName, '/admin/');
+
+    $basePath = $adminPosition === false
+        ? ''
+        : substr($scriptName, 0, $adminPosition);
+
+    return rtrim($basePath, '/');
+}
+
+function adminSessionPath(): string
+{
+    return adminBasePath() . '/admin/';
+}
+
+function adminLoginUrl(): string
+{
+    return adminBasePath() . '/admin/login.php';
+}
+
+/*
+|--------------------------------------------------------------------------
+| DETEKSI HTTPS (termasuk di belakang reverse proxy / Cloudflare)
+|--------------------------------------------------------------------------
+*/
+
+function adminIsHttps(): bool
+{
+    if (
+        !empty($_SERVER['HTTPS'])
+        && strtolower((string) $_SERVER['HTTPS']) !== 'off'
+    ) {
+        return true;
+    }
+
+    if ((int) ($_SERVER['SERVER_PORT'] ?? 0) === 443) {
+        return true;
+    }
+
+    return strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+}
+
+>>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
 /*
 |--------------------------------------------------------------------------
 | START SESSION
@@ -47,9 +127,14 @@ function adminStartSession(): void
 {
     if (session_status() === PHP_SESSION_ACTIVE) {
 
+<<<<<<< HEAD
         if (session_name() !== 'YESNET_ADMIN_SESSID') {
+=======
+        if (session_name() !== ADMIN_SESSION_NAME) {
+>>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
             http_response_code(500);
-            exit('Sesi administrator tidak dapat diinisialisasi dengan aman.');
+            exit('Sesi administrator tidak dapat diinisialisasi dengan aman. '
+                . 'Ada session_start() lain yang berjalan sebelum session.php.');
         }
 
         return;
@@ -60,7 +145,17 @@ function adminStartSession(): void
         exit('Sesi administrator tidak tersedia.');
     }
 
+<<<<<<< HEAD
     session_name('YESNET_ADMIN_SESSID');
+=======
+    if (headers_sent($file, $line)) {
+        http_response_code(500);
+        exit('Sesi administrator tidak dapat dimulai: output sudah dikirim '
+            . "sebelum session.php ({$file}:{$line}).");
+    }
+
+    session_name(ADMIN_SESSION_NAME);
+>>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
 
     ini_set('session.use_strict_mode', '1');
     ini_set('session.use_only_cookies', '1');
@@ -68,10 +163,16 @@ function adminStartSession(): void
 
     session_set_cookie_params([
         'lifetime' => 0,
+<<<<<<< HEAD
         'path' => adminSessionPath(),
         'domain' => '',
         'secure' => isset($_SERVER['HTTPS'])
             && strtolower((string) $_SERVER['HTTPS']) !== 'off',
+=======
+        'path'     => adminSessionPath(),
+        'domain'   => '',
+        'secure'   => adminIsHttps(),
+>>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
         'httponly' => true,
         'samesite' => 'Lax',
     ]);
@@ -80,16 +181,67 @@ function adminStartSession(): void
         http_response_code(500);
         exit('Sesi administrator tidak dapat dimulai.');
     }
+
+    /*
+    | Timeout karena tidak ada aktivitas.
+    */
+    $now  = time();
+    $last = $_SESSION['admin_last_activity'] ?? null;
+
+    if (is_int($last) && ($now - $last) > ADMIN_SESSION_IDLE_TIMEOUT) {
+        $_SESSION = [];
+        session_regenerate_id(true);
+    }
+
+    $_SESSION['admin_last_activity'] = $now;
+
+    /*
+    | Halaman admin tidak boleh di-cache browser/proxy.
+    */
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
 }
 
 /*
 |--------------------------------------------------------------------------
+<<<<<<< HEAD
 | CLEAR SESSION
 |--------------------------------------------------------------------------
 */
 
 function adminClearSession(): void
 {
+=======
+| LOGIN / LOGOUT HELPER
+|--------------------------------------------------------------------------
+| Panggil adminLogin() dari login.php setelah password terverifikasi.
+|--------------------------------------------------------------------------
+*/
+
+function adminLogin(int $userId, string $role): void
+{
+    adminStartSession();
+
+    // Cegah session fixation.
+    session_regenerate_id(true);
+
+    $role = strtolower(trim($role));
+
+    $_SESSION['user_id']             = $userId;
+    $_SESSION['role']                = $role;
+    $_SESSION['admin_permissions']   = adminPermissionsForRole($role);
+    $_SESSION['admin_last_activity'] = time();
+
+    unset($_SESSION['admin_csrf']);
+}
+
+function adminClearSession(): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        return;
+    }
+
+>>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
     $_SESSION = [];
 
     if (ini_get('session.use_cookies')) {
@@ -100,12 +252,23 @@ function adminClearSession(): void
             session_name(),
             '',
             [
+<<<<<<< HEAD
                 'expires' => time() - 42000,
                 'path' => $params['path'],
                 'domain' => $params['domain'],
                 'secure' => $params['secure'],
                 'httponly' => $params['httponly'],
                 'samesite' => $params['samesite'] ?? 'Lax',
+=======
+                'expires'  => time() - 42000,
+                'path'     => $params['path'],
+                'domain'   => $params['domain'],
+                'secure'   => $params['secure'],
+                'httponly' => $params['httponly'],
+                'samesite' => ($params['samesite'] ?? '') !== ''
+                    ? $params['samesite']
+                    : 'Lax',
+>>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
             ]
         );
     }
@@ -121,6 +284,11 @@ function adminClearSession(): void
 
 function adminRequireLogin(): void
 {
+<<<<<<< HEAD
+=======
+    adminStartSession();
+
+>>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
     $userId = $_SESSION['user_id'] ?? null;
 
     $role = strtolower(
@@ -180,14 +348,28 @@ function adminPermissionsForRole(string $role): array
 |--------------------------------------------------------------------------
 | CHECK PERMISSION
 |--------------------------------------------------------------------------
+<<<<<<< HEAD
+=======
+| Izin selalu dihitung dari role di session, sehingga tidak bergantung
+| pada login.php yang harus mengisi $_SESSION['admin_permissions'].
+|--------------------------------------------------------------------------
+>>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
 */
 
 function adminHasPermission(string $permission): bool
 {
-    $permissions = $_SESSION['admin_permissions'] ?? [];
+    $role = (string) ($_SESSION['role'] ?? '');
 
+<<<<<<< HEAD
     return is_array($permissions)
         && in_array($permission, $permissions, true);
+=======
+    $permissions = adminPermissionsForRole($role);
+
+    $_SESSION['admin_permissions'] = $permissions;
+
+    return in_array($permission, $permissions, true);
+>>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
 }
 
 function adminRequirePermission(string $permission): void
@@ -202,6 +384,7 @@ function adminRequirePermission(string $permission): void
 
 /*
 |--------------------------------------------------------------------------
+<<<<<<< HEAD
 | LOGIN URL
 |--------------------------------------------------------------------------
 */
@@ -225,12 +408,15 @@ function adminLoginUrl(): string
 
 /*
 |--------------------------------------------------------------------------
+=======
+>>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
 | REQUEST PERMISSION
 |--------------------------------------------------------------------------
 */
 
 function adminPermissionForRequest(): string
 {
+<<<<<<< HEAD
     $scriptName = strtolower(
         str_replace(
             '\\',
@@ -238,6 +424,9 @@ function adminPermissionForRequest(): string
             (string) ($_SERVER['SCRIPT_NAME'] ?? '')
         )
     );
+=======
+    $scriptName = strtolower(adminScriptName());
+>>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
 
     $adminPosition = strpos($scriptName, '/admin/');
 
@@ -255,13 +444,13 @@ function adminPermissionForRequest(): string
     if ($route === 'overview.php') {
 
         return match ((string) ($_GET['section'] ?? '')) {
-            'customers' => 'customers.view',
-            'packages' => 'packages.manage',
-            'invoices' => 'billing.view',
-            'payments' => 'finance.view',
+            'customers'   => 'customers.view',
+            'packages'    => 'packages.manage',
+            'invoices'    => 'billing.view',
+            'payments'    => 'finance.view',
             'technicians' => 'technicians.view',
-            'network' => 'network.view',
-            default => 'portal.access',
+            'network'     => 'network.view',
+            default       => 'portal.access',
         };
     }
 
@@ -277,7 +466,10 @@ function adminPermissionForRequest(): string
     }
 
     /*
+<<<<<<< HEAD
     | Route di bawah sudah disesuaikan.
+=======
+>>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
     | $route tidak diawali dengan admin/.
     */
 
@@ -309,10 +501,14 @@ function adminPermissionForRequest(): string
         return 'customers.view';
     }
 
+<<<<<<< HEAD
     if (
         str_starts_with($route, 'pengaduan/') ||
         str_starts_with($route, 'admin/pengaduan/')
     ) {
+=======
+    if (str_starts_with($route, 'pengaduan/')) {
+>>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
         return 'tickets.manage';
     }
 
@@ -354,4 +550,8 @@ function adminVerifyCsrf(mixed $token): bool
 |--------------------------------------------------------------------------
 */
 
+<<<<<<< HEAD
 adminStartSession();
+=======
+adminStartSession();
+>>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
