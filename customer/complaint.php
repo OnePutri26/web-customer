@@ -159,24 +159,32 @@ function normalizePriority($priority): string
     return 'other';
 }
 
+/*
+| Label jenis gangguan. Harus sama dengan daftar di complaint_create.php.
+*/
+const CATEGORY_LABELS = [
+    'internet_down'   => 'Internet Mati',
+    'slow_connection' => 'Internet Lambat',
+    'intermittent'    => 'Koneksi Putus-Putus',
+    'high_latency'    => 'Ping Tinggi / Lag',
+    'site_blocked'    => 'Situs / Aplikasi Error',
+    'los_red_light'   => 'Lampu LOS Merah / Kabel Fiber',
+    'wifi_problem'    => 'Masalah WiFi',
+    'router_problem'  => 'Masalah Router / ONT',
+    'ip_dns'          => 'Masalah IP / DNS',
+    'billing'         => 'Billing',
+    'other'           => 'Gangguan Lainnya',
+];
+
 function categoryLabel($category): string
 {
-    $labels = [
-        'internet_down'   => 'Internet Down',
-        'slow_connection' => 'Internet Lambat',
-        'wifi_problem'    => 'Masalah WiFi',
-        'router_problem'  => 'Masalah Router',
-        'billing'         => 'Billing',
-        'other'           => 'Lainnya',
-    ];
-
     $category = strtolower(trim((string) ($category ?? '')));
 
     if ($category === '') {
         return '';
     }
 
-    return $labels[$category] ?? ucfirst(str_replace('_', ' ', $category));
+    return CATEGORY_LABELS[$category] ?? ucfirst(str_replace('_', ' ', $category));
 }
 
 function truncateText(string $text, int $limit = 140): string
@@ -207,6 +215,21 @@ $priorityMeta = [
     'medium'   => ['Sedang', 'medium'],
     'low'      => ['Rendah', 'low'],
     'other'    => ['Tidak diketahui', 'other'],
+];
+
+/*
+| Jalan pintas pelaporan: [kode kategori, label, ikon Bootstrap Icons].
+*/
+$quickCategories = [
+    ['internet_down',   'Internet Mati',          'bi-wifi-off'],
+    ['slow_connection', 'Internet Lambat',        'bi-speedometer2'],
+    ['intermittent',    'Putus-Putus',            'bi-activity'],
+    ['high_latency',    'Ping Tinggi / Lag',      'bi-controller'],
+    ['site_blocked',    'Situs / Aplikasi Error', 'bi-ban'],
+    ['los_red_light',   'Lampu LOS Merah',        'bi-router-fill'],
+    ['wifi_problem',    'Masalah WiFi',           'bi-wifi-2'],
+    ['router_problem',  'Router / ONT',           'bi-hdd-network'],
+    ['other',           'Gangguan Lainnya',       'bi-three-dots'],
 ];
 
 
@@ -333,6 +356,9 @@ if ($nama === '') {
 }
 
 $statusLangganan = normalizeSubscriptionStatus($customer['status_langganan'] ?? '');
+
+// Sama dengan aturan di complaint_create.php.
+$canReport = in_array($statusLangganan, ['active', 'suspended', 'pending'], true);
 
 
 /*
@@ -549,7 +575,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     <link rel="stylesheet" href="assets/css/dashboard.css">
 
     <!-- Complaint CSS (khusus halaman laporan) -->
-    <link rel="stylesheet" href="assets/css/complaint.css?v=12">
+    <link rel="stylesheet" href="assets/css/complaint.css?v=13">
 
 </head>
 
@@ -860,6 +886,40 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
 
             <!-- =================================================
+                 LAPORKAN GANGGUAN (jalan pintas per jenis)
+            ================================================== -->
+
+            <?php if ($canReport): ?>
+
+                <section class="dashboard-card cp-quick" aria-labelledby="cpQuickTitle">
+
+                    <div class="card-heading compact">
+                        <div>
+                            <span class="card-kicker">LAPORKAN GANGGUAN</span>
+                            <h3 id="cpQuickTitle">Gangguan apa yang kamu alami?</h3>
+                            <p>Semua jenis gangguan internet bisa dilaporkan. Pilih salah satu, formulirnya langsung disiapkan.</p>
+                        </div>
+                    </div>
+
+                    <div class="cp-quick-grid">
+
+                        <?php foreach ($quickCategories as [$quickKey, $quickLabel, $quickIcon]): ?>
+
+                            <a href="complaint_create.php?category=<?= e($quickKey); ?>" class="cp-quick-item">
+                                <i class="bi <?= e($quickIcon); ?>"></i>
+                                <span><?= e($quickLabel); ?></span>
+                            </a>
+
+                        <?php endforeach; ?>
+
+                    </div>
+
+                </section>
+
+            <?php endif; ?>
+
+
+            <!-- =================================================
                  DAFTAR LAPORAN
             ================================================== -->
 
@@ -900,11 +960,11 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                         <h4>Data laporan belum tersedia</h4>
                         <p>
                             Sistem laporan gangguan belum terhubung. Silakan hubungi
-                            Customer Service jika kamu mengalami masalah internet.
+                            Customer Care jika kamu mengalami masalah internet.
                         </p>
                         <a href="chat.php" class="cp-create">
                             <i class="bi bi-headset"></i>
-                            Hubungi Customer Service
+                            Hubungi Customer Care
                         </a>
                     </div>
 
@@ -914,8 +974,8 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                         <div class="cp-empty-icon"><i class="bi bi-ticket-detailed"></i></div>
                         <h4>Belum ada laporan</h4>
                         <p>
-                            Kamu belum membuat laporan gangguan. Jika mengalami masalah internet,
-                            buat laporan baru dan tim kami akan menanganinya.
+                            Kamu belum membuat laporan gangguan. Jika mengalami masalah internet
+                            apa pun, buat laporan baru dan tim kami akan menanganinya.
                         </p>
                         <a href="complaint_create.php" class="cp-create">
                             <i class="bi bi-plus-lg"></i>
@@ -1096,11 +1156,11 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
                 <div>
                     <strong>Butuh bantuan segera?</strong>
-                    <span>Untuk gangguan mendesak, hubungi Customer Service lewat live chat.</span>
+                    <span>Untuk gangguan mendesak, hubungi Technical Support lewat live chat.</span>
                 </div>
 
-                <a href="chat.php" class="cp-link">
-                    Chat Customer Service <i class="bi bi-arrow-right"></i>
+                <a href="chat.php?topic=complaint" class="cp-link">
+                    Chat Technical Support <i class="bi bi-arrow-right"></i>
                 </a>
 
             </div>

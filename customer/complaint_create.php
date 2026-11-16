@@ -124,16 +124,38 @@ function textLength(string $text): int
 | OPSI FORM
 |--------------------------------------------------------------------------
 | Nilai (key) disimpan ke database; label hanya untuk tampilan.
+| Daftar key harus sinkron dengan CATEGORY_LABELS di complaint.php.
 */
 
-$categories = [
-    'internet_down'   => 'Internet Down / Tidak Bisa Terhubung',
-    'slow_connection' => 'Internet Lambat',
-    'wifi_problem'    => 'Masalah WiFi',
-    'router_problem'  => 'Masalah Router / Perangkat',
-    'billing'         => 'Billing / Tagihan',
-    'other'           => 'Lainnya',
+$categoryGroups = [
+
+    'Koneksi Internet' => [
+        'internet_down'   => 'Internet Mati / Tidak Bisa Terhubung',
+        'slow_connection' => 'Internet Lambat',
+        'intermittent'    => 'Koneksi Putus-Putus',
+        'high_latency'    => 'Ping Tinggi / Lag (Game & Streaming)',
+        'site_blocked'    => 'Situs atau Aplikasi Tertentu Tidak Bisa Dibuka',
+        'los_red_light'   => 'Lampu LOS Merah / Kabel Fiber Bermasalah',
+    ],
+
+    'WiFi & Perangkat' => [
+        'wifi_problem'    => 'Masalah WiFi (sinyal lemah / tidak muncul)',
+        'router_problem'  => 'Masalah Router / ONT / Modem',
+    ],
+
+    'Lainnya' => [
+        'ip_dns'          => 'Masalah IP / DNS',
+        'billing'         => 'Billing / Tagihan',
+        'other'           => 'Gangguan Lainnya',
+    ],
+
 ];
+
+$categories = [];
+
+foreach ($categoryGroups as $groupItems) {
+    $categories += $groupItems;
+}
 
 $priorities = [
     'low'      => ['Rendah', 'Tidak mengganggu aktivitas'],
@@ -142,10 +164,43 @@ $priorities = [
     'critical' => ['Kritis', 'Mati total / sangat mendesak'],
 ];
 
+// Prioritas yang disarankan otomatis saat jenis gangguan dipilih.
+$suggestedPriority = [
+    'internet_down'   => 'high',
+    'slow_connection' => 'medium',
+    'intermittent'    => 'medium',
+    'high_latency'    => 'medium',
+    'site_blocked'    => 'medium',
+    'los_red_light'   => 'high',
+    'wifi_problem'    => 'medium',
+    'router_problem'  => 'medium',
+    'ip_dns'          => 'medium',
+    'billing'         => 'low',
+    'other'           => 'medium',
+];
+
+// Detail tambahan (opsional) agar tim teknis cepat memahami masalahnya.
+$startedOptions = [
+    'now'       => 'Baru saja (kurang dari 1 jam)',
+    'today'     => 'Hari ini',
+    'yesterday' => 'Kemarin',
+    'days'      => 'Beberapa hari terakhir',
+    'week'      => 'Lebih dari seminggu',
+];
+
+$scopeOptions = [
+    'all'     => 'Semua perangkat',
+    'single'  => 'Satu perangkat saja',
+    'wifi'    => 'Hanya lewat WiFi',
+    'lan'     => 'Hanya lewat kabel LAN',
+    'unknown' => 'Tidak tahu',
+];
+
 const SUBJECT_MIN = 5;
 const SUBJECT_MAX = 150;
 const DESCRIPTION_MIN = 10;
-const DESCRIPTION_MAX = 2000;
+// Sedikit di bawah 2000 agar detail tambahan yang ditempelkan tetap muat.
+const DESCRIPTION_MAX = 1800;
 const HOURLY_LIMIT = 5;
 
 
@@ -193,12 +248,26 @@ $unreadNotifications = 0;
 
 $errors = [];
 
+$isPost = $_SERVER['REQUEST_METHOD'] === 'POST';
+
 $old = [
     'category'    => '',
     'subject'     => '',
     'priority'    => 'medium',
+    'started'     => '',
+    'scope'       => '',
     'description' => '',
 ];
+
+// Jalan pintas dari complaint.php: complaint_create.php?category=internet_down
+if (!$isPost) {
+    $presetCategory = trim((string) ($_GET['category'] ?? ''));
+
+    if (isset($categories[$presetCategory])) {
+        $old['category'] = $presetCategory;
+        $old['priority'] = $suggestedPriority[$presetCategory] ?? 'medium';
+    }
+}
 
 
 /*
@@ -262,8 +331,10 @@ if ($nama === '') {
 
 $statusLangganan = normalizeSubscriptionStatus($customer['status_langganan'] ?? '');
 
-// Laporan gangguan hanya untuk pelanggan dengan layanan aktif atau ditangguhkan.
-$canCreate = in_array($statusLangganan, ['active', 'suspended'], true);
+// Laporan dapat dibuat oleh pelanggan aktif, ditangguhkan, atau yang masih
+// menunggu pemasangan (mis. kendala saat instalasi). Hanya akun tanpa
+// langganan / berakhir yang diarahkan ke Customer Care.
+$canCreate = in_array($statusLangganan, ['active', 'suspended', 'pending'], true);
 
 
 /*
@@ -288,11 +359,13 @@ $hasStatus = $complaintReady && columnExists($conn, 'complaint', 'status');
 |--------------------------------------------------------------------------
 */
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($isPost) {
 
     $old['category'] = trim((string) ($_POST['category'] ?? ''));
     $old['subject'] = trim((string) ($_POST['subject'] ?? ''));
     $old['priority'] = trim((string) ($_POST['priority'] ?? 'medium'));
+    $old['started'] = trim((string) ($_POST['started'] ?? ''));
+    $old['scope'] = trim((string) ($_POST['scope'] ?? ''));
     $old['description'] = trim((string) ($_POST['description'] ?? ''));
 
     $postToken = (string) ($_POST['csrf_token'] ?? '');
@@ -303,12 +376,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     } elseif (!$canCreate) {
 
-        $errors[] = 'Laporan gangguan hanya dapat dibuat oleh pelanggan dengan layanan aktif.';
+        $errors[] = 'Laporan gangguan hanya dapat dibuat oleh pelanggan dengan layanan aktif atau dalam proses pemasangan.';
 
     } elseif (!$complaintReady) {
 
         error_log('Complaint Create YESNET: struktur tabel complaint belum sesuai.');
-        $errors[] = 'Sistem laporan belum siap digunakan. Silakan hubungi Customer Service.';
+        $errors[] = 'Sistem laporan belum siap digunakan. Silakan hubungi Customer Care.';
 
     } else {
 
@@ -318,6 +391,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (!isset($priorities[$old['priority']])) {
             $errors[] = 'Pilih tingkat prioritas.';
+        }
+
+        if ($old['started'] !== '' && !isset($startedOptions[$old['started']])) {
+            $errors[] = 'Pilihan "kapan mulai terjadi" tidak valid.';
+        }
+
+        if ($old['scope'] !== '' && !isset($scopeOptions[$old['scope']])) {
+            $errors[] = 'Pilihan "perangkat yang terdampak" tidak valid.';
         }
 
         $subjectLength = textLength($old['subject']);
@@ -352,7 +433,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 if ((int) ($rows[0]['total'] ?? 0) >= HOURLY_LIMIT) {
                     $errors[] = 'Kamu sudah membuat ' . HOURLY_LIMIT
-                        . ' laporan dalam 1 jam terakhir. Silakan tunggu atau hubungi Customer Service lewat live chat.';
+                        . ' laporan dalam 1 jam terakhir. Silakan tunggu atau hubungi Technical Support lewat live chat.';
                 }
             } catch (Throwable $e) {
                 error_log('Complaint Create YESNET rate limit check failed: ' . $e->getMessage());
@@ -360,6 +441,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($errors === []) {
+
+            // Detail tambahan ditempelkan di akhir deskripsi sehingga tidak
+            // perlu kolom baru di tabel complaint.
+            $details = [];
+
+            if ($old['started'] !== '') {
+                $details[] = 'Mulai terjadi: ' . $startedOptions[$old['started']];
+            }
+
+            if ($old['scope'] !== '') {
+                $details[] = 'Perangkat terdampak: ' . $scopeOptions[$old['scope']];
+            }
+
+            $storedDescription = $old['description'];
+
+            if ($details !== []) {
+                $storedDescription .= "\n\n— " . implode(' · ', $details);
+            }
 
             $savedCode = null;
 
@@ -380,7 +479,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $code,
                         $old['category'],
                         $old['subject'],
-                        $old['description'],
+                        $storedDescription,
                         $old['priority']
                     );
                     $stmt->execute();
@@ -471,6 +570,12 @@ $avatar = strtoupper(substr(trim($nama) ?: 'C', 0, 1));
 
 $currentPage = 'complaint.php'; // Menu "Laporan Gangguan" tetap aktif.
 
+$priorityLabelMap = [];
+
+foreach ($priorities as $priorityKey => $priorityInfo) {
+    $priorityLabelMap[$priorityKey] = $priorityInfo[0];
+}
+
 ?>
 <!DOCTYPE html>
 
@@ -502,7 +607,7 @@ $currentPage = 'complaint.php'; // Menu "Laporan Gangguan" tetap aktif.
     <link rel="stylesheet" href="assets/css/dashboard.css">
 
     <!-- Complaint CSS (daftar + form) -->
-    <link rel="stylesheet" href="assets/css/complaint.css?v=12">
+    <link rel="stylesheet" href="assets/css/complaint.css?v=13">
 
 </head>
 
@@ -770,7 +875,7 @@ $currentPage = 'complaint.php'; // Menu "Laporan Gangguan" tetap aktif.
                         <div>
                             <span class="card-kicker">DETAIL MASALAH</span>
                             <h3>Ceritakan gangguan yang kamu alami</h3>
-                            <p>Semakin jelas informasinya, semakin cepat tim kami menangani.</p>
+                            <p>Gangguan internet apa pun bisa dilaporkan. Semakin jelas informasinya, semakin cepat tim kami menangani.</p>
                         </div>
 
                     </div>
@@ -799,12 +904,13 @@ $currentPage = 'complaint.php'; // Menu "Laporan Gangguan" tetap aktif.
                             <div class="cp-empty-icon"><i class="bi bi-lock"></i></div>
                             <h4>Laporan belum tersedia untuk akun ini</h4>
                             <p>
-                                Laporan gangguan dapat dibuat setelah layanan internet aktif.
-                                Jika ada kendala lain, hubungi Customer Service.
+                                Laporan gangguan dapat dibuat oleh pelanggan yang layanan internetnya
+                                aktif atau sedang dalam proses pemasangan. Jika ada kendala lain,
+                                hubungi Customer Care.
                             </p>
                             <a href="chat.php" class="cp-create">
                                 <i class="bi bi-headset"></i>
-                                Hubungi Customer Service
+                                Hubungi Customer Care
                             </a>
                         </div>
 
@@ -814,12 +920,12 @@ $currentPage = 'complaint.php'; // Menu "Laporan Gangguan" tetap aktif.
                             <div class="cp-empty-icon"><i class="bi bi-plug"></i></div>
                             <h4>Sistem laporan belum siap</h4>
                             <p>
-                                Fitur ini belum terhubung. Silakan hubungi Customer Service
+                                Fitur ini belum terhubung. Silakan hubungi Customer Care
                                 untuk melaporkan gangguan.
                             </p>
                             <a href="chat.php" class="cp-create">
                                 <i class="bi bi-headset"></i>
-                                Hubungi Customer Service
+                                Hubungi Customer Care
                             </a>
                         </div>
 
@@ -836,12 +942,21 @@ $currentPage = 'complaint.php'; // Menu "Laporan Gangguan" tetap aktif.
                                     <option value="" disabled <?= $old['category'] === '' ? 'selected' : ''; ?>>
                                         Pilih jenis gangguan
                                     </option>
-                                    <?php foreach ($categories as $value => $label): ?>
-                                        <option value="<?= e($value); ?>" <?= $old['category'] === $value ? 'selected' : ''; ?>>
-                                            <?= e($label); ?>
-                                        </option>
+
+                                    <?php foreach ($categoryGroups as $groupLabel => $groupItems): ?>
+                                        <optgroup label="<?= e($groupLabel); ?>">
+                                            <?php foreach ($groupItems as $value => $label): ?>
+                                                <option value="<?= e($value); ?>" <?= $old['category'] === $value ? 'selected' : ''; ?>>
+                                                    <?= e($label); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </optgroup>
                                     <?php endforeach; ?>
                                 </select>
+
+                                <small class="cp-select-hint">
+                                    Tidak ada yang cocok? Pilih "Gangguan Lainnya" dan jelaskan di deskripsi.
+                                </small>
                             </div>
 
                             <div class="cp-field">
@@ -857,6 +972,36 @@ $currentPage = 'complaint.php'; // Menu "Laporan Gangguan" tetap aktif.
                                     value="<?= e($old['subject']); ?>"
                                     required
                                 >
+                            </div>
+
+                            <div class="cp-row-2">
+
+                                <div class="cp-field">
+                                    <label for="started">Kapan mulai terjadi? <em>(opsional)</em></label>
+
+                                    <select name="started" id="started" class="cp-input">
+                                        <option value="">Pilih waktu</option>
+                                        <?php foreach ($startedOptions as $value => $label): ?>
+                                            <option value="<?= e($value); ?>" <?= $old['started'] === $value ? 'selected' : ''; ?>>
+                                                <?= e($label); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+
+                                <div class="cp-field">
+                                    <label for="scope">Perangkat yang terdampak <em>(opsional)</em></label>
+
+                                    <select name="scope" id="scope" class="cp-input">
+                                        <option value="">Pilih cakupan</option>
+                                        <?php foreach ($scopeOptions as $value => $label): ?>
+                                            <option value="<?= e($value); ?>" <?= $old['scope'] === $value ? 'selected' : ''; ?>>
+                                                <?= e($label); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+
                             </div>
 
                             <fieldset class="cp-field">
@@ -882,6 +1027,8 @@ $currentPage = 'complaint.php'; // Menu "Laporan Gangguan" tetap aktif.
                                     <?php endforeach; ?>
 
                                 </div>
+
+                                <small class="cp-select-hint" id="priorityHint" hidden></small>
                             </fieldset>
 
                             <div class="cp-field">
@@ -894,7 +1041,7 @@ $currentPage = 'complaint.php'; // Menu "Laporan Gangguan" tetap aktif.
                                     class="cp-input cp-textarea"
                                     rows="6"
                                     maxlength="<?= DESCRIPTION_MAX; ?>"
-                                    placeholder="Kapan mulai terjadi, perangkat apa yang terdampak, dan apa yang sudah kamu coba."
+                                    placeholder="Jelaskan gangguannya: apa yang terjadi, perangkat apa yang terdampak, pesan error yang muncul, dan apa yang sudah kamu coba."
                                     required
                                 ><?= e($old['description']); ?></textarea>
 
@@ -950,6 +1097,11 @@ $currentPage = 'complaint.php'; // Menu "Laporan Gangguan" tetap aktif.
                             </li>
 
                             <li>
+                                <i class="bi bi-router-fill"></i>
+                                <span>Cek lampu di ONT/modem. Lampu LOS merah berarti sinyal fiber terputus, sebutkan di laporan.</span>
+                            </li>
+
+                            <li>
                                 <i class="bi bi-arrow-repeat"></i>
                                 <span>Matikan router sebentar lalu nyalakan kembali.</span>
                             </li>
@@ -974,11 +1126,11 @@ $currentPage = 'complaint.php'; // Menu "Laporan Gangguan" tetap aktif.
 
                         <div>
                             <strong>Butuh bantuan segera?</strong>
-                            <span>Untuk gangguan mendesak, hubungi Customer Service lewat live chat.</span>
+                            <span>Untuk gangguan mendesak, hubungi Technical Support lewat live chat.</span>
                         </div>
 
-                        <a href="chat.php" class="cp-link">
-                            Chat Customer Service <i class="bi bi-arrow-right"></i>
+                        <a href="chat.php?topic=complaint" class="cp-link">
+                            Chat Technical Support <i class="bi bi-arrow-right"></i>
                         </a>
 
                     </div>
@@ -1105,7 +1257,15 @@ document.addEventListener('DOMContentLoaded', function () {
     const description = document.getElementById('description');
     const descriptionCount = document.getElementById('descriptionCount');
     const submitButton = document.getElementById('submitButton');
+    const categorySelect = document.getElementById('category');
+    const priorityHint = document.getElementById('priorityHint');
     const descriptionMax = <?= (int) DESCRIPTION_MAX; ?>;
+
+    const suggestedPriority = <?= json_encode($suggestedPriority, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+    const priorityLabels = <?= json_encode($priorityLabelMap, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+
+    // Jika form dikirim ulang (ada error), hormati pilihan prioritas pengguna.
+    let priorityTouched = <?= $isPost ? 'true' : 'false'; ?>;
 
     function updateCount() {
         if (description && descriptionCount) {
@@ -1116,6 +1276,51 @@ document.addEventListener('DOMContentLoaded', function () {
     if (description) {
         description.addEventListener('input', updateCount);
         updateCount();
+    }
+
+    // Saran prioritas otomatis berdasarkan jenis gangguan.
+    function applySuggestedPriority() {
+        if (!categorySelect || priorityTouched) {
+            return;
+        }
+
+        const suggestion = suggestedPriority[categorySelect.value];
+
+        if (!suggestion) {
+            return;
+        }
+
+        const radio = document.querySelector('input[name="priority"][value="' + suggestion + '"]');
+
+        if (radio) {
+            radio.checked = true;
+        }
+
+        if (priorityHint) {
+            priorityHint.textContent = 'Prioritas disarankan: ' + (priorityLabels[suggestion] || suggestion)
+                + '. Kamu tetap bisa mengubahnya.';
+            priorityHint.hidden = false;
+        }
+    }
+
+    // Pilihan manual pengguna tidak boleh ditimpa saran otomatis.
+    document.querySelectorAll('input[name="priority"]').forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            priorityTouched = true;
+
+            if (priorityHint) {
+                priorityHint.hidden = true;
+            }
+        });
+    });
+
+    if (categorySelect) {
+        categorySelect.addEventListener('change', applySuggestedPriority);
+
+        // Kategori sudah terpilih dari jalan pintas di complaint.php.
+        if (categorySelect.value !== '') {
+            applySuggestedPriority();
+        }
     }
 
     // Cegah kirim ganda saat tombol ditekan berulang.

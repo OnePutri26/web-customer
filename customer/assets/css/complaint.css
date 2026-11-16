@@ -55,7 +55,8 @@
 .cp-detail:focus-visible,
 .cp-tab:focus-visible,
 .cp-cancel:focus-visible,
-.cp-page-btn:focus-visible {
+.cp-page-btn:focus-visible,
+.cp-quick-item:focus-visible {
     outline: 2px solid var(--primary);
     outline-offset: 2px;
 }
@@ -153,6 +154,82 @@
 
 .stats-grid .stat-tag {
     font-size: 8px;
+}
+
+
+/* =========================================================
+   LAPORKAN GANGGUAN (jalan pintas per jenis)
+========================================================= */
+
+.cp-quick {
+    margin-top: 14px;
+}
+
+.cp-quick:hover {
+    transform: none;
+}
+
+.cp-quick .card-heading h3 {
+    font-size: 15px;
+}
+
+.cp-quick .card-heading p {
+    margin-top: 4px;
+    font-size: 11px;
+}
+
+.cp-quick-grid {
+    margin-top: 14px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px;
+}
+
+.cp-quick-item {
+    min-width: 0;
+    padding: 11px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    color: #475569;
+    background: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.35;
+    transition: .2s ease;
+}
+
+.cp-quick-item i {
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    color: #2563eb;
+    background: #eaf2ff;
+    font-size: 14px;
+    transition: .2s ease;
+}
+
+.cp-quick-item span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.cp-quick-item:hover {
+    color: var(--primary);
+    border-color: #bfdbfe;
+    background: #f3f7ff;
+    transform: translateY(-1px);
+}
+
+.cp-quick-item:hover i {
+    color: #fff;
+    background: #2563eb;
 }
 
 
@@ -603,6 +680,13 @@
     line-height: 1.4;
 }
 
+.cp-field > label em {
+    color: #94a3b8;
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 600;
+}
+
 .cp-input {
     width: 100%;
     min-height: 44px;
@@ -645,6 +729,26 @@ select.cp-input {
     gap: 10px;
     color: #94a3b8;
     font-size: 11px;
+}
+
+/* Petunjuk kecil di bawah kolom (jenis gangguan, saran prioritas) */
+.cp-select-hint {
+    margin-top: 6px;
+    display: block;
+    color: #94a3b8;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.cp-select-hint[hidden] {
+    display: none;
+}
+
+/* Dua kolom berdampingan (kapan mulai + perangkat terdampak) */
+.cp-row-2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
 }
 
 
@@ -867,6 +971,8 @@ select.cp-input {
 .dashboard-page[data-theme="dark"] .cp-help span,
 .dashboard-page[data-theme="dark"] .card-heading p,
 .dashboard-page[data-theme="dark"] .cp-counter,
+.dashboard-page[data-theme="dark"] .cp-select-hint,
+.dashboard-page[data-theme="dark"] .cp-field > label em,
 .dashboard-page[data-theme="dark"] .cp-priority-body small,
 .dashboard-page[data-theme="dark"] .cp-tips li,
 .dashboard-page[data-theme="dark"] .cp-page-info {
@@ -909,6 +1015,28 @@ select.cp-input {
 .dashboard-page[data-theme="dark"] .cp-page-btn.is-disabled {
     color: #5d6f88;
     background: #131f31;
+}
+
+.dashboard-page[data-theme="dark"] .cp-quick-item {
+    color: #c5d1e3;
+    border-color: #2b3a51;
+    background: #182538;
+}
+
+.dashboard-page[data-theme="dark"] .cp-quick-item i {
+    color: #8bb7ff;
+    background: #1d2c42;
+}
+
+.dashboard-page[data-theme="dark"] .cp-quick-item:hover {
+    color: #8bb7ff;
+    border-color: #3b5278;
+    background: #1d2c42;
+}
+
+.dashboard-page[data-theme="dark"] .cp-quick-item:hover i {
+    color: #fff;
+    background: #2563eb;
 }
 
 .dashboard-page[data-theme="dark"] .cp-input {
@@ -1044,6 +1172,10 @@ select.cp-input {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .cp-row-2 {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
     .cp-form-side {
         grid-template-columns: minmax(0, 1fr);
     }
@@ -1064,6 +1196,10 @@ select.cp-input {
     .cp-tab {
         flex: 1;
         justify-content: center;
+    }
+
+    .cp-quick-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .cp-item {
@@ -1113,6 +1249,8 @@ select.cp-input {
     .cp-create,
     .cp-detail,
     .cp-tab,
+    .cp-quick-item,
+    .cp-quick-item i,
     .cp-priority-body,
     .cp-spinner {
         transition: none;
