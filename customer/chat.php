@@ -770,6 +770,51 @@ if ($isAjaxRequest && $messageError !== '') {
 |--------------------------------------------------------------------------
 */
 
+/*
+|--------------------------------------------------------------------------
+| KONTAK WHATSAPP (CS / NOC)
+| Umum, Tagihan, Instalasi -> CS
+| WiFi, Gangguan           -> NOC
+| Ganti nomor di bawah, atau definisikan konstanta WA_CS_NUMBER dan
+| WA_NOC_NUMBER di config/database.php. Format bebas (08xx / 628xx / +62).
+|--------------------------------------------------------------------------
+*/
+
+function normalizeWaNumber(string $number): string
+{
+    $digits = preg_replace('/\D+/', '', $number);
+
+    if ($digits === '') {
+        return '';
+    }
+
+    if (strpos($digits, '0') === 0) {
+        return '62' . substr($digits, 1);
+    }
+
+    if (strpos($digits, '8') === 0) {
+        return '62' . $digits;
+    }
+
+    return $digits;
+}
+
+$waCsNumber  = defined('WA_CS_NUMBER')  ? WA_CS_NUMBER  : '6281234567890'; // GANTI nomor CS
+$waNocNumber = defined('WA_NOC_NUMBER') ? WA_NOC_NUMBER : '6289876543210'; // GANTI nomor NOC
+
+$useNoc = in_array($topic, ['wifi', 'complaint'], true);
+
+$waTeam   = $useNoc ? 'NOC' : 'CS';
+$waNumber = normalizeWaNumber($useNoc ? $waNocNumber : $waCsNumber);
+$waText   = 'Halo ' . $waTeam . ' YESNET, saya ' . $nama
+          . ' (ID pelanggan #' . $customerId . '). '
+          . 'Saya ingin bertanya terkait ' . $topicLabel . '.';
+
+$waLink = $waNumber !== ''
+    ? 'https://wa.me/' . $waNumber . '?text=' . rawurlencode($waText)
+    : '';
+
+
 $messages = [];
 $lastMessageId = 0;
 $currentRoomId = null;
@@ -1182,6 +1227,34 @@ function assetVersion(string $relativePath): int
                     <?php endforeach; ?>
 
                 </nav>
+
+
+                <?php if ($waLink !== ''): ?>
+
+                    <div class="chat-wa-bar">
+
+                        <div class="chat-wa-text">
+                            <strong>Butuh respon langsung?</strong>
+                            <span>
+                                <?= $useNoc
+                                    ? 'Masalah WiFi atau gangguan ditangani tim NOC.'
+                                    : 'Pertanyaan umum, tagihan, dan instalasi ditangani tim CS.'; ?>
+                            </span>
+                        </div>
+
+                        <a
+                            href="<?= e($waLink); ?>"
+                            class="chat-wa-button <?= $useNoc ? 'is-noc' : 'is-cs'; ?>"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            <i class="bi bi-whatsapp"></i>
+                            Hubungi <?= e($waTeam); ?> via WhatsApp
+                        </a>
+
+                    </div>
+
+                <?php endif; ?>
 
 
                 <div class="chat-handler-note" id="chatHandlerNote" role="status" <?= $handledByCs ? '' : 'hidden'; ?>>
