@@ -17,6 +17,39 @@ mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 /*
 |--------------------------------------------------------------------------
+| KONSTANTA
+|--------------------------------------------------------------------------
+| ANTHROPIC_API_KEY (opsional) didefinisikan di config/database.php:
+|   define('ANTHROPIC_API_KEY', 'sk-ant-...');
+| Tanpa key, chat tetap berjalan dengan FAQ + pesan fallback.
+|--------------------------------------------------------------------------
+*/
+
+const AUTO_REPLY_FALLBACK = 'Maaf, pertanyaan ini belum bisa kami jawab secara otomatis. '
+                          . 'Silakan lanjutkan melalui Customer Care agar kami dapat membantu dengan tepat.';
+
+const AI_MODEL = 'claude-haiku-5-5';
+
+/*
+ * Kontak WhatsApp per wilayah.
+ * care = Customer Care (Umum, Tagihan, Instalasi)
+ * tech = Technical Support (WiFi, Gangguan)
+ * Format bebas (08xx / 628xx / +62).
+ */
+const WA_CONTACTS = [
+    'jakarta' => [
+        'care' => '6285126625546',
+        'tech' => '6285211626679',
+    ],
+    'surabaya' => [
+        'care' => '6285604145030',
+        'tech' => '62882009050576',
+    ],
+];
+
+
+/*
+|--------------------------------------------------------------------------
 | HELPER
 |--------------------------------------------------------------------------
 */
@@ -140,7 +173,7 @@ function formatWaktuChat($datetime): string
 
 
 /**
- * sender_id = 0 pada sender_type 'cs' berarti balasan otomatis sistem.
+ * sender_id = 0 pada sender_type 'cs' berarti balasan otomatis (FAQ / AI).
  */
 function senderLabel(string $senderType, int $senderId): string
 {
@@ -148,21 +181,22 @@ function senderLabel(string $senderType, int $senderId): string
         return 'Anda';
     }
 
-    return $senderId === 0 ? 'Panduan FAQ' : 'Customer Service';
+    return $senderId === 0 ? 'Asisten Virtual' : 'Customer Care';
 }
 
 
 /*
 |--------------------------------------------------------------------------
-| BALASAN OTOMATIS (FAQ)
+| BALASAN OTOMATIS
+| Urutan: 1) FAQ  ->  2) AI (jika ANTHROPIC_API_KEY ada)  ->  3) fallback
 |--------------------------------------------------------------------------
 */
 
-function findAutoReply(mysqli $conn, string $message, string $topic): string
+/**
+ * Mencari jawaban FAQ. Mengembalikan null bila tidak ada yang cocok.
+ */
+function findAutoReply(mysqli $conn, string $message, string $topic): ?string
 {
-    $fallback = 'Maaf, FAQ yang tersedia belum memuat jawaban untuk pertanyaan ini. '
-              . 'Silakan lanjutkan melalui Customer Service agar kami dapat membantu dengan tepat.';
-
     if (
         !tableExists($conn, 'faq_auto_replies') ||
         !columnExists($conn, 'faq_auto_replies', 'keywords') ||
@@ -170,7 +204,7 @@ function findAutoReply(mysqli $conn, string $message, string $topic): string
         !columnExists($conn, 'faq_auto_replies', 'topic') ||
         !columnExists($conn, 'faq_auto_replies', 'is_active')
     ) {
-        return $fallback;
+        return null;
     }
 
     try {
@@ -205,13 +239,97 @@ function findAutoReply(mysqli $conn, string $message, string $topic): string
             }
         }
 
-        return $bestAnswer ?? $fallback;
+        return $bestAnswer;
 
     } catch (Throwable $e) {
         error_log('Chat YESNET auto reply failed: ' . $e->getMessage());
 
-        return $fallback;
+        return null;
     }
+}
+
+
+/**
+ * Jawaban AI (Claude API). Mengembalikan null bila AI tidak aktif atau gagal.
+ *
+ * @param array $history pesan terakhir di room (kolom sender_type, message)
+ */
+function askAi(string $message, string $topicLabel, string $nama, array $history): ?string
+{
+    if (
+        !defined('ANTHROPIC_API_KEY') ||
+        ANTHROPIC_API_KEY === '' ||
+        !function_exists('curl_init')
+    ) {
+        return null;
+    }
+
+    // Susun giliran percakapan: harus berselang-seling, diawali 'user'.
+    $turns = [];
+
+    foreach ($history as $h) {
+        $role = (string) $h['sender_type'] === 'customer' ? 'user' : 'assistant';
+
+        if (!empty($turns) && $turns[count($turns) - 1]['role'] === $role) {
+            $turns[count($turns) - 1]['content'] .= "\n" . (string) $h['message'];
+        } else {
+            $turns[] = ['role' => $role, 'content' => (string) $h['message']];
+        }
+    }
+
+    while (!empty($turns) && $turns[0]['role'] !== 'user') {
+        array_shift($turns);
+    }
+
+    if (!empty($turns) && $turns[count($turns) - 1]['role'] === 'user') {
+        $turns[count($turns) - 1]['content'] .= "\n" . $message;
+    } else {
+        $turns[] = ['role' => 'user', 'content' => $message];
+    }
+
+    $system = "Kamu adalah asisten virtual YESNET, penyedia layanan internet. "
+            . "Nama pelanggan: {$nama}. Topik percakapan: {$topicLabel}. "
+            . "Jawab singkat, ramah, dan sopan dalam bahasa Indonesia. "
+            . "Jangan mengarang harga, nominal tagihan, jadwal instalasi, atau status gangguan "
+            . "milik pelanggan karena kamu tidak punya akses ke data akun. "
+            . "Untuk data akun, tagihan, atau instalasi arahkan ke Customer Care; "
+            . "untuk masalah WiFi atau gangguan teknis lanjutan arahkan ke Technical Support. "
+            . "Boleh memberi langkah umum seperti restart modem atau cek kabel.";
+
+    $ch = curl_init('https://api.anthropic.com/v1/messages');
+
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT        => 15,
+        CURLOPT_HTTPHEADER     => [
+            'content-type: application/json',
+            'x-api-key: ' . ANTHROPIC_API_KEY,
+            'anthropic-version: 2023-06-01',
+        ],
+        CURLOPT_POSTFIELDS     => json_encode([
+            'model'      => AI_MODEL,
+            'max_tokens' => 400,
+            'system'     => $system,
+            'messages'   => $turns,
+        ], JSON_UNESCAPED_UNICODE),
+    ]);
+
+    $raw  = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($raw === false || $code !== 200) {
+        error_log('Chat YESNET AI failed: HTTP ' . $code);
+
+        return null;
+    }
+
+    $data = json_decode((string) $raw, true);
+    $text = trim((string) ($data['content'][0]['text'] ?? ''));
+
+    return $text !== '' ? $text : null;
 }
 
 
@@ -262,9 +380,9 @@ function getOrCreateRoomId(mysqli $conn, int $customerId): int
 
 
 /**
- * True bila CS manusia sudah mengambil alih room ini.
- * - Jika kolom chat_rooms.ai_mode ada: ai_mode = 0 berarti diambil alih CS.
- * - Jika tidak ada, tetapi kolom assigned_to ada: terisi berarti sudah ditangani CS.
+ * True bila Customer Care (manusia) sudah mengambil alih room ini.
+ * - Jika kolom chat_rooms.ai_mode ada: ai_mode = 0 berarti diambil alih.
+ * - Jika tidak ada, tetapi kolom assigned_to ada: terisi berarti sudah ditangani.
  */
 function roomHandledByCs(mysqli $conn, ?int $roomId): bool
 {
@@ -373,7 +491,7 @@ function insertChatMessage(
 }
 
 
-/** Tandai balasan CS/FAQ sebagai sudah dibaca customer. */
+/** Tandai balasan Customer Care / asisten sebagai sudah dibaca customer. */
 function markCsMessagesRead(mysqli $conn, int $roomId): void
 {
     try {
@@ -394,6 +512,51 @@ function markCsMessagesRead(mysqli $conn, int $roomId): void
     } catch (Throwable $e) {
         error_log('Chat YESNET mark read failed: ' . $e->getMessage());
     }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| KONTAK WHATSAPP
+|--------------------------------------------------------------------------
+*/
+
+function normalizeWaNumber(string $number): string
+{
+    $digits = preg_replace('/\D+/', '', $number);
+
+    if ($digits === '') {
+        return '';
+    }
+
+    if (strpos($digits, '0') === 0) {
+        return '62' . substr($digits, 1);
+    }
+
+    if (strpos($digits, '8') === 0) {
+        return '62' . $digits;
+    }
+
+    return $digits;
+}
+
+
+/**
+ * Jakarta bila data customer menyebut Jakarta / DKI.
+ * Selain itu dianggap Surabaya (Jawa Timur).
+ * Tambahkan nama kolom lain di daftar bila tabel customers memakai nama berbeda.
+ */
+function detectRegion(array $customer): string
+{
+    $text = '';
+
+    foreach (['kota', 'city', 'wilayah', 'area', 'kabupaten', 'provinsi', 'alamat', 'address'] as $column) {
+        if (!empty($customer[$column])) {
+            $text .= ' ' . $customer[$column];
+        }
+    }
+
+    return preg_match('/jakarta|dki/i', $text) ? 'jakarta' : 'surabaya';
 }
 
 
@@ -540,7 +703,7 @@ $topicIcon  = $topicIcons[$topic];
 /*
 |--------------------------------------------------------------------------
 | TABEL CHAT SIAP?
-| `topic` TIDAK lagi menjadi syarat. Bila kolomnya ada, riwayat difilter
+| `topic` TIDAK menjadi syarat. Bila kolomnya ada, riwayat difilter
 | per topik; bila tidak ada, semua pesan tampil dalam satu percakapan.
 |--------------------------------------------------------------------------
 */
@@ -682,12 +845,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             } else {
 
-                // Jika CS sudah mengambil alih, jangan kirim balasan otomatis.
+                // Jika Customer Care sudah mengambil alih, jangan kirim balasan otomatis.
                 $handledByCs = roomHandledByCs($conn, $roomId);
 
-                $autoReply = $handledByCs
-                    ? null
-                    : findAutoReply($conn, $postMessage, $postTopic);
+                $autoReply = null;
+
+                if (!$handledByCs) {
+                    // Riwayat singkat (sebelum pesan ini disimpan) sebagai konteks AI.
+                    $history = array_slice(
+                        fetchRoomMessages($conn, $roomId, $postTopic, $hasTopic, 0, 200),
+                        -6
+                    );
+
+                    $autoReply = findAutoReply($conn, $postMessage, $postTopic)          // 1) FAQ
+                              ?? askAi($postMessage, $topicLabel, $nama, $history)       // 2) AI
+                              ?? AUTO_REPLY_FALLBACK;                                    // 3) Fallback
+                }
 
                 $autoReplyMessageId = 0;
 
@@ -766,46 +939,17 @@ if ($isAjaxRequest && $messageError !== '') {
 
 /*
 |--------------------------------------------------------------------------
-| RIWAYAT PESAN
+| KONTAK WHATSAPP (Customer Care / Technical Support, per wilayah)
+| Umum, Tagihan, Instalasi -> Customer Care
+| WiFi, Gangguan           -> Technical Support
 |--------------------------------------------------------------------------
 */
 
-/*
-|--------------------------------------------------------------------------
-| KONTAK WHATSAPP (CS / NOC)
-| Umum, Tagihan, Instalasi -> CS
-| WiFi, Gangguan           -> NOC
-| Ganti nomor di bawah, atau definisikan konstanta WA_CS_NUMBER dan
-| WA_NOC_NUMBER di config/database.php. Format bebas (08xx / 628xx / +62).
-|--------------------------------------------------------------------------
-*/
+$region  = detectRegion($customer);
+$useTech = in_array($topic, ['wifi', 'complaint'], true);
 
-function normalizeWaNumber(string $number): string
-{
-    $digits = preg_replace('/\D+/', '', $number);
-
-    if ($digits === '') {
-        return '';
-    }
-
-    if (strpos($digits, '0') === 0) {
-        return '62' . substr($digits, 1);
-    }
-
-    if (strpos($digits, '8') === 0) {
-        return '62' . $digits;
-    }
-
-    return $digits;
-}
-
-$waCsNumber  = defined('WA_CS_NUMBER')  ? WA_CS_NUMBER  : '6281234567890'; // GANTI nomor CS
-$waNocNumber = defined('WA_NOC_NUMBER') ? WA_NOC_NUMBER : '6289876543210'; // GANTI nomor NOC
-
-$useNoc = in_array($topic, ['wifi', 'complaint'], true);
-
-$waTeam   = $useNoc ? 'NOC' : 'CS';
-$waNumber = normalizeWaNumber($useNoc ? $waNocNumber : $waCsNumber);
+$waTeam   = $useTech ? 'Technical Support' : 'Customer Care';
+$waNumber = normalizeWaNumber(WA_CONTACTS[$region][$useTech ? 'tech' : 'care']);
 $waText   = 'Halo ' . $waTeam . ' YESNET, saya ' . $nama
           . ' (ID pelanggan #' . $customerId . '). '
           . 'Saya ingin bertanya terkait ' . $topicLabel . '.';
@@ -814,6 +958,12 @@ $waLink = $waNumber !== ''
     ? 'https://wa.me/' . $waNumber . '?text=' . rawurlencode($waText)
     : '';
 
+
+/*
+|--------------------------------------------------------------------------
+| RIWAYAT PESAN
+|--------------------------------------------------------------------------
+*/
 
 $messages = [];
 $lastMessageId = 0;
@@ -867,7 +1017,7 @@ $quickQuestions = [
     ],
     'general' => [
         'Saya ingin bertanya tentang layanan',
-        'Bagaimana cara menghubungi CS?',
+        'Bagaimana cara menghubungi Customer Care?',
         'Saya membutuhkan bantuan'
     ]
 ];
@@ -1208,8 +1358,8 @@ function assetVersion(string $relativePath): int
                     </div>
 
                     <span class="chat-mode-badge">
-                        <i class="bi bi-journal-text"></i>
-                        FAQ &amp; Customer Service
+                        <i class="bi bi-stars"></i>
+                        Asisten Virtual &amp; Customer Care
                     </span>
 
                 </div>
@@ -1236,15 +1386,15 @@ function assetVersion(string $relativePath): int
                         <div class="chat-wa-text">
                             <strong>Butuh respon langsung?</strong>
                             <span>
-                                <?= $useNoc
-                                    ? 'Masalah WiFi atau gangguan ditangani tim NOC.'
-                                    : 'Pertanyaan umum, tagihan, dan instalasi ditangani tim CS.'; ?>
+                                <?= $useTech
+                                    ? 'Masalah WiFi atau gangguan ditangani tim Technical Support.'
+                                    : 'Pertanyaan umum, tagihan, dan instalasi ditangani tim Customer Care.'; ?>
                             </span>
                         </div>
 
                         <a
                             href="<?= e($waLink); ?>"
-                            class="chat-wa-button <?= $useNoc ? 'is-noc' : 'is-cs'; ?>"
+                            class="chat-wa-button <?= $useTech ? 'is-tech' : 'is-care'; ?>"
                             target="_blank"
                             rel="noopener noreferrer"
                         >
@@ -1259,7 +1409,7 @@ function assetVersion(string $relativePath): int
 
                 <div class="chat-handler-note" id="chatHandlerNote" role="status" <?= $handledByCs ? '' : 'hidden'; ?>>
                     <i class="bi bi-headset"></i>
-                    <span>Customer Service sedang menangani percakapan ini. Balasan akan muncul di sini.</span>
+                    <span>Customer Care sedang menangani percakapan ini. Balasan akan muncul di sini.</span>
                 </div>
 
 
@@ -1282,11 +1432,11 @@ function assetVersion(string $relativePath): int
 
                             <div class="message-row cs-message is-placeholder" id="chatPlaceholder">
 
-                                <div class="message-avatar"><i class="bi bi-journal-text"></i></div>
+                                <div class="message-avatar"><i class="bi bi-stars"></i></div>
 
                                 <div class="message-content">
-                                    <div class="message-name">Panduan FAQ</div>
-                                    <div class="message-bubble">Halo <?= e($nama); ?>! Ada yang bisa kami bantu terkait layanan internet kamu? Pilih topik atau tulis pesan untuk Customer Service.</div>
+                                    <div class="message-name">Asisten Virtual</div>
+                                    <div class="message-bubble">Halo <?= e($nama); ?>! Ada yang bisa kami bantu terkait layanan internet kamu? Pilih topik atau tulis pesanmu, asisten virtual kami akan menjawab. Jika perlu, Customer Care siap membantu.</div>
                                 </div>
 
                             </div>
@@ -1308,7 +1458,7 @@ function assetVersion(string $relativePath): int
 
                                     <?php if (!$isCustomer): ?>
                                         <div class="message-avatar">
-                                            <i class="bi <?= $isAuto ? 'bi-journal-text' : 'bi-headset'; ?>"></i>
+                                            <i class="bi <?= $isAuto ? 'bi-stars' : 'bi-headset'; ?>"></i>
                                         </div>
                                     <?php endif; ?>
 
@@ -1382,7 +1532,7 @@ function assetVersion(string $relativePath): int
                                 name="message"
                                 id="messageInput"
                                 rows="1"
-                                placeholder="Tulis pesan untuk Customer Service..."
+                                placeholder="Tulis pesan Anda..."
                                 maxlength="2000"
                                 <?= $chatReady ? '' : 'disabled'; ?>
                             ><?= e($draftMessage); ?></textarea>
@@ -1455,18 +1605,18 @@ function assetVersion(string $relativePath): int
                     <div class="chat-info-list">
 
                         <div>
-                            <i class="bi bi-journal-text"></i>
+                            <i class="bi bi-stars"></i>
                             <span>
-                                <strong>Panduan FAQ</strong>
-                                Jawaban otomatis hanya merujuk FAQ yang tersedia. Pertanyaan di luar FAQ perlu ditindaklanjuti oleh Customer Service.
+                                <strong>Asisten Virtual</strong>
+                                Menjawab otomatis dari FAQ dan AI. Untuk data akun, tagihan, atau masalah lanjutan, Customer Care yang akan membantu.
                             </span>
                         </div>
 
                         <div>
                             <i class="bi bi-headset"></i>
                             <span>
-                                <strong>Tim Customer Service</strong>
-                                Pesan kamu tersimpan dan dapat dibalas oleh CS. Halaman ini memeriksa balasan baru secara berkala.
+                                <strong>Tim Customer Care</strong>
+                                Pesan kamu tersimpan dan dapat dibalas oleh Customer Care. Halaman ini memeriksa balasan baru secara berkala.
                             </span>
                         </div>
 
@@ -1474,7 +1624,7 @@ function assetVersion(string $relativePath): int
                             <i class="bi bi-tools"></i>
                             <span>
                                 <strong>Gangguan teknis?</strong>
-                                Gunakan <a href="complaint.php">Laporan Gangguan</a> agar tercatat dan ditindaklanjuti.
+                                Gunakan <a href="complaint.php">Laporan Gangguan</a> agar tercatat dan ditindaklanjuti Technical Support.
                             </span>
                         </div>
 
@@ -1650,6 +1800,44 @@ document.addEventListener('DOMContentLoaded', function () {
         errorMessage.hidden = false;
     }
 
+    /* Indikator "mengetik" saat menunggu balasan asisten */
+
+    function showTyping() {
+        if (!chatMessages || document.getElementById('typingIndicator')) { return; }
+
+        const row = document.createElement('div');
+        row.className = 'message-row cs-message typing-row';
+        row.id = 'typingIndicator';
+
+        const avatar = document.createElement('div');
+        avatar.className = 'message-avatar';
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-stars';
+        avatar.appendChild(icon);
+
+        const content = document.createElement('div');
+        content.className = 'message-content';
+
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble typing-bubble';
+        bubble.setAttribute('aria-label', 'Asisten sedang mengetik');
+        bubble.append(
+            document.createElement('span'),
+            document.createElement('span'),
+            document.createElement('span')
+        );
+
+        content.appendChild(bubble);
+        row.append(avatar, content);
+        chatMessages.appendChild(row);
+        scrollToBottom();
+    }
+
+    function hideTyping() {
+        const typing = document.getElementById('typingIndicator');
+        if (typing) { typing.remove(); }
+    }
+
     function appendMessage(item, deliveryStatus) {
         if (!chatMessages) { return; }
 
@@ -1683,7 +1871,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const avatar = document.createElement('div');
             avatar.className = 'message-avatar';
             const icon = document.createElement('i');
-            icon.className = 'bi ' + (item.is_auto ? 'bi-journal-text' : 'bi-headset');
+            icon.className = 'bi ' + (item.is_auto ? 'bi-stars' : 'bi-headset');
             avatar.appendChild(icon);
             row.appendChild(avatar);
         }
@@ -1741,6 +1929,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             messageInput.disabled = true;
             messageForm.setAttribute('aria-busy', 'true');
+            showTyping();
 
             try {
                 const response = await fetch(messageForm.action, {
@@ -1758,6 +1947,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (!response.ok) {
                     throw new Error(payload.error || 'Pesan gagal dikirim. Silakan coba lagi.');
                 }
+
+                hideTyping();
 
                 const placeholder = document.getElementById('chatPlaceholder');
                 if (placeholder) { placeholder.remove(); }
@@ -1777,6 +1968,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 autoResize();
                 scrollToBottom();
             } catch (error) {
+                hideTyping();
                 showSendError(error.message || 'Pesan gagal dikirim. Silakan coba lagi.');
             } finally {
                 messageInput.disabled = false;

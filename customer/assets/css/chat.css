@@ -152,7 +152,7 @@
 
 
 /* =========================================================
-   INFO: CS SEDANG MENANGANI
+   INFO: CUSTOMER CARE SEDANG MENANGANI
 ========================================================= */
 
 .chat-handler-note {
@@ -296,6 +296,58 @@
 
 .is-placeholder {
     opacity: .9;
+}
+
+
+/* =========================================================
+   INDIKATOR MENGETIK (menunggu balasan asisten)
+========================================================= */
+
+.typing-bubble {
+    min-width: 52px;
+    padding: 12px 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.typing-bubble span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #9aa8bd;
+    animation: chatTyping 1.2s infinite ease-in-out;
+}
+
+.typing-bubble span:nth-child(2) {
+    animation-delay: .15s;
+}
+
+.typing-bubble span:nth-child(3) {
+    animation-delay: .3s;
+}
+
+@keyframes chatTyping {
+
+    0%, 60%, 100% {
+        opacity: .35;
+        transform: translateY(0);
+    }
+
+    30% {
+        opacity: 1;
+        transform: translateY(-3px);
+    }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .typing-bubble span {
+        animation: none;
+        opacity: .7;
+    }
+
 }
 
 
@@ -717,6 +769,96 @@
     color: #6ee7a5;
 }
 
+.dashboard-page[data-theme="dark"] .typing-bubble span {
+    background: #7f90a8;
+}
+
+
+/* =========================================================
+   TOMBOL WHATSAPP (Customer Care / Technical Support)
+========================================================= */
+
+.chat-wa-bar {
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid #edf1f5;
+    background: #f8fffb;
+}
+
+.chat-wa-text {
+    min-width: 0;
+    display: grid;
+    gap: 1px;
+}
+
+.chat-wa-text strong {
+    color: #1d293b;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.chat-wa-text span {
+    color: #718096;
+    font-size: 9px;
+    line-height: 1.5;
+}
+
+.chat-page .chat-panel a.chat-wa-button {
+    padding: 9px 14px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+    box-shadow: 0 5px 12px rgba(22, 163, 74, .2);
+    transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.chat-wa-button i {
+    font-size: 14px;
+}
+
+/* Customer Care */
+.chat-wa-button.is-care {
+    background: linear-gradient(135deg, #16a34a, #22c55e);
+}
+
+/* Technical Support */
+.chat-wa-button.is-tech {
+    background: linear-gradient(135deg, #0f766e, #14b8a6);
+    box-shadow: 0 5px 12px rgba(15, 118, 110, .22);
+}
+
+.chat-wa-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 16px rgba(22, 163, 74, .28);
+}
+
+.chat-wa-button:focus-visible {
+    outline: 3px solid rgba(22, 163, 74, .35);
+    outline-offset: 2px;
+}
+
+.dashboard-page[data-theme="dark"] .chat-wa-bar {
+    border-color: #26354a;
+    background: rgba(34, 197, 94, .08);
+}
+
+.dashboard-page[data-theme="dark"] .chat-wa-text strong {
+    color: #e7eef9;
+}
+
+.dashboard-page[data-theme="dark"] .chat-wa-text span {
+    color: #9cadc2;
+}
+
 
 /* =========================================================
    RESPONSIVE
@@ -744,6 +886,16 @@
 
     .message-row {
         max-width: 90%;
+    }
+
+    .chat-wa-bar {
+        padding: 10px 14px;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .chat-page .chat-panel a.chat-wa-button {
+        justify-content: center;
     }
 
 }
@@ -806,104 +958,6 @@
 
     .message-input-wrapper textarea {
         padding-right: 14px;
-    }
-
-}
-
-
-/* =========================================================
-   TOMBOL WHATSAPP (CS / NOC)
-========================================================= */
-
-.chat-wa-bar {
-    padding: 10px 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    border-bottom: 1px solid #edf1f5;
-    background: #f8fffb;
-}
-
-.chat-wa-text {
-    min-width: 0;
-    display: grid;
-    gap: 1px;
-}
-
-.chat-wa-text strong {
-    color: #1d293b;
-    font-size: 11px;
-    font-weight: 800;
-}
-
-.chat-wa-text span {
-    color: #718096;
-    font-size: 9px;
-    line-height: 1.5;
-}
-
-.chat-page .chat-panel a.chat-wa-button {
-    padding: 9px 14px;
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    border-radius: 10px;
-    color: #fff;
-    font-size: 10px;
-    font-weight: 700;
-    white-space: nowrap;
-    box-shadow: 0 5px 12px rgba(22, 163, 74, .2);
-    transition: transform .2s ease, box-shadow .2s ease;
-}
-
-.chat-wa-button i {
-    font-size: 14px;
-}
-
-.chat-wa-button.is-cs {
-    background: linear-gradient(135deg, #16a34a, #22c55e);
-}
-
-.chat-wa-button.is-noc {
-    background: linear-gradient(135deg, #0f766e, #14b8a6);
-    box-shadow: 0 5px 12px rgba(15, 118, 110, .22);
-}
-
-.chat-wa-button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 8px 16px rgba(22, 163, 74, .28);
-}
-
-.chat-wa-button:focus-visible {
-    outline: 3px solid rgba(22, 163, 74, .35);
-    outline-offset: 2px;
-}
-
-.dashboard-page[data-theme="dark"] .chat-wa-bar {
-    border-color: #26354a;
-    background: rgba(34, 197, 94, .08);
-}
-
-.dashboard-page[data-theme="dark"] .chat-wa-text strong {
-    color: #e7eef9;
-}
-
-.dashboard-page[data-theme="dark"] .chat-wa-text span {
-    color: #9cadc2;
-}
-
-@media (max-width: 700px) {
-
-    .chat-wa-bar {
-        padding: 10px 14px;
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .chat-page .chat-panel a.chat-wa-button {
-        justify-content: center;
     }
 
 }
