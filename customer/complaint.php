@@ -113,23 +113,24 @@ function normalizeSubscriptionStatus($status): string
     return 'belum_berlangganan';
 }
 
-/**
- * Menyeragamkan status complaint: open, process, closed, atau other.
- */
+/*
+| Kelompok status complaint. Dipakai untuk normalisasi tampilan
+| sekaligus untuk membangun filter SQL, sehingga keduanya selalu sama.
+*/
+const COMPLAINT_STATUS_GROUPS = [
+    'open'    => ['open', 'baru', 'new', 'pending'],
+    'process' => ['process', 'proses', 'diproses', 'on progress', 'in progress', 'in_progress'],
+    'closed'  => ['closed', 'selesai', 'resolved'],
+];
+
 function normalizeComplaintStatus($status): string
 {
     $status = strtolower(trim((string) ($status ?? '')));
 
-    if (in_array($status, ['open', 'baru', 'new', 'pending'], true)) {
-        return 'open';
-    }
-
-    if (in_array($status, ['process', 'proses', 'diproses', 'on progress', 'in progress'], true)) {
-        return 'process';
-    }
-
-    if (in_array($status, ['closed', 'selesai', 'resolved'], true)) {
-        return 'closed';
+    foreach (COMPLAINT_STATUS_GROUPS as $key => $values) {
+        if (in_array($status, $values, true)) {
+            return $key;
+        }
     }
 
     return 'other';
@@ -138,6 +139,10 @@ function normalizeComplaintStatus($status): string
 function normalizePriority($priority): string
 {
     $priority = strtolower(trim((string) ($priority ?? '')));
+
+    if (in_array($priority, ['critical', 'kritis'], true)) {
+        return 'critical';
+    }
 
     if (in_array($priority, ['high', 'tinggi', 'urgent'], true)) {
         return 'high';
@@ -154,19 +159,25 @@ function normalizePriority($priority): string
     return 'other';
 }
 
-$complaintStatusMeta = [
-    'open'    => ['Baru', 'open', 'bi-exclamation-circle-fill'],
-    'process' => ['Diproses', 'process', 'bi-arrow-repeat'],
-    'closed'  => ['Selesai', 'closed', 'bi-check-circle-fill'],
-    'other'   => ['Tidak diketahui', 'other', 'bi-question-circle-fill'],
-];
+function categoryLabel($category): string
+{
+    $labels = [
+        'internet_down'   => 'Internet Down',
+        'slow_connection' => 'Internet Lambat',
+        'wifi_problem'    => 'Masalah WiFi',
+        'router_problem'  => 'Masalah Router',
+        'billing'         => 'Billing',
+        'other'           => 'Lainnya',
+    ];
 
-$priorityMeta = [
-    'high'   => ['Tinggi', 'high'],
-    'medium' => ['Sedang', 'medium'],
-    'low'    => ['Rendah', 'low'],
-    'other'  => ['Tidak diketahui', 'other'],
-];
+    $category = strtolower(trim((string) ($category ?? '')));
+
+    if ($category === '') {
+        return '';
+    }
+
+    return $labels[$category] ?? ucfirst(str_replace('_', ' ', $category));
+}
 
 function truncateText(string $text, int $limit = 140): string
 {
@@ -183,6 +194,21 @@ function truncateText(string $text, int $limit = 140): string
     return $text;
 }
 
+$complaintStatusMeta = [
+    'open'    => ['Baru', 'open', 'bi-exclamation-circle-fill'],
+    'process' => ['Diproses', 'process', 'bi-arrow-repeat'],
+    'closed'  => ['Selesai', 'closed', 'bi-check-circle-fill'],
+    'other'   => ['Tidak diketahui', 'other', 'bi-question-circle-fill'],
+];
+
+$priorityMeta = [
+    'critical' => ['Kritis', 'critical'],
+    'high'     => ['Tinggi', 'high'],
+    'medium'   => ['Sedang', 'medium'],
+    'low'      => ['Rendah', 'low'],
+    'other'    => ['Tidak diketahui', 'other'],
+];
+
 
 /*
 |--------------------------------------------------------------------------
@@ -195,6 +221,20 @@ $userId = (int) ($_SESSION['user_id'] ?? 0);
 if ($userId <= 0) {
     header("Location: ../login.php");
     exit;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| FLASH MESSAGE (dari complaint_create.php)
+|--------------------------------------------------------------------------
+*/
+
+$flash = $_SESSION['complaint_flash'] ?? null;
+unset($_SESSION['complaint_flash']);
+
+if (!is_array($flash) || empty($flash['message'])) {
+    $flash = null;
 }
 
 
@@ -222,6 +262,8 @@ $counts = [
     'process' => 0,
     'closed'  => 0,
 ];
+
+$perPage = 10;
 
 
 /*
@@ -295,7 +337,7 @@ $statusLangganan = normalizeSubscriptionStatus($customer['status_langganan'] ?? 
 
 /*
 |--------------------------------------------------------------------------
-| FILTER STATUS
+| FILTER STATUS + HALAMAN
 |--------------------------------------------------------------------------
 */
 
@@ -306,28 +348,104 @@ if (!in_array($filter, $allowedFilters, true)) {
     $filter = 'all';
 }
 
+$page = max(1, (int) ($_GET['page'] ?? 1));
+
 
 /*
 |--------------------------------------------------------------------------
-| AMBIL COMPLAINT
+| JUMLAH COMPLAINT PER STATUS
 |--------------------------------------------------------------------------
 | Relasi: complaint.id_customer -> customers.id
+| Dihitung dengan query agregat agar akurat berapa pun jumlah datanya.
 */
+
+$hasStatusColumn = false;
 
 if (
     tableExists($conn, 'complaint') &&
     columnExists($conn, 'complaint', 'id_customer')
 ) {
     $complaintTableAvailable = true;
+    $hasStatusColumn = columnExists($conn, 'complaint', 'status');
 
     try {
+        if ($hasStatusColumn) {
+            $stmt = $conn->prepare("
+                SELECT LOWER(TRIM(status)) AS status_key, COUNT(*) AS total
+                FROM complaint
+                WHERE id_customer = ?
+                GROUP BY LOWER(TRIM(status))
+            ");
+            $stmt->bind_param("i", $customerId);
+            $stmt->execute();
+            $countRows = statementFetchAll($stmt);
+            $stmt->close();
+
+            foreach ($countRows as $countRow) {
+                $total = (int) ($countRow['total'] ?? 0);
+                $key = normalizeComplaintStatus($countRow['status_key'] ?? '');
+
+                $counts['all'] += $total;
+
+                if (isset($counts[$key])) {
+                    $counts[$key] += $total;
+                }
+            }
+        } else {
+            $stmt = $conn->prepare("SELECT COUNT(*) AS total FROM complaint WHERE id_customer = ?");
+            $stmt->bind_param("i", $customerId);
+            $stmt->execute();
+            $countRows = statementFetchAll($stmt);
+            $stmt->close();
+
+            $counts['all'] = (int) ($countRows[0]['total'] ?? 0);
+        }
+    } catch (Throwable $e) {
+        error_log('Complaint YESNET count query failed: ' . $e->getMessage());
+    }
+}
+
+// Tanpa kolom status, filter status tidak bermakna.
+if (!$hasStatusColumn) {
+    $filter = 'all';
+}
+
+// Badge menu: complaint yang belum selesai.
+$totalGangguan = max(0, $counts['all'] - $counts['closed']);
+
+$filterTotal = (int) ($counts[$filter] ?? 0);
+$totalPages = max(1, (int) ceil($filterTotal / $perPage));
+$page = min($page, $totalPages);
+$offset = ($page - 1) * $perPage;
+
+
+/*
+|--------------------------------------------------------------------------
+| AMBIL DAFTAR COMPLAINT
+|--------------------------------------------------------------------------
+*/
+
+if ($complaintTableAvailable && $filterTotal > 0) {
+    try {
+        $where = "id_customer = ?";
+
+        if ($filter !== 'all') {
+            $quoted = array_map(
+                static fn (string $value): string => "'" . $conn->real_escape_string($value) . "'",
+                COMPLAINT_STATUS_GROUPS[$filter]
+            );
+
+            $where .= " AND LOWER(TRIM(status)) IN (" . implode(', ', $quoted) . ")";
+        }
+
         $stmt = $conn->prepare("
             SELECT *
             FROM complaint
-            WHERE id_customer = ?
+            WHERE {$where}
             ORDER BY id DESC
+            LIMIT ? OFFSET ?
         ");
-        $stmt->bind_param("i", $customerId);
+        $stmt->bind_param("iii", $customerId, $perPage, $offset);
         $stmt->execute();
         $complaints = statementFetchAll($stmt);
         $stmt->close();
@@ -338,27 +456,9 @@ if (
 }
 
 foreach ($complaints as $index => $row) {
-    $statusKey = normalizeComplaintStatus($row['status'] ?? '');
-
-    $complaints[$index]['_status'] = $statusKey;
-    $complaints[$index]['_priority'] = normalizePriority($row['prioritas'] ?? $row['priority'] ?? '');
-
-    $counts['all']++;
-
-    if (isset($counts[$statusKey])) {
-        $counts[$statusKey]++;
-    }
+    $complaints[$index]['_status'] = normalizeComplaintStatus($row['status'] ?? '');
+    $complaints[$index]['_priority'] = normalizePriority($row['priority'] ?? $row['prioritas'] ?? '');
 }
-
-// Badge menu: complaint yang belum selesai.
-$totalGangguan = $counts['all'] - $counts['closed'];
-
-$visibleComplaints = $filter === 'all'
-    ? $complaints
-    : array_values(array_filter(
-        $complaints,
-        static fn (array $row): bool => $row['_status'] === $filter
-    ));
 
 
 /*
@@ -403,6 +503,17 @@ $filterLabels = [
     'closed'  => 'Selesai',
 ];
 
+function complaintPageUrl(string $filter, int $page): string
+{
+    $query = ['status' => $filter];
+
+    if ($page > 1) {
+        $query['page'] = $page;
+    }
+
+    return 'complaint.php?' . http_build_query($query);
+}
+
 $avatar = strtoupper(substr(trim($nama) ?: 'C', 0, 1));
 
 $currentPage = basename($_SERVER['PHP_SELF']);
@@ -437,8 +548,8 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     <!-- Dashboard CSS (dasar) -->
     <link rel="stylesheet" href="assets/css/dashboard.css">
 
-    <!-- Complaint CSS (khusus halaman ini) -->
-    <link rel="stylesheet" href="assets/css/complaint.css?v=11">
+    <!-- Complaint CSS (khusus halaman laporan) -->
+    <link rel="stylesheet" href="assets/css/complaint.css?v=12">
 
 </head>
 
@@ -675,6 +786,19 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         <div class="dashboard-content">
 
 
+            <?php if ($flash): ?>
+
+                <div
+                    class="cp-flash <?= ($flash['type'] ?? '') === 'error' ? 'is-error' : 'is-success'; ?>"
+                    role="status"
+                >
+                    <i class="bi <?= ($flash['type'] ?? '') === 'error' ? 'bi-exclamation-triangle-fill' : 'bi-check-circle-fill'; ?>"></i>
+                    <span><?= e($flash['message']); ?></span>
+                </div>
+
+            <?php endif; ?>
+
+
             <div class="section-title-row cp-head">
 
                 <div>
@@ -751,7 +875,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
                 </div>
 
-                <?php if ($complaintTableAvailable && $counts['all'] > 0): ?>
+                <?php if ($complaintTableAvailable && $hasStatusColumn && $counts['all'] > 0): ?>
 
                     <nav class="cp-tabs" aria-label="Filter status laporan">
                         <?php foreach ($filterLabels as $key => $label): ?>
@@ -799,7 +923,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                         </a>
                     </div>
 
-                <?php elseif (empty($visibleComplaints)): ?>
+                <?php elseif (empty($complaints)): ?>
 
                     <div class="cp-empty cp-empty-compact">
                         <div class="cp-empty-icon"><i class="bi bi-funnel"></i></div>
@@ -812,7 +936,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
                     <div class="cp-list">
 
-                        <?php foreach ($visibleComplaints as $row): ?>
+                        <?php foreach ($complaints as $row): ?>
 
                             <?php
                             $complaintId = (int) ($row['id'] ?? 0);
@@ -834,8 +958,10 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                                 $subject = 'Tanpa subjek';
                             }
 
+                            // Kolom sesuai INSERT di complaint_create.php: complaint_code.
                             $ticketCode = trim((string) (
-                                $row['kode_tiket']
+                                $row['complaint_code']
+                                ?? $row['kode_tiket']
                                 ?? $row['ticket_code']
                                 ?? $row['kode_complaint']
                                 ?? ''
@@ -846,12 +972,14 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                             }
 
                             $description = trim((string) (
-                                $row['deskripsi']
-                                ?? $row['description']
+                                $row['description']
+                                ?? $row['deskripsi']
                                 ?? $row['isi']
                                 ?? $row['pesan']
                                 ?? ''
                             ));
+
+                            $categoryText = categoryLabel($row['category'] ?? '');
 
                             $createdAt = 'Waktu tidak tersedia';
                             $createdTs = !empty($row['created_at']) ? strtotime((string) $row['created_at']) : false;
@@ -885,6 +1013,13 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
                                     <div class="cp-meta">
 
+                                        <?php if ($categoryText !== ''): ?>
+                                            <span class="cp-badge category">
+                                                <i class="bi bi-tag-fill"></i>
+                                                <?= e($categoryText); ?>
+                                            </span>
+                                        <?php endif; ?>
+
                                         <span class="cp-badge priority-<?= e($priorityClass); ?>">
                                             <i class="bi bi-flag-fill"></i>
                                             Prioritas <?= e($priorityLabel); ?>
@@ -915,6 +1050,39 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                         <?php endforeach; ?>
 
                     </div>
+
+
+                    <?php if ($totalPages > 1): ?>
+
+                        <nav class="cp-pagination" aria-label="Halaman laporan">
+
+                            <?php if ($page > 1): ?>
+                                <a href="<?= e(complaintPageUrl($filter, $page - 1)); ?>" class="cp-page-btn">
+                                    <i class="bi bi-chevron-left"></i> Sebelumnya
+                                </a>
+                            <?php else: ?>
+                                <span class="cp-page-btn is-disabled">
+                                    <i class="bi bi-chevron-left"></i> Sebelumnya
+                                </span>
+                            <?php endif; ?>
+
+                            <span class="cp-page-info">
+                                Halaman <?= (int) $page; ?> dari <?= (int) $totalPages; ?>
+                            </span>
+
+                            <?php if ($page < $totalPages): ?>
+                                <a href="<?= e(complaintPageUrl($filter, $page + 1)); ?>" class="cp-page-btn">
+                                    Berikutnya <i class="bi bi-chevron-right"></i>
+                                </a>
+                            <?php else: ?>
+                                <span class="cp-page-btn is-disabled">
+                                    Berikutnya <i class="bi bi-chevron-right"></i>
+                                </span>
+                            <?php endif; ?>
+
+                        </nav>
+
+                    <?php endif; ?>
 
                 <?php endif; ?>
 
