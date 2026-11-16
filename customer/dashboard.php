@@ -403,7 +403,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 $menuMain = [
     ['dashboard.php',                 'bi-grid-fill',            'Dashboard'],
     ['usage.php',                     'bi-router-fill',          'Internet Saya'],
-    ['billing.php',                   'bi-receipt-cutoff',       'Tagihan Saya'],
+    ['billing.php',                   'bi-receipt-cutoff',       'Tagihan & Pembayaran'],
     ['billing.php#riwayat-pembayaran', 'bi-clock-history',       'Riwayat Pembayaran'],
     ['speedtest.php',                 'bi-speedometer2',         'Speed Test'],
     ['complaint.php',                 'bi-tools',                'Laporan Gangguan'],
@@ -520,7 +520,7 @@ $quickServices = [
                 <div class="menu-label">Akun</div>
                 <a href="profile.php" class="menu-item">
                     <span class="menu-icon"><i class="bi bi-person-circle"></i></span>
-                    <span class="menu-text">Profil Saya</span>
+                    <span class="menu-text">Pengaturan Akun</span>
                 </a>
                 <a href="notifikasi.php" class="menu-item">
                     <span class="menu-icon"><i class="bi bi-bell-fill"></i></span>
@@ -568,13 +568,13 @@ $quickServices = [
                         <?= $unreadNotifications > 0 ? '' : 'hidden'; ?>><?= $unreadNotifications > 99 ? '99+' : $unreadNotifications; ?></span>
                 </a>
 
-                <div class="top-profile">
+                <a href="profile.php" class="top-profile" aria-label="Buka pengaturan akun">
                     <div class="top-profile-avatar"><?= e($avatar); ?></div>
                     <div class="top-profile-info">
                         <strong><?= e($nama); ?></strong>
                         <span>ID pelanggan #<?= $customerId; ?></span>
                     </div>
-                </div>
+                </a>
             </div>
         </header>
 

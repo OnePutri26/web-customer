@@ -1099,3 +1099,47 @@ button:focus-visible {
 @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* Dark navigation keeps the YESNET brand distinct from the light workspace. */
+.sidebar {
+    background: linear-gradient(180deg, #101b2c 0%, #142238 100%);
+    border-right-color: #24334a;
+    box-shadow: 8px 0 28px rgba(15, 23, 42, .12);
+}
+
+.sidebar-brand { border-bottom-color: #24334a; }
+.brand-text strong,
+.sidebar-user-info strong { color: #f1f5fb; }
+.brand-text span,
+.sidebar-user-info span,
+.menu-label { color: #9aabc2; }
+
+.menu-item { color: #c1ccdc; }
+.menu-item:hover {
+    color: #fff;
+    background: rgba(96, 165, 250, .12);
+}
+.menu-item.active {
+    color: #fff;
+    background: linear-gradient(90deg, rgba(37, 99, 235, .35), rgba(37, 99, 235, .14));
+    box-shadow: inset 3px 0 0 #60a5fa;
+}
+.menu-item.active .menu-icon { background: rgba(147, 197, 253, .16); }
+.logout-item { color: #fca5a5; }
+.logout-item:hover { color: #fecaca; background: rgba(239, 68, 68, .12); }
+
+.sidebar-user {
+    border-top-color: #24334a;
+    background: rgba(10, 19, 33, .45);
+}
+.sidebar-user-avatar {
+    background: linear-gradient(135deg, #2563eb, #5b8def);
+}
+
+.top-profile {
+    border-radius: 12px;
+    padding: 3px 5px;
+    transition: background .2s ease;
+}
+.top-profile:hover { background: #f4f7fc; }
+.top-profile:focus-visible { outline-offset: 3px; }
