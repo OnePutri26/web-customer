@@ -31,6 +31,20 @@ const AUTO_REPLY_FALLBACK = 'Maaf, pertanyaan ini belum bisa kami jawab secara o
 const AI_MODEL = 'claude-haiku-5-5';
 
 /*
+ * Masa tampil chat untuk customer (dalam jam). 24 = 1 hari (rolling 24 jam).
+ * Isi 0 untuk mematikan (chat tampil selamanya).
+ */
+const CHAT_RETENTION_HOURS = 24;
+
+/*
+ * false = pesan lama hanya DISEMBUNYIKAN dari customer (data tetap ada untuk
+ *         riwayat admin / laporan).
+ * true  = pesan lama juga DIHAPUS PERMANEN dari database (dibersihkan otomatis
+ *         secara berkala saat ada customer membuka halaman chat).
+ */
+const CHAT_PURGE_OLD = false;
+
+/*
  * Kontak WhatsApp per wilayah.
  * care = Customer Care (Umum, Tagihan, Instalasi)
  * tech = Technical Support (WiFi, Gangguan)
@@ -436,6 +450,10 @@ function fetchRoomMessages(
           AND id > ?
     ";
 
+    if (CHAT_RETENTION_HOURS > 0) {
+        $sql .= " AND created_at >= (NOW() - INTERVAL " . (int) CHAT_RETENTION_HOURS . " HOUR) ";
+    }
+
     if ($hasTopic) {
         $sql .= " AND topic = ? ";
     }
@@ -512,6 +530,40 @@ function markCsMessagesRead(mysqli $conn, int $roomId): void
     } catch (Throwable $e) {
         error_log('Chat YESNET mark read failed: ' . $e->getMessage());
     }
+}
+
+
+/**
+ * Hapus permanen pesan yang melewati masa tampil (hanya bila CHAT_PURGE_OLD = true).
+ */
+function purgeOldChatMessages(mysqli $conn): void
+{
+    if (!CHAT_PURGE_OLD || CHAT_RETENTION_HOURS <= 0) {
+        return;
+    }
+
+    try {
+        $conn->query(
+            "DELETE FROM chat_messages
+             WHERE created_at < (NOW() - INTERVAL " . (int) CHAT_RETENTION_HOURS . " HOUR)
+             LIMIT 500"
+        );
+    } catch (Throwable $e) {
+        error_log('Chat YESNET purge failed: ' . $e->getMessage());
+    }
+}
+
+
+/** "24 jam" atau "1 hari" untuk teks informasi. */
+function retentionLabel(): string
+{
+    $hours = (int) CHAT_RETENTION_HOURS;
+
+    if ($hours > 0 && $hours % 24 === 0) {
+        return ($hours / 24) . ' hari';
+    }
+
+    return $hours . ' jam';
 }
 
 
@@ -721,6 +773,11 @@ $chatReady =
 $hasTopic = $chatReady && columnExists($conn, 'chat_messages', 'topic');
 
 $hasLastMessageAt = $chatReady && columnExists($conn, 'chat_rooms', 'last_message_at');
+
+// Pembersihan berkala (sekitar 1 dari 20 kunjungan) agar tidak membebani server.
+if ($chatReady && CHAT_PURGE_OLD && !isset($_GET['poll']) && mt_rand(1, 20) === 1) {
+    purgeOldChatMessages($conn);
+}
 
 
 /*
@@ -1415,6 +1472,13 @@ function assetVersion(string $relativePath): int
 
                 <div class="chat-body" id="chatBody">
 
+                    <?php if (CHAT_RETENTION_HOURS > 0): ?>
+                        <div class="chat-retention">
+                            <i class="bi bi-clock-history"></i>
+                            Pesan otomatis hilang setelah <?= e(retentionLabel()); ?>
+                        </div>
+                    <?php endif; ?>
+
                     <div class="chat-messages" id="chatMessages" aria-live="polite">
 
                         <?php if (!$chatReady): ?>
@@ -1555,7 +1619,12 @@ function assetVersion(string $relativePath): int
                     </form>
 
                     <div class="chat-footer-info">
-                        <span><i class="bi bi-shield-check"></i> Pesan tersimpan di akun kamu</span>
+                        <span>
+                            <i class="bi bi-shield-check"></i>
+                            <?= CHAT_RETENTION_HOURS > 0
+                                ? 'Pesan dihapus otomatis setelah ' . e(retentionLabel())
+                                : 'Pesan tersimpan di akun kamu'; ?>
+                        </span>
                         <span>Enter untuk kirim · Shift+Enter baris baru</span>
                     </div>
 
