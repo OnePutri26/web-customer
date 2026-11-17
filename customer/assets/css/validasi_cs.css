@@ -1,3 +1,7 @@
+/* =========================================================
+   VALIDASI CS - CUSTOMER PORTAL
+========================================================= */
+
 * {
     box-sizing: border-box;
 }
@@ -7,11 +11,21 @@ body {
     background: #f5f7fb;
     color: #172033;
     font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.5;
+}
+
+a {
+    text-decoration: none;
 }
 
 .page-wrapper {
     min-height: 100vh;
+    display: flex;
+    flex-direction: column;
 }
+
+
+/* ---------- HEADER ---------- */
 
 .top-header {
     background: #fff;
@@ -20,7 +34,7 @@ body {
 
 .header-container,
 .main-container,
-.footer > div {
+.footer-inner {
     width: min(1100px, calc(100% - 32px));
     margin: 0 auto;
 }
@@ -35,8 +49,7 @@ body {
 
 .brand,
 .header-right,
-.user-box,
-.actions {
+.user-box {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -44,7 +57,6 @@ body {
 
 .brand {
     color: #155eef;
-    text-decoration: none;
     font-weight: 800;
 }
 
@@ -54,6 +66,7 @@ body {
 .process-icon {
     display: grid;
     place-items: center;
+    flex-shrink: 0;
     border-radius: 14px;
     background: #eff6ff;
     color: #155eef;
@@ -63,25 +76,32 @@ body {
 .user-avatar {
     width: 42px;
     height: 42px;
+    font-size: 18px;
+    font-weight: 800;
 }
 
 .brand-text,
 .user-info {
     display: grid;
-    gap: 3px;
+    gap: 2px;
 }
 
-.user-info span,
-.page-label,
-.step-content span,
-.intro,
-.info-item span,
-.footer {
+.brand-text strong,
+.user-info strong {
+    font-size: 14px;
+    color: #172033;
+}
+
+.brand-text span,
+.user-info span {
+    font-size: 12px;
     color: #667085;
+    font-weight: 500;
 }
 
 .logout-btn,
-.back-button {
+.back-button,
+.chat-button {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -90,13 +110,37 @@ body {
     border-radius: 10px;
     color: #344054;
     background: #fff;
-    text-decoration: none;
+    font-size: 14px;
     font-weight: 700;
+    cursor: pointer;
+    transition: .2s ease;
 }
 
+.logout-btn:hover,
+.back-button:hover {
+    background: #f9fafb;
+}
+
+.chat-button {
+    color: #fff;
+    border-color: #155eef;
+    background: #155eef;
+}
+
+.chat-button:hover {
+    background: #0f4cdb;
+}
+
+
+/* ---------- MAIN ---------- */
+
 .main-container {
+    flex: 1;
     padding: 36px 0;
 }
+
+
+/* ---------- PROGRESS ---------- */
 
 .progress-wrapper {
     display: flex;
@@ -120,6 +164,8 @@ body {
     border: 1px solid #d0d5dd;
     border-radius: 50%;
     background: #fff;
+    color: #667085;
+    font-weight: 700;
 }
 
 .step.completed .step-number,
@@ -131,8 +177,13 @@ body {
 
 .step-content {
     display: grid;
-    gap: 3px;
+    gap: 2px;
     font-size: 13px;
+}
+
+.step-content span {
+    color: #667085;
+    font-size: 12px;
 }
 
 .step-line {
@@ -145,6 +196,9 @@ body {
 .step-line.active {
     background: #155eef;
 }
+
+
+/* ---------- CARD ---------- */
 
 .validation-card {
     max-width: 850px;
@@ -165,18 +219,50 @@ body {
 
 .status-badge {
     display: inline-flex;
-    margin: 12px 0;
-    padding: 7px 11px;
+    align-items: center;
+    gap: 8px;
+    margin: 14px 0 10px;
+    padding: 7px 12px;
     border-radius: 999px;
     color: #175cd3;
     background: #eff8ff;
     font-size: 12px;
     font-weight: 700;
+    letter-spacing: .3px;
 }
 
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #155eef;
+    animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: .4; transform: scale(.8); }
+}
+
+.validation-card h1 {
+    margin: 0 0 8px;
+    font-size: clamp(22px, 3.5vw, 28px);
+    font-weight: 800;
+    color: #101828;
+}
+
+.intro {
+    margin: 0;
+    color: #667085;
+    font-size: 15px;
+    line-height: 1.7;
+}
+
+
+/* ---------- SECTION ---------- */
+
 .section-box,
-.process-box,
-.address-box {
+.process-box {
     margin-top: 20px;
     padding: 18px;
     border: 1px solid #e6eaf0;
@@ -190,6 +276,11 @@ body {
     gap: 9px;
     margin-bottom: 14px;
     font-weight: 700;
+    color: #101828;
+}
+
+.section-heading i {
+    color: #155eef;
 }
 
 .info-grid {
@@ -198,32 +289,63 @@ body {
     gap: 14px;
 }
 
-.info-item {
+.info-item,
+.package-summary > div,
+.location-info > div {
     display: grid;
-    gap: 5px;
+    gap: 4px;
     min-width: 0;
 }
 
+.info-item span,
+.package-summary span,
+.location-info span {
+    color: #667085;
+    font-size: 12px;
+}
+
 .info-item strong,
-.address-box,
-.package-summary {
+.package-summary strong,
+.location-info strong {
+    font-size: 14px;
     overflow-wrap: anywhere;
 }
 
+.success-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #039855;
+}
+
 .package-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
     padding: 14px;
     border-radius: 10px;
     background: #f8fafc;
 }
 
-.success-text {
-    color: #039855;
+.address-box {
+    padding: 14px;
+    border: 1px solid #e6eaf0;
+    border-radius: 10px;
+    background: #f8fafc;
+    font-size: 14px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
 }
 
 .location-info {
-    margin-top: 10px;
-    color: #667085;
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
 }
+
+
+/* ---------- PROSES ---------- */
 
 .process-box {
     display: flex;
@@ -232,18 +354,58 @@ body {
     background: #f8fafc;
 }
 
+.process-box strong {
+    color: #101828;
+}
+
+.process-box p {
+    margin: 4px 0 0;
+    color: #667085;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+
+/* ---------- AKSI ---------- */
+
 .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     justify-content: flex-start;
+    gap: 10px;
     margin-top: 22px;
 }
 
+
+/* ---------- FOOTER ---------- */
+
 .footer {
     padding: 20px 0;
-    text-align: center;
+    color: #667085;
     font-size: 12px;
 }
 
+.footer-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-align: center;
+}
+
+.footer-brand {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: #155eef;
+}
+
+
+/* ---------- RESPONSIVE ---------- */
+
 @media (max-width: 640px) {
+
     .header-container {
         flex-wrap: wrap;
         padding: 12px 0;
@@ -257,13 +419,25 @@ body {
     .progress-wrapper {
         justify-content: flex-start;
         overflow-x: auto;
+        padding-bottom: 6px;
     }
 
     .step {
         min-width: max-content;
     }
 
-    .info-grid {
+    .info-grid,
+    .package-summary,
+    .location-info {
         grid-template-columns: 1fr;
+    }
+
+    .process-box {
+        align-items: flex-start;
+    }
+
+    .actions > a {
+        flex: 1 1 100%;
+        justify-content: center;
     }
 }

@@ -1,38 +1,245 @@
 <?php
 
-require_once "../config/database.php";
+session_start();
+
 require_once "../config/auth.php";
+
+requireLogin();
+
+require_once "../config/database.php";
 
 requireRole('customer');
 
+date_default_timezone_set('Asia/Jakarta');
+
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
+
 /*
 |--------------------------------------------------------------------------
-| FUNGSI BALASAN OTOMATIS (FAQ)
+| KONSTANTA
+|--------------------------------------------------------------------------
+| ANTHROPIC_API_KEY (opsional) didefinisikan di config/database.php:
+|   define('ANTHROPIC_API_KEY', 'sk-ant-...');
+| Tanpa key, chat tetap berjalan dengan FAQ + pesan fallback.
 |--------------------------------------------------------------------------
 */
-function findAutoReply(mysqli $conn, string $message, string $topic): string
+
+const AUTO_REPLY_FALLBACK = 'Maaf, pertanyaan ini belum bisa kami jawab secara otomatis. '
+                          . 'Silakan lanjutkan melalui Customer Care agar kami dapat membantu dengan tepat.';
+
+const AI_MODEL = 'claude-haiku-5-5';
+
+/*
+ * Masa tampil chat untuk customer (dalam jam). 24 = 1 hari (rolling 24 jam).
+ * Isi 0 untuk mematikan (chat tampil selamanya).
+ */
+const CHAT_RETENTION_HOURS = 24;
+
+/*
+ * false = pesan lama hanya DISEMBUNYIKAN dari customer (data tetap ada untuk
+ *         riwayat admin / laporan).
+ * true  = pesan lama juga DIHAPUS PERMANEN dari database (dibersihkan otomatis
+ *         secara berkala saat ada customer membuka halaman chat).
+ */
+const CHAT_PURGE_OLD = false;
+
+/*
+ * Kontak WhatsApp per wilayah.
+ * care = Customer Care (Umum, Tagihan, Instalasi)
+ * tech = Technical Support (WiFi, Gangguan)
+ * Format bebas (08xx / 628xx / +62).
+ */
+const WA_CONTACTS = [
+    'jakarta' => [
+        'care' => '6285126625546',
+        'tech' => '6285211626679',
+    ],
+    'surabaya' => [
+        'care' => '6285604145030',
+        'tech' => '62882009050576',
+    ],
+];
+
+
+/*
+|--------------------------------------------------------------------------
+| HELPER
+|--------------------------------------------------------------------------
+*/
+
+function e($value): string
 {
-    $fallback = 'Terima kasih, pesan kamu sudah kami terima. '
-              . 'Tim Customer Service akan segera membalas.';
+    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+}
+
+
+function tableExists(mysqli $conn, string $table): bool
+{
+    $table = $conn->real_escape_string($table);
+    $result = $conn->query("SHOW TABLES LIKE '{$table}'");
+
+    return $result && $result->num_rows > 0;
+}
+
+
+function columnExists(mysqli $conn, string $table, string $column): bool
+{
+    $table  = $conn->real_escape_string($table);
+    $column = $conn->real_escape_string($column);
+    $result = $conn->query("SHOW COLUMNS FROM `{$table}` LIKE '{$column}'");
+
+    return $result && $result->num_rows > 0;
+}
+
+
+/**
+ * Mengambil seluruh hasil prepared statement.
+ * Mendukung hosting dengan maupun tanpa mysqlnd.
+ */
+function statementFetchAll(mysqli_stmt $stmt): array
+{
+    if (method_exists($stmt, 'get_result')) {
+        $result = $stmt->get_result();
+
+        if ($result instanceof mysqli_result) {
+            return $result->fetch_all(MYSQLI_ASSOC);
+        }
+    }
+
+    $metadata = $stmt->result_metadata();
+
+    if (!$metadata) {
+        return [];
+    }
+
+    $row  = [];
+    $bind = [];
+
+    foreach ($metadata->fetch_fields() as $field) {
+        $row[$field->name] = null;
+        $bind[] = &$row[$field->name];
+    }
+
+    call_user_func_array([$stmt, 'bind_result'], $bind);
+
+    $rows = [];
+
+    while ($stmt->fetch()) {
+        $copy = [];
+
+        foreach ($row as $key => $value) {
+            $copy[$key] = $value;
+        }
+
+        $rows[] = $copy;
+    }
+
+    $metadata->free();
+
+    return $rows;
+}
+
+
+function normalizeSubscriptionStatus($status): string
+{
+    $status = strtolower(trim((string) $status));
+
+    if (in_array($status, ['active', 'aktif'], true)) {
+        return 'active';
+    }
+
+    if (in_array($status, ['pending', 'proses', 'menunggu_pemasangan', 'menunggu pemasangan'], true)) {
+        return 'pending';
+    }
+
+    if (in_array($status, ['suspended', 'ditangguhkan'], true)) {
+        return 'suspended';
+    }
+
+    if (in_array($status, ['terminated', 'berakhir', 'nonaktif'], true)) {
+        return 'terminated';
+    }
+
+    return 'belum_berlangganan';
+}
+
+
+function jsonResponse(array $payload, int $status = 200): void
+{
+    http_response_code($status);
+
+    header('Content-Type: application/json; charset=UTF-8');
+    header('Cache-Control: no-store');
+
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+
+    exit;
+}
+
+
+function formatWaktuChat($datetime): string
+{
+    $time = strtotime((string) $datetime);
+
+    return $time ? date('d M Y, H:i', $time) : '';
+}
+
+
+/**
+ * sender_id = 0 pada sender_type 'cs' berarti balasan otomatis (FAQ / AI).
+ */
+function senderLabel(string $senderType, int $senderId): string
+{
+    if ($senderType === 'customer') {
+        return 'Anda';
+    }
+
+    return $senderId === 0 ? 'Asisten Virtual' : 'Customer Care';
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| BALASAN OTOMATIS
+| Urutan: 1) FAQ  ->  2) AI (jika ANTHROPIC_API_KEY ada)  ->  3) fallback
+|--------------------------------------------------------------------------
+*/
+
+/**
+ * Mencari jawaban FAQ. Mengembalikan null bila tidak ada yang cocok.
+ */
+function findAutoReply(mysqli $conn, string $message, string $topic): ?string
+{
+    if (
+        !tableExists($conn, 'faq_auto_replies') ||
+        !columnExists($conn, 'faq_auto_replies', 'keywords') ||
+        !columnExists($conn, 'faq_auto_replies', 'answer') ||
+        !columnExists($conn, 'faq_auto_replies', 'topic') ||
+        !columnExists($conn, 'faq_auto_replies', 'is_active')
+    ) {
+        return null;
+    }
 
     try {
         $stmt = $conn->prepare("
             SELECT keywords, answer
             FROM faq_auto_replies
             WHERE is_active = 1
-            AND topic IN (?, 'general')
+              AND topic IN (?, 'general')
         ");
         $stmt->bind_param("s", $topic);
         $stmt->execute();
-        $result = $stmt->get_result();
+        $rows = statementFetchAll($stmt);
+        $stmt->close();
 
         $bestAnswer = null;
         $bestScore  = 0;
 
-        while ($row = $result->fetch_assoc()) {
+        foreach ($rows as $row) {
             $score = 0;
 
-            foreach (explode(',', $row['keywords']) as $keyword) {
+            foreach (explode(',', (string) $row['keywords']) as $keyword) {
                 $keyword = trim($keyword);
 
                 if ($keyword !== '' && mb_stripos($message, $keyword) !== false) {
@@ -42,39 +249,128 @@ function findAutoReply(mysqli $conn, string $message, string $topic): string
 
             if ($score > $bestScore) {
                 $bestScore  = $score;
-                $bestAnswer = $row['answer'];
+                $bestAnswer = (string) $row['answer'];
             }
         }
 
-        return $bestAnswer ?? $fallback;
+        return $bestAnswer;
 
-    } catch (Exception $e) {
-        return $fallback;
+    } catch (Throwable $e) {
+        error_log('Chat YESNET auto reply failed: ' . $e->getMessage());
+
+        return null;
     }
 }
 
+
+/**
+ * Jawaban AI (Claude API). Mengembalikan null bila AI tidak aktif atau gagal.
+ *
+ * @param array $history pesan terakhir di room (kolom sender_type, message)
+ */
+function askAi(string $message, string $topicLabel, string $nama, array $history): ?string
+{
+    if (
+        !defined('ANTHROPIC_API_KEY') ||
+        ANTHROPIC_API_KEY === '' ||
+        !function_exists('curl_init')
+    ) {
+        return null;
+    }
+
+    // Susun giliran percakapan: harus berselang-seling, diawali 'user'.
+    $turns = [];
+
+    foreach ($history as $h) {
+        $role = (string) $h['sender_type'] === 'customer' ? 'user' : 'assistant';
+
+        if (!empty($turns) && $turns[count($turns) - 1]['role'] === $role) {
+            $turns[count($turns) - 1]['content'] .= "\n" . (string) $h['message'];
+        } else {
+            $turns[] = ['role' => $role, 'content' => (string) $h['message']];
+        }
+    }
+
+    while (!empty($turns) && $turns[0]['role'] !== 'user') {
+        array_shift($turns);
+    }
+
+    if (!empty($turns) && $turns[count($turns) - 1]['role'] === 'user') {
+        $turns[count($turns) - 1]['content'] .= "\n" . $message;
+    } else {
+        $turns[] = ['role' => 'user', 'content' => $message];
+    }
+
+    $system = "Kamu adalah asisten virtual YESNET, penyedia layanan internet. "
+            . "Nama pelanggan: {$nama}. Topik percakapan: {$topicLabel}. "
+            . "Jawab singkat, ramah, dan sopan dalam bahasa Indonesia. "
+            . "Jangan mengarang harga, nominal tagihan, jadwal instalasi, atau status gangguan "
+            . "milik pelanggan karena kamu tidak punya akses ke data akun. "
+            . "Untuk data akun, tagihan, atau instalasi arahkan ke Customer Care; "
+            . "untuk masalah WiFi atau gangguan teknis lanjutan arahkan ke Technical Support. "
+            . "Boleh memberi langkah umum seperti restart modem atau cek kabel.";
+
+    $ch = curl_init('https://api.anthropic.com/v1/messages');
+
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT        => 15,
+        CURLOPT_HTTPHEADER     => [
+            'content-type: application/json',
+            'x-api-key: ' . ANTHROPIC_API_KEY,
+            'anthropic-version: 2023-06-01',
+        ],
+        CURLOPT_POSTFIELDS     => json_encode([
+            'model'      => AI_MODEL,
+            'max_tokens' => 400,
+            'system'     => $system,
+            'messages'   => $turns,
+        ], JSON_UNESCAPED_UNICODE),
+    ]);
+
+    $raw  = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($raw === false || $code !== 200) {
+        error_log('Chat YESNET AI failed: HTTP ' . $code);
+
+        return null;
+    }
+
+    $data = json_decode((string) $raw, true);
+    $text = trim((string) ($data['content'][0]['text'] ?? ''));
+
+    return $text !== '' ? $text : null;
+}
+
+
 /*
 |--------------------------------------------------------------------------
-| FUNGSI ROOM CHAT (tabel chat_rooms)
+| ROOM CHAT (chat_rooms)
 |--------------------------------------------------------------------------
 */
+
 function findRoomId(mysqli $conn, int $customerId): ?int
 {
     $stmt = $conn->prepare("
         SELECT id
         FROM chat_rooms
         WHERE id_customer = ?
-        AND status <> 'closed'
+          AND status <> 'closed'
         ORDER BY id DESC
         LIMIT 1
     ");
     $stmt->bind_param("i", $customerId);
     $stmt->execute();
+    $rows = statementFetchAll($stmt);
+    $stmt->close();
 
-    $row = $stmt->get_result()->fetch_assoc();
-
-    return $row ? (int) $row['id'] : null;
+    return isset($rows[0]['id']) ? (int) $rows[0]['id'] : null;
 }
+
 
 function getOrCreateRoomId(mysqli $conn, int $customerId): int
 {
@@ -90,45 +386,337 @@ function getOrCreateRoomId(mysqli $conn, int $customerId): int
     ");
     $stmt->bind_param("i", $customerId);
     $stmt->execute();
+    $newId = (int) $conn->insert_id;
+    $stmt->close();
 
-    return (int) $conn->insert_id;
+    return $newId;
 }
 
-$userId = $_SESSION['user_id'];
 
-$stmt = $conn->prepare("
-    SELECT *
-    FROM customers
-    WHERE user_id = ?
-    LIMIT 1
-");
+/**
+ * True bila Customer Care (manusia) sudah mengambil alih room ini.
+ * - Jika kolom chat_rooms.ai_mode ada: ai_mode = 0 berarti diambil alih.
+ * - Jika tidak ada, tetapi kolom assigned_to ada: terisi berarti sudah ditangani.
+ */
+function roomHandledByCs(mysqli $conn, ?int $roomId): bool
+{
+    if ($roomId === null) {
+        return false;
+    }
 
-$stmt->bind_param("i", $userId);
-$stmt->execute();
+    if (columnExists($conn, 'chat_rooms', 'ai_mode')) {
+        $column = 'ai_mode';
+    } elseif (columnExists($conn, 'chat_rooms', 'assigned_to')) {
+        $column = 'assigned_to';
+    } else {
+        return false;
+    }
 
-$customer = $stmt->get_result()->fetch_assoc();
+    $stmt = $conn->prepare("SELECT `{$column}` AS v FROM chat_rooms WHERE id = ? LIMIT 1");
+    $stmt->bind_param("i", $roomId);
+    $stmt->execute();
+    $rows = statementFetchAll($stmt);
+    $stmt->close();
 
-if (!$customer) {
-    die("Data customer tidak ditemukan.");
+    if (!isset($rows[0]) || $rows[0]['v'] === null) {
+        return false;
+    }
+
+    return $column === 'ai_mode'
+        ? (int) $rows[0]['v'] === 0
+        : (int) $rows[0]['v'] > 0;
 }
 
-$customerId = $customer['id'];
-$nama       = $customer['nama'] ?? 'Customer';
-$initial    = strtoupper(substr(trim($nama), 0, 1));
 
-$topic = $_GET['topic'] ?? 'general';
+/*
+|--------------------------------------------------------------------------
+| PESAN (chat_messages)
+| Kolom `topic` bersifat opsional agar tetap berjalan pada tabel lama.
+|--------------------------------------------------------------------------
+*/
 
-$allowedTopics = [
-    'general',
-    'wifi',
-    'billing',
-    'complaint',
-    'installation'
-];
+function fetchRoomMessages(
+    mysqli $conn,
+    int $roomId,
+    string $topic,
+    bool $hasTopic,
+    int $afterId,
+    int $limit
+): array {
+    $sql = "
+        SELECT id, sender_type, sender_id, message, created_at
+        FROM chat_messages
+        WHERE id_room = ?
+          AND id > ?
+    ";
 
-if (!in_array($topic, $allowedTopics, true)) {
-    $topic = 'general';
+    if (CHAT_RETENTION_HOURS > 0) {
+        $sql .= " AND created_at >= (NOW() - INTERVAL " . (int) CHAT_RETENTION_HOURS . " HOUR) ";
+    }
+
+    if ($hasTopic) {
+        $sql .= " AND topic = ? ";
+    }
+
+    $sql .= " ORDER BY id ASC LIMIT " . (int) $limit;
+
+    $stmt = $conn->prepare($sql);
+
+    if ($hasTopic) {
+        $stmt->bind_param("iis", $roomId, $afterId, $topic);
+    } else {
+        $stmt->bind_param("ii", $roomId, $afterId);
+    }
+
+    $stmt->execute();
+    $rows = statementFetchAll($stmt);
+    $stmt->close();
+
+    return $rows;
 }
+
+
+function insertChatMessage(
+    mysqli $conn,
+    int $roomId,
+    string $senderType,
+    int $senderId,
+    string $message,
+    string $topic,
+    bool $hasTopic
+): int {
+    if ($hasTopic) {
+        $stmt = $conn->prepare("
+            INSERT INTO chat_messages
+                (id_room, sender_type, sender_id, message, topic, created_at)
+            VALUES (?, ?, ?, ?, ?, NOW())
+        ");
+        $stmt->bind_param("isiss", $roomId, $senderType, $senderId, $message, $topic);
+    } else {
+        $stmt = $conn->prepare("
+            INSERT INTO chat_messages
+                (id_room, sender_type, sender_id, message, created_at)
+            VALUES (?, ?, ?, ?, NOW())
+        ");
+        $stmt->bind_param("isis", $roomId, $senderType, $senderId, $message);
+    }
+
+    $stmt->execute();
+    $id = (int) $conn->insert_id;
+    $stmt->close();
+
+    return $id;
+}
+
+
+/** Tandai balasan Customer Care / asisten sebagai sudah dibaca customer. */
+function markCsMessagesRead(mysqli $conn, int $roomId): void
+{
+    try {
+        if (!columnExists($conn, 'chat_messages', 'is_read')) {
+            return;
+        }
+
+        $stmt = $conn->prepare("
+            UPDATE chat_messages
+            SET is_read = 1
+            WHERE id_room = ?
+              AND sender_type <> 'customer'
+              AND is_read = 0
+        ");
+        $stmt->bind_param("i", $roomId);
+        $stmt->execute();
+        $stmt->close();
+    } catch (Throwable $e) {
+        error_log('Chat YESNET mark read failed: ' . $e->getMessage());
+    }
+}
+
+
+/**
+ * Hapus permanen pesan yang melewati masa tampil (hanya bila CHAT_PURGE_OLD = true).
+ */
+function purgeOldChatMessages(mysqli $conn): void
+{
+    if (!CHAT_PURGE_OLD || CHAT_RETENTION_HOURS <= 0) {
+        return;
+    }
+
+    try {
+        $conn->query(
+            "DELETE FROM chat_messages
+             WHERE created_at < (NOW() - INTERVAL " . (int) CHAT_RETENTION_HOURS . " HOUR)
+             LIMIT 500"
+        );
+    } catch (Throwable $e) {
+        error_log('Chat YESNET purge failed: ' . $e->getMessage());
+    }
+}
+
+
+/** "24 jam" atau "1 hari" untuk teks informasi. */
+function retentionLabel(): string
+{
+    $hours = (int) CHAT_RETENTION_HOURS;
+
+    if ($hours > 0 && $hours % 24 === 0) {
+        return ($hours / 24) . ' hari';
+    }
+
+    return $hours . ' jam';
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| KONTAK WHATSAPP
+|--------------------------------------------------------------------------
+*/
+
+function normalizeWaNumber(string $number): string
+{
+    $digits = preg_replace('/\D+/', '', $number);
+
+    if ($digits === '') {
+        return '';
+    }
+
+    if (strpos($digits, '0') === 0) {
+        return '62' . substr($digits, 1);
+    }
+
+    if (strpos($digits, '8') === 0) {
+        return '62' . $digits;
+    }
+
+    return $digits;
+}
+
+
+/**
+ * Jakarta bila data customer menyebut Jakarta / DKI.
+ * Selain itu dianggap Surabaya (Jawa Timur).
+ * Tambahkan nama kolom lain di daftar bila tabel customers memakai nama berbeda.
+ */
+function detectRegion(array $customer): string
+{
+    $text = '';
+
+    foreach (['kota', 'city', 'wilayah', 'area', 'kabupaten', 'provinsi', 'alamat', 'address'] as $column) {
+        if (!empty($customer[$column])) {
+            $text .= ' ' . $customer[$column];
+        }
+    }
+
+    return preg_match('/jakarta|dki/i', $text) ? 'jakarta' : 'surabaya';
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| CEK LOGIN
+|--------------------------------------------------------------------------
+*/
+
+$userId = (int) ($_SESSION['user_id'] ?? 0);
+
+if ($userId <= 0) {
+    header("Location: ../login.php");
+    exit;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| CSRF
+|--------------------------------------------------------------------------
+*/
+
+if (empty($_SESSION['csrf_chat'])) {
+    $_SESSION['csrf_chat'] = bin2hex(random_bytes(32));
+}
+
+$csrfToken = $_SESSION['csrf_chat'];
+
+
+/*
+|--------------------------------------------------------------------------
+| DEFAULT DATA
+|--------------------------------------------------------------------------
+*/
+
+$customer = null;
+$customerId = 0;
+$statusLangganan = 'belum_berlangganan';
+$totalGangguan = 0;
+$unreadNotifications = 0;
+
+
+/*
+|--------------------------------------------------------------------------
+| DATA CUSTOMER
+|--------------------------------------------------------------------------
+*/
+
+if (!tableExists($conn, 'customers')) {
+    http_response_code(500);
+    die("Tabel customers tidak ditemukan.");
+}
+
+if (!columnExists($conn, 'customers', 'user_id')) {
+    error_log("Chat YESNET: kolom customers.user_id tidak ditemukan.");
+    http_response_code(500);
+    die("Struktur tabel customers belum sesuai. Kolom user_id tidak ditemukan.");
+}
+
+try {
+    $stmt = $conn->prepare("SELECT * FROM customers WHERE user_id = ? LIMIT 1");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+
+    $customerRows = statementFetchAll($stmt);
+    $stmt->close();
+
+    if (empty($customerRows)) {
+        http_response_code(404);
+        die("Data customer tidak ditemukan untuk akun ini.");
+    }
+
+    $customer = $customerRows[0];
+} catch (Throwable $e) {
+    error_log(
+        "Chat YESNET customer query error: " . $e->getMessage() .
+        " | file: " . $e->getFile() . " | line: " . $e->getLine()
+    );
+
+    http_response_code(500);
+    die("Data halaman gagal dimuat. Periksa struktur tabel customers atau error log hosting.");
+}
+
+$customerId = (int) ($customer['id'] ?? 0);
+
+$nama = trim((string) (
+    $customer['nama']
+    ?? $customer['name']
+    ?? $_SESSION['nama']
+    ?? $_SESSION['username']
+    ?? 'Customer'
+));
+
+if ($nama === '') {
+    $nama = 'Customer';
+}
+
+$statusLangganan = normalizeSubscriptionStatus($customer['status_langganan'] ?? '');
+
+$avatar = strtoupper(substr($nama, 0, 1));
+
+
+/*
+|--------------------------------------------------------------------------
+| TOPIK
+|--------------------------------------------------------------------------
+*/
 
 $topicLabels = [
     'general'      => 'Pertanyaan Umum',
@@ -138,8 +726,6 @@ $topicLabels = [
     'installation' => 'Instalasi'
 ];
 
-$topicLabel = $topicLabels[$topic] ?? 'Pertanyaan Umum';
-
 $topicIcons = [
     'general'      => 'bi-chat-dots',
     'wifi'         => 'bi-wifi',
@@ -148,165 +734,424 @@ $topicIcons = [
     'installation' => 'bi-calendar-check'
 ];
 
-$topicIcon = $topicIcons[$topic] ?? 'bi-chat-dots';
+$topicShort = [
+    'general'      => 'Umum',
+    'wifi'         => 'WiFi',
+    'billing'      => 'Tagihan',
+    'complaint'    => 'Gangguan',
+    'installation' => 'Instalasi'
+];
 
-$messageError = '';
+$topic = (string) ($_GET['topic'] ?? 'general');
+
+if (!isset($topicLabels[$topic])) {
+    $topic = 'general';
+}
+
+$topicLabel = $topicLabels[$topic];
+$topicIcon  = $topicIcons[$topic];
+
 
 /*
 |--------------------------------------------------------------------------
-| PROSES KIRIM PESAN
+| TABEL CHAT SIAP?
+| `topic` TIDAK menjadi syarat. Bila kolomnya ada, riwayat difilter
+| per topik; bila tidak ada, semua pesan tampil dalam satu percakapan.
 |--------------------------------------------------------------------------
 */
+
+$chatReady =
+    tableExists($conn, 'chat_rooms') &&
+    tableExists($conn, 'chat_messages') &&
+    columnExists($conn, 'chat_rooms', 'id_customer') &&
+    columnExists($conn, 'chat_rooms', 'status') &&
+    columnExists($conn, 'chat_messages', 'id_room') &&
+    columnExists($conn, 'chat_messages', 'sender_type') &&
+    columnExists($conn, 'chat_messages', 'sender_id') &&
+    columnExists($conn, 'chat_messages', 'message');
+
+$hasTopic = $chatReady && columnExists($conn, 'chat_messages', 'topic');
+
+$hasLastMessageAt = $chatReady && columnExists($conn, 'chat_rooms', 'last_message_at');
+
+// Pembersihan berkala (sekitar 1 dari 20 kunjungan) agar tidak membebani server.
+if ($chatReady && CHAT_PURGE_OLD && !isset($_GET['poll']) && mt_rand(1, 20) === 1) {
+    purgeOldChatMessages($conn);
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| GET: POLLING PESAN BARU (JSON)
+|--------------------------------------------------------------------------
+*/
+
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['poll'])) {
+
+    if (!$chatReady) {
+        jsonResponse(['messages' => [], 'handled_by_cs' => false]);
+    }
+
+    $afterId = max(0, (int) ($_GET['after'] ?? 0));
+    $pollMessages = [];
+    $pollHandledByCs = false;
+
+    try {
+        $roomId = findRoomId($conn, $customerId);
+
+        if ($roomId !== null) {
+            $pollHandledByCs = roomHandledByCs($conn, $roomId);
+
+            $rows = fetchRoomMessages($conn, $roomId, $topic, $hasTopic, $afterId, 50);
+
+            foreach ($rows as $row) {
+                $pollMessages[] = [
+                    'id'         => (int) $row['id'],
+                    'sender'     => (string) $row['sender_type'],
+                    'label'      => senderLabel((string) $row['sender_type'], (int) $row['sender_id']),
+                    'is_auto'    => (string) $row['sender_type'] !== 'customer'
+                                    && (int) $row['sender_id'] === 0,
+                    'message'    => (string) $row['message'],
+                    'time_label' => formatWaktuChat($row['created_at'])
+                ];
+            }
+
+            if (!empty($rows)) {
+                markCsMessagesRead($conn, $roomId);
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('Chat YESNET poll failed: ' . $e->getMessage());
+        jsonResponse(['messages' => [], 'error' => 'Gagal memuat pesan.'], 500);
+    }
+
+    jsonResponse([
+        'messages'      => $pollMessages,
+        'handled_by_cs' => $pollHandledByCs
+    ]);
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| POST: KIRIM PESAN
+|--------------------------------------------------------------------------
+*/
+
+$messageError = '';
+$draftMessage = '';
+$isAjaxRequest = strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    $postMessage = trim($_POST['message'] ?? '');
-    $postTopic   = $_POST['topic'] ?? 'general';
+    $postMessage = trim((string) ($_POST['message'] ?? ''));
+    $postTopic   = (string) ($_POST['topic'] ?? 'general');
+    $postToken   = (string) ($_POST['csrf_token'] ?? '');
 
-    if (!in_array($postTopic, $allowedTopics, true)) {
+    if (!isset($topicLabels[$postTopic])) {
         $postTopic = 'general';
     }
 
-    if ($postMessage === '') {
+    $topic      = $postTopic;
+    $topicLabel = $topicLabels[$topic];
+    $topicIcon  = $topicIcons[$topic];
+
+    if (!hash_equals($csrfToken, $postToken)) {
+
+        $messageError = 'Sesi tidak valid. Muat ulang halaman lalu coba lagi.';
+        $draftMessage = $postMessage;
+
+    } elseif (!$chatReady) {
+
+        error_log('Chat YESNET: tabel chat_rooms/chat_messages belum sesuai.');
+        $messageError = 'Fitur chat belum siap digunakan. Silakan hubungi kami melalui kontak resmi.';
+        $draftMessage = $postMessage;
+
+    } elseif ($postMessage === '') {
 
         $messageError = 'Pesan tidak boleh kosong.';
 
     } elseif (mb_strlen($postMessage) > 2000) {
 
         $messageError = 'Pesan maksimal 2000 karakter.';
+        $draftMessage = $postMessage;
 
     } else {
 
         try {
 
-            // 0. Ambil room customer (buat baru jika belum ada)
-            $roomId = getOrCreateRoomId($conn, (int) $customerId);
+            $roomId = getOrCreateRoomId($conn, $customerId);
 
-            // 1. Simpan pesan customer
+            // Batasi kecepatan kirim: maksimal 10 pesan per menit.
             $stmt = $conn->prepare("
-                INSERT INTO chat_messages
-                (id_room, sender_type, sender_id, message, topic, created_at)
-                VALUES (?, 'customer', ?, ?, ?, NOW())
+                SELECT COUNT(*) AS total
+                FROM chat_messages
+                WHERE id_room = ?
+                  AND sender_type = 'customer'
+                  AND created_at >= (NOW() - INTERVAL 1 MINUTE)
             ");
-
-            $stmt->bind_param("iiss", $roomId, $customerId, $postMessage, $postTopic);
+            $stmt->bind_param("i", $roomId);
             $stmt->execute();
+            $rows = statementFetchAll($stmt);
+            $stmt->close();
 
-            // 2. Cari & simpan balasan otomatis (sender_id 0 = sistem)
-            $autoReply = findAutoReply($conn, $postMessage, $postTopic);
+            if ((int) ($rows[0]['total'] ?? 0) >= 10) {
 
-            $replyStmt = $conn->prepare("
-                INSERT INTO chat_messages
-                (id_room, sender_type, sender_id, message, topic, created_at)
-                VALUES (?, 'cs', 0, ?, ?, NOW())
-            ");
+                $messageError = 'Terlalu banyak pesan dalam waktu singkat. Tunggu sebentar lalu coba lagi.';
+                $draftMessage = $postMessage;
 
-            $replyStmt->bind_param("iss", $roomId, $autoReply, $postTopic);
-            $replyStmt->execute();
+            } else {
 
-            // 3. Update waktu pesan terakhir di room
-            $roomStmt = $conn->prepare("
-                UPDATE chat_rooms
-                SET last_message_at = NOW()
-                WHERE id = ?
-            ");
+                // Jika Customer Care sudah mengambil alih, jangan kirim balasan otomatis.
+                $handledByCs = roomHandledByCs($conn, $roomId);
 
-            $roomStmt->bind_param("i", $roomId);
-            $roomStmt->execute();
+                $autoReply = null;
 
-            header("Location: chat.php?topic=" . urlencode($postTopic));
-            exit;
+                if (!$handledByCs) {
+                    // Riwayat singkat (sebelum pesan ini disimpan) sebagai konteks AI.
+                    $history = array_slice(
+                        fetchRoomMessages($conn, $roomId, $postTopic, $hasTopic, 0, 200),
+                        -6
+                    );
 
-        } catch (Exception $e) {
+                    $autoReply = findAutoReply($conn, $postMessage, $postTopic)          // 1) FAQ
+                              ?? askAi($postMessage, $topicLabel, $nama, $history)       // 2) AI
+                              ?? AUTO_REPLY_FALLBACK;                                    // 3) Fallback
+                }
 
-            $messageError = 'Pesan belum dapat disimpan. Pastikan tabel chat_messages tersedia.';
+                $autoReplyMessageId = 0;
+
+                $conn->begin_transaction();
+
+                try {
+                    $customerMessageId = insertChatMessage(
+                        $conn, $roomId, 'customer', $customerId, $postMessage, $postTopic, $hasTopic
+                    );
+
+                    if ($autoReply !== null) {
+                        $autoReplyMessageId = insertChatMessage(
+                            $conn, $roomId, 'cs', 0, $autoReply, $postTopic, $hasTopic
+                        );
+                    }
+
+                    if ($hasLastMessageAt) {
+                        $stmt = $conn->prepare("UPDATE chat_rooms SET last_message_at = NOW() WHERE id = ?");
+                        $stmt->bind_param("i", $roomId);
+                        $stmt->execute();
+                        $stmt->close();
+                    }
+
+                    $conn->commit();
+                } catch (Throwable $inner) {
+                    $conn->rollback();
+                    throw $inner;
+                }
+
+                if ($isAjaxRequest) {
+                    $messageTime = formatWaktuChat(date('Y-m-d H:i:s'));
+
+                    $responseMessages = [[
+                        'id'         => $customerMessageId,
+                        'sender'     => 'customer',
+                        'label'      => 'Anda',
+                        'is_auto'    => false,
+                        'message'    => $postMessage,
+                        'time_label' => $messageTime
+                    ]];
+
+                    if ($autoReply !== null) {
+                        $responseMessages[] = [
+                            'id'         => $autoReplyMessageId,
+                            'sender'     => 'cs',
+                            'label'      => senderLabel('cs', 0),
+                            'is_auto'    => true,
+                            'message'    => $autoReply,
+                            'time_label' => $messageTime
+                        ];
+                    }
+
+                    jsonResponse([
+                        'messages'      => $responseMessages,
+                        'handled_by_cs' => $handledByCs
+                    ]);
+                }
+
+                header("Location: chat.php?topic=" . urlencode($postTopic));
+                exit;
+            }
+
+        } catch (Throwable $e) {
+
+            error_log('Chat YESNET send failed: ' . $e->getMessage());
+            $messageError = 'Pesan belum dapat dikirim. Silakan coba lagi.';
+            $draftMessage = $postMessage;
         }
     }
 }
+
+if ($isAjaxRequest && $messageError !== '') {
+    jsonResponse(['error' => $messageError], 422);
+}
+
 
 /*
 |--------------------------------------------------------------------------
-| AMBIL RIWAYAT PESAN
+| KONTAK WHATSAPP (Customer Care / Technical Support, per wilayah)
+| Umum, Tagihan, Instalasi -> Customer Care
+| WiFi, Gangguan           -> Technical Support
 |--------------------------------------------------------------------------
 */
+
+$region  = detectRegion($customer);
+$useTech = in_array($topic, ['wifi', 'complaint'], true);
+
+$waTeam   = $useTech ? 'Technical Support' : 'Customer Care';
+$waNumber = normalizeWaNumber(WA_CONTACTS[$region][$useTech ? 'tech' : 'care']);
+$waText   = 'Halo ' . $waTeam . ' YESNET, saya ' . $nama
+          . ' (ID pelanggan #' . $customerId . '). '
+          . 'Saya ingin bertanya terkait ' . $topicLabel . '.';
+
+$waLink = $waNumber !== ''
+    ? 'https://wa.me/' . $waNumber . '?text=' . rawurlencode($waText)
+    : '';
+
+
+/*
+|--------------------------------------------------------------------------
+| RIWAYAT PESAN
+|--------------------------------------------------------------------------
+*/
+
 $messages = [];
+$lastMessageId = 0;
+$currentRoomId = null;
+$handledByCs = false;
 
-try {
+if ($chatReady) {
+    try {
+        $currentRoomId = findRoomId($conn, $customerId);
 
-    $currentRoomId = findRoomId($conn, (int) $customerId);
+        if ($currentRoomId !== null) {
+            $handledByCs = roomHandledByCs($conn, $currentRoomId);
+            $messages = fetchRoomMessages($conn, $currentRoomId, $topic, $hasTopic, 0, 200);
 
-    if ($currentRoomId !== null) {
-
-        $stmt = $conn->prepare("
-            SELECT id, sender_type AS sender, message, topic, created_at
-            FROM chat_messages
-            WHERE id_room = ?
-            AND topic = ?
-            ORDER BY created_at ASC, id ASC
-        ");
-
-        $stmt->bind_param("is", $currentRoomId, $topic);
-        $stmt->execute();
-
-        $result = $stmt->get_result();
-
-        while ($row = $result->fetch_assoc()) {
-            $messages[] = $row;
+            if (!empty($messages)) {
+                markCsMessagesRead($conn, $currentRoomId);
+            }
         }
+    } catch (Throwable $e) {
+        error_log('Chat YESNET history query failed: ' . $e->getMessage());
+        $messages = [];
     }
-
-} catch (Exception $e) {
-
-    $messages = [];
 }
 
-if (empty($messages)) {
-
-    $messages[] = [
-        'id'         => 0,
-        'sender'     => 'cs',
-        'message'    => 'Halo ' . $nama . '! 👋 Ada yang bisa kami bantu terkait layanan internet kamu?',
-        'topic'      => $topic,
-        'created_at' => date('Y-m-d H:i:s')
-    ];
+foreach ($messages as $row) {
+    $lastMessageId = max($lastMessageId, (int) $row['id']);
 }
+
+$hasMessages = !empty($messages);
 
 $quickQuestions = [
-
     'wifi' => [
         'WiFi saya tidak bisa digunakan',
         'Bagaimana cara reset WiFi?',
         'Internet saya lambat'
     ],
-
     'billing' => [
         'Berapa tagihan saya?',
         'Bagaimana cara pembayaran?',
         'Pembayaran saya belum masuk'
     ],
-
     'complaint' => [
         'Internet saya mati',
         'Koneksi sering putus',
         'Saya ingin melaporkan gangguan'
     ],
-
     'installation' => [
         'Kapan jadwal instalasi saya?',
         'Saya ingin ubah jadwal instalasi',
         'Bagaimana proses instalasi?'
     ],
-
     'general' => [
         'Saya ingin bertanya tentang layanan',
-        'Bagaimana cara menghubungi CS?',
+        'Bagaimana cara menghubungi Customer Care?',
         'Saya membutuhkan bantuan'
     ]
 ];
 
 $currentQuickQuestions = $quickQuestions[$topic] ?? $quickQuestions['general'];
 
-?>
 
+/*
+|--------------------------------------------------------------------------
+| BADGE SIDEBAR: LAPORAN GANGGUAN AKTIF
+|--------------------------------------------------------------------------
+*/
+
+if (
+    $customerId > 0 &&
+    tableExists($conn, 'complaint') &&
+    columnExists($conn, 'complaint', 'id_customer')
+) {
+    try {
+        $sqlComplaint = "SELECT COUNT(*) AS total FROM complaint WHERE id_customer = ?";
+
+        if (columnExists($conn, 'complaint', 'status')) {
+            $sqlComplaint .= " AND LOWER(status) NOT IN ('closed', 'resolved')";
+        }
+
+        $stmt = $conn->prepare($sqlComplaint);
+        $stmt->bind_param("i", $customerId);
+        $stmt->execute();
+        $rows = statementFetchAll($stmt);
+        $totalGangguan = (int) ($rows[0]['total'] ?? 0);
+        $stmt->close();
+    } catch (Throwable $e) {
+        error_log('Chat YESNET complaint count failed: ' . $e->getMessage());
+    }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| NOTIFIKASI BELUM DIBACA
+|--------------------------------------------------------------------------
+*/
+
+if (
+    tableExists($conn, 'notifications') &&
+    columnExists($conn, 'notifications', 'id_user') &&
+    columnExists($conn, 'notifications', 'dibaca')
+) {
+    try {
+        $stmt = $conn->prepare("
+            SELECT COUNT(*) AS total
+            FROM notifications
+            WHERE (id_user = ? OR id_user IS NULL)
+              AND dibaca = 0
+        ");
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $rows = statementFetchAll($stmt);
+        $unreadNotifications = (int) ($rows[0]['total'] ?? 0);
+        $stmt->close();
+    } catch (Throwable $e) {
+        error_log('Chat YESNET notification count failed: ' . $e->getMessage());
+    }
+}
+
+
+$currentPage = basename($_SERVER['PHP_SELF']);
+
+// Cache-busting CSS agar perubahan langsung terbaca browser.
+function assetVersion(string $relativePath): int
+{
+    $file = __DIR__ . '/' . $relativePath;
+
+    return is_file($file) ? (int) filemtime($file) : 1;
+}
+
+?>
 <!DOCTYPE html>
 <html lang="id">
 
@@ -314,20 +1159,18 @@ $currentQuickQuestions = $quickQuestions[$topic] ?? $quickQuestions['general'];
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f4cdb">
 
-    <title>Chat CS | Customer Portal</title>
+    <title>Bantuan / Live Chat - YESNET</title>
 
-    <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-        rel="stylesheet"
-    >
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 
-    <link
-        rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
-    >
+    <!-- Dashboard CSS (shell bersama) -->
+    <link rel="stylesheet" href="assets/css/dashboard.css?v=<?= assetVersion('assets/css/dashboard.css'); ?>">
 
-    <link rel="stylesheet" href="assets/css/chat.css">
+    <!-- Halaman Chat (harus setelah dashboard.css dan Bootstrap) -->
+    <link rel="stylesheet" href="assets/css/chat.css?v=<?= assetVersion('assets/css/chat.css'); ?>">
 
     <link rel="stylesheet" href="assets/css/portal-unified.css">
     <script defer src="assets/js/portal-ui.js"></script>
@@ -335,322 +1178,485 @@ $currentQuickQuestions = $quickQuestions[$topic] ?? $quickQuestions['general'];
 </head>
 
 
-<body>
+<body class="dashboard-page chat-page">
 
-<aside class="sidebar">
+<div class="customer-layout">
 
-    <!-- LOGO -->
-    <div class="sidebar-logo">
-
-        <div class="logo-icon">
-            <i class="bi bi-wifi"></i>
-        </div>
-
-        <div class="logo-text">
-            <h5>WiFi Management</h5>
-            <span>Customer Portal</span>
-        </div>
-
-    </div>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
 
-    <!-- MENU -->
-    <div class="sidebar-menu">
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
 
-        <p class="menu-title">MENU</p>
+        <div class="sidebar-brand">
 
-        <a href="dashboard.php" class="menu-item">
-            <i class="bi bi-grid-fill"></i>
-            <span>Dashboard</span>
-        </a>
+            <div class="brand-logo"><i class="bi bi-wifi"></i></div>
 
-        <a href="billing.php" class="menu-item">
-            <i class="bi bi-credit-card-fill"></i>
-            <span>Tagihan</span>
-        </a>
-
-        <a href="usage.php" class="menu-item">
-            <i class="bi bi-speedometer2"></i>
-            <span>Pemakaian</span>
-        </a>
-
-        <a href="speedtest.php" class="menu-item">
-            <i class="bi bi-lightning-charge-fill"></i>
-            <span>Speed Test</span>
-        </a>
-
-        <a href="complaint.php" class="menu-item">
-            <i class="bi bi-tools"></i>
-            <span>Gangguan</span>
-        </a>
-
-        <a href="network_status.php" class="menu-item">
-            <i class="bi bi-globe2"></i>
-            <span>Status Jaringan</span>
-        </a>
-
-        <a href="chat.php" class="menu-item active">
-            <i class="bi bi-chat-dots-fill"></i>
-            <span>Chat CS</span>
-        </a>
-
-        <p class="menu-title menu-account">AKUN</p>
-
-        <a href="upgrade.php" class="menu-item">
-            <i class="bi bi-arrow-up-circle-fill"></i>
-            <span>Upgrade Paket</span>
-        </a>
-
-        <a href="service_request.php" class="menu-item">
-            <i class="bi bi-plus-circle-fill"></i>
-            <span>Layanan Tambahan</span>
-        </a>
-
-        <a href="profile.php" class="menu-item">
-            <i class="bi bi-person-circle"></i>
-            <span>Profile Saya</span>
-        </a>
-
-        <a href="../logout.php" class="menu-item logout">
-            <i class="bi bi-box-arrow-right"></i>
-            <span>Logout</span>
-        </a>
-
-    </div>
-
-
-    <!-- USER -->
-    <div class="sidebar-user">
-
-        <div class="user-avatar">
-            <?= htmlspecialchars($initial) ?>
-        </div>
-
-        <div class="user-detail">
-            <strong><?= htmlspecialchars($nama) ?></strong>
-            <span>Customer</span>
-        </div>
-
-    </div>
-
-</aside>
-
-<main class="main-content">
-
-    <header class="topbar">
-
-        <div>
-            <h4>Chat Customer Service</h4>
-            <span>Hubungi CS untuk bantuan layanan internet</span>
-        </div>
-
-        <div class="topbar-right">
-
-            <div class="notification">
-                <i class="bi bi-bell"></i>
+            <div class="brand-text">
+                <strong>YESNET</strong>
+                <span>Customer Portal</span>
             </div>
 
-            <a href="profile.php" class="top-profile">
-
-                <div class="top-avatar">
-                    <?= htmlspecialchars($initial) ?>
-                </div>
-
-                <div class="top-user">
-                    <strong><?= htmlspecialchars($nama) ?></strong>
-                    <span>Customer</span>
-                </div>
-
-            </a>
+            <button type="button" class="sidebar-close" id="sidebarClose">
+                <i class="bi bi-x-lg"></i>
+            </button>
 
         </div>
 
-    </header>
 
-    <div class="content chat-page">
+        <div class="sidebar-scroll">
 
-        <div class="chat-wrapper">
+            <div class="menu-section">
 
-            <div class="chat-header">
+                <div class="menu-label">UTAMA</div>
 
-                <div class="cs-profile">
+                <a href="dashboard.php" class="menu-item <?= $currentPage === 'dashboard.php' ? 'active' : ''; ?>">
+                    <span class="menu-icon"><i class="bi bi-grid-fill"></i></span>
+                    <span class="menu-text">Dashboard</span>
+                </a>
 
-                    <div class="cs-avatar">
-                        <i class="bi bi-headset"></i>
-                        <span class="online-dot"></span>
+                <a href="usage.php" class="menu-item <?= $currentPage === 'usage.php' ? 'active' : ''; ?>">
+                    <span class="menu-icon"><i class="bi bi-router-fill"></i></span>
+                    <span class="menu-text">Internet Saya</span>
+                </a>
+
+                <a href="billing.php" class="menu-item <?= $currentPage === 'billing.php' ? 'active' : ''; ?>">
+                    <span class="menu-icon"><i class="bi bi-receipt-cutoff"></i></span>
+                    <span class="menu-text">Tagihan Saya</span>
+                </a>
+
+                <a href="billing.php#riwayat-pembayaran" class="menu-item">
+                    <span class="menu-icon"><i class="bi bi-clock-history"></i></span>
+                    <span class="menu-text">Riwayat Pembayaran</span>
+                </a>
+
+                <a href="speedtest.php" class="menu-item <?= $currentPage === 'speedtest.php' ? 'active' : ''; ?>">
+                    <span class="menu-icon"><i class="bi bi-speedometer2"></i></span>
+                    <span class="menu-text">Speed Test</span>
+                </a>
+
+                <a href="complaint.php" class="menu-item <?= $currentPage === 'complaint.php' ? 'active' : ''; ?>">
+                    <span class="menu-icon"><i class="bi bi-tools"></i></span>
+                    <span class="menu-text">Laporan Gangguan</span>
+                    <?php if ($totalGangguan > 0): ?>
+                        <span class="menu-badge"><?= $totalGangguan; ?></span>
+                    <?php endif; ?>
+                </a>
+
+                <a href="network_status.php" class="menu-item <?= $currentPage === 'network_status.php' ? 'active' : ''; ?>">
+                    <span class="menu-icon"><i class="bi bi-globe2"></i></span>
+                    <span class="menu-text">Status Jaringan</span>
+                </a>
+
+                <a href="upgrade.php" class="menu-item <?= $currentPage === 'upgrade.php' ? 'active' : ''; ?>">
+                    <span class="menu-icon"><i class="bi bi-arrow-up-circle-fill"></i></span>
+                    <span class="menu-text">Upgrade Paket</span>
+                </a>
+
+                <a href="chat.php" class="menu-item <?= $currentPage === 'chat.php' ? 'active' : ''; ?>">
+                    <span class="menu-icon"><i class="bi bi-chat-dots-fill"></i></span>
+                    <span class="menu-text">Bantuan / Live Chat</span>
+                </a>
+
+            </div>
+
+
+            <div class="menu-section">
+
+                <div class="menu-label">LAYANAN</div>
+
+                <?php if ($statusLangganan === 'belum_berlangganan'): ?>
+
+                    <a href="../paket.php?mode=direct" class="menu-item">
+                        <span class="menu-icon"><i class="bi bi-box-seam-fill"></i></span>
+                        <span class="menu-text">Pilih Paket</span>
+                    </a>
+
+                <?php elseif ($statusLangganan === 'pending'): ?>
+
+                    <a href="installation.php" class="menu-item">
+                        <span class="menu-icon"><i class="bi bi-hammer"></i></span>
+                        <span class="menu-text">Status Pemasangan</span>
+                    </a>
+
+                <?php elseif ($statusLangganan === 'active'): ?>
+
+                    <a href="upgrade.php" class="menu-item">
+                        <span class="menu-icon"><i class="bi bi-arrow-up-circle-fill"></i></span>
+                        <span class="menu-text">Upgrade Paket</span>
+                    </a>
+
+                    <a href="service_request.php" class="menu-item">
+                        <span class="menu-icon"><i class="bi bi-plus-circle-fill"></i></span>
+                        <span class="menu-text">Layanan Tambahan</span>
+                    </a>
+
+                <?php endif; ?>
+
+            </div>
+
+
+            <div class="menu-section">
+
+                <div class="menu-label">AKUN</div>
+
+                <a href="profile.php" class="menu-item">
+                    <span class="menu-icon"><i class="bi bi-person-circle"></i></span>
+                    <span class="menu-text">Profile Saya</span>
+                </a>
+
+                <a href="notifikasi.php" class="menu-item">
+                    <span class="menu-icon"><i class="bi bi-bell-fill"></i></span>
+                    <span class="menu-text">Notifikasi</span>
+                </a>
+
+                <a href="../logout.php" class="menu-item logout-item">
+                    <span class="menu-icon"><i class="bi bi-box-arrow-right"></i></span>
+                    <span class="menu-text">Logout</span>
+                </a>
+
+            </div>
+
+        </div>
+
+
+        <div class="sidebar-user">
+
+            <div class="sidebar-user-avatar"><?= e($avatar); ?></div>
+
+            <div class="sidebar-user-info">
+                <strong><?= e($nama); ?></strong>
+                <span>ID pelanggan #<?= (int) $customerId; ?></span>
+            </div>
+
+            <i class="bi bi-three-dots"></i>
+
+        </div>
+
+    </aside>
+
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+
+        <header class="topbar">
+
+            <div class="topbar-left">
+
+                <button type="button" class="mobile-menu-button" id="mobileMenuButton">
+                    <i class="bi bi-list"></i>
+                </button>
+
+                <div>
+                    <div class="breadcrumb-text">
+                        Customer Portal
+                        <span>/</span>
+                        Bantuan
                     </div>
 
-                    <div>
-                        <h5>Customer Service</h5>
-                        <span>
-                            <i class="bi bi-circle-fill"></i>
-                            Online • Siap membantu
-                        </span>
+                    <h1>Bantuan / Live Chat</h1>
+                </div>
+
+            </div>
+
+
+            <div class="topbar-right">
+
+                <button
+                    type="button"
+                    class="theme-toggle"
+                    id="themeToggle"
+                    aria-label="Aktifkan tema gelap"
+                    aria-pressed="false"
+                    title="Ganti tema"
+                >
+                    <i class="bi bi-moon-stars" id="themeToggleIcon"></i>
+                </button>
+
+                <a href="notifikasi.php" class="notification-button" title="Notifikasi">
+                    <i class="bi bi-bell"></i>
+
+                    <span class="notification-count" <?= $unreadNotifications > 0 ? '' : 'hidden'; ?>><?= $unreadNotifications > 99 ? '99+' : $unreadNotifications; ?></span>
+                </a>
+
+                <div class="top-profile">
+
+                    <div class="top-profile-avatar"><?= e($avatar); ?></div>
+
+                    <div class="top-profile-info">
+                        <strong><?= e($nama); ?></strong>
+                        <span>ID pelanggan #<?= (int) $customerId; ?></span>
                     </div>
+
+                    <i class="bi bi-chevron-down"></i>
 
                 </div>
 
-                <div class="chat-header-actions">
-                    <span class="support-badge">
-                        <i class="bi bi-clock"></i>
-                        24/7 Support
+            </div>
+
+        </header>
+
+
+        <div class="dashboard-content chat-content">
+
+            <!-- PANEL CHAT -->
+            <section class="dashboard-card chat-panel">
+
+                <div class="chat-header">
+
+                    <div class="chat-header-left">
+
+                        <div class="chat-header-icon">
+                            <i class="bi <?= e($topicIcon); ?>"></i>
+                        </div>
+
+                        <div>
+                            <span class="card-kicker">TOPIK CHAT</span>
+                            <h3><?= e($topicLabel); ?></h3>
+                        </div>
+
+                    </div>
+
+                    <span class="chat-mode-badge">
+                        <i class="bi bi-stars"></i>
+                        Asisten Virtual &amp; Customer Care
                     </span>
-                </div>
-
-            </div>
-
-            <div class="chat-body" id="chatBody">
-
-                <!-- WELCOME -->
-                <div class="chat-welcome">
-
-                    <div class="welcome-icon">
-                        <i class="bi bi-chat-heart"></i>
-                    </div>
-
-                    <h3>Halo, <?= htmlspecialchars($nama) ?> 👋</h3>
-
-                    <p>
-                        Selamat datang di Customer Service.
-                        Pilih topik atau tulis pertanyaan kamu di bawah.
-                    </p>
 
                 </div>
 
 
-                <!-- TOPIC -->
-                <div class="topic-selector">
+                <nav class="chat-topics" aria-label="Pilih topik bantuan">
 
-                    <span class="topic-title">Pilih topik bantuan</span>
+                    <?php foreach ($topicShort as $key => $label): ?>
 
-                    <div class="topic-list">
-
-                        <a
-                            href="chat.php?topic=general"
-                            class="topic-item <?= $topic === 'general' ? 'active' : '' ?>"
-                        >
-                            <i class="bi bi-chat-dots"></i>
-                            <span>Umum</span>
+                        <a href="chat.php?topic=<?= e($key); ?>" class="chat-topic <?= $topic === $key ? 'active' : ''; ?>">
+                            <i class="bi <?= e($topicIcons[$key]); ?>"></i>
+                            <?= e($label); ?>
                         </a>
 
-                        <a
-                            href="chat.php?topic=wifi"
-                            class="topic-item <?= $topic === 'wifi' ? 'active' : '' ?>"
-                        >
-                            <i class="bi bi-wifi"></i>
-                            <span>WiFi</span>
-                        </a>
+                    <?php endforeach; ?>
+
+                </nav>
+
+
+                <?php if ($waLink !== ''): ?>
+
+                    <div class="chat-wa-bar">
+
+                        <div class="chat-wa-text">
+                            <strong>Butuh respon langsung?</strong>
+                            <span>
+                                <?= $useTech
+                                    ? 'Masalah WiFi atau gangguan ditangani tim Technical Support.'
+                                    : 'Pertanyaan umum, tagihan, dan instalasi ditangani tim Customer Care.'; ?>
+                            </span>
+                        </div>
 
                         <a
-                            href="chat.php?topic=billing"
-                            class="topic-item <?= $topic === 'billing' ? 'active' : '' ?>"
+                            href="<?= e($waLink); ?>"
+                            class="chat-wa-button <?= $useTech ? 'is-tech' : 'is-care'; ?>"
+                            target="_blank"
+                            rel="noopener noreferrer"
                         >
-                            <i class="bi bi-credit-card"></i>
-                            <span>Tagihan</span>
-                        </a>
-
-                        <a
-                            href="chat.php?topic=complaint"
-                            class="topic-item <?= $topic === 'complaint' ? 'active' : '' ?>"
-                        >
-                            <i class="bi bi-tools"></i>
-                            <span>Gangguan</span>
-                        </a>
-
-                        <a
-                            href="chat.php?topic=installation"
-                            class="topic-item <?= $topic === 'installation' ? 'active' : '' ?>"
-                        >
-                            <i class="bi bi-calendar-check"></i>
-                            <span>Instalasi</span>
+                            <i class="bi bi-whatsapp"></i>
+                            Hubungi <?= e($waTeam); ?> via WhatsApp
                         </a>
 
                     </div>
 
+                <?php endif; ?>
+
+
+                <div class="chat-handler-note" id="chatHandlerNote" role="status" <?= $handledByCs ? '' : 'hidden'; ?>>
+                    <i class="bi bi-headset"></i>
+                    <span>Customer Care sedang menangani percakapan ini. Balasan akan muncul di sini.</span>
                 </div>
 
 
-                <!-- TOPIC INFO -->
-                <div class="current-topic">
+                <div class="chat-body" id="chatBody">
 
-                    <div class="current-topic-icon">
-                        <i class="bi <?= htmlspecialchars($topicIcon) ?>"></i>
-                    </div>
+                    <?php if (CHAT_RETENTION_HOURS > 0): ?>
+                        <div class="chat-retention">
+                            <i class="bi bi-clock-history"></i>
+                            Pesan otomatis hilang setelah <?= e(retentionLabel()); ?>
+                        </div>
+                    <?php endif; ?>
 
-                    <div>
-                        <span>TOPIK CHAT</span>
-                        <strong><?= htmlspecialchars($topicLabel) ?></strong>
-                    </div>
+                    <div class="chat-messages" id="chatMessages" aria-live="polite">
 
-                </div>
+                        <?php if (!$chatReady): ?>
 
+                            <div class="chat-empty" role="status">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                <strong>Fitur chat belum siap</strong>
+                                <span>
+                                    Tabel chat belum tersedia di sistem.
+                                    Silakan hubungi kami melalui kontak resmi.
+                                </span>
+                            </div>
 
-                <!-- MESSAGES -->
-                <div class="messages">
+                        <?php elseif (!$hasMessages): ?>
 
-                    <?php foreach ($messages as $msg): ?>
+                            <div class="message-row cs-message is-placeholder" id="chatPlaceholder">
 
-                        <?php $isCustomer = ($msg['sender'] ?? '') === 'customer'; ?>
+                                <div class="message-avatar"><i class="bi bi-stars"></i></div>
 
-                        <div class="message-row <?= $isCustomer ? 'customer-message' : 'cs-message' ?>">
-
-                            <?php if (!$isCustomer): ?>
-                                <div class="message-avatar">
-                                    <i class="bi bi-headset"></i>
-                                </div>
-                            <?php endif; ?>
-
-                            <div class="message-content">
-
-                                <div class="message-name">
-                                    <?= $isCustomer ? 'Anda' : 'Customer Service' ?>
-                                </div>
-
-                                <div class="message-bubble">
-                                    <?= nl2br(htmlspecialchars($msg['message'])) ?>
-                                </div>
-
-                                <div class="message-time">
-
-                                    <?= date('d M Y, H:i', strtotime($msg['created_at'])) ?>
-
-                                    <?php if ($isCustomer): ?>
-                                        <i class="bi bi-check2-all"></i>
-                                    <?php endif; ?>
-
+                                <div class="message-content">
+                                    <div class="message-name">Asisten Virtual</div>
+                                    <div class="message-bubble">Halo <?= e($nama); ?>! Ada yang bisa kami bantu terkait layanan internet kamu? Pilih topik atau tulis pesanmu, asisten virtual kami akan menjawab. Jika perlu, Customer Care siap membantu.</div>
                                 </div>
 
                             </div>
 
-                            <?php if ($isCustomer): ?>
-                                <div class="message-avatar customer-avatar">
-                                    <?= htmlspecialchars($initial) ?>
+                        <?php else: ?>
+
+                            <?php foreach ($messages as $msg): ?>
+
+                                <?php
+                                $isCustomer = (string) $msg['sender_type'] === 'customer';
+                                $isAuto = !$isCustomer && (int) $msg['sender_id'] === 0;
+                                ?>
+
+                                <div
+                                    class="message-row <?= $isCustomer ? 'customer-message' : 'cs-message'; ?>"
+                                    id="chat-message-<?= (int) $msg['id']; ?>"
+                                    data-id="<?= (int) $msg['id']; ?>"
+                                >
+
+                                    <?php if (!$isCustomer): ?>
+                                        <div class="message-avatar">
+                                            <i class="bi <?= $isAuto ? 'bi-stars' : 'bi-headset'; ?>"></i>
+                                        </div>
+                                    <?php endif; ?>
+
+                                    <div class="message-content">
+
+                                        <div class="message-name">
+                                            <?= e(senderLabel((string) $msg['sender_type'], (int) $msg['sender_id'])); ?>
+                                        </div>
+
+                                        <div class="message-bubble"><?= e($msg['message']); ?></div>
+
+                                        <div class="message-time"><?= e(formatWaktuChat($msg['created_at'])); ?></div>
+
+                                    </div>
+
+                                    <?php if ($isCustomer): ?>
+                                        <div class="message-avatar customer-avatar"><?= e($avatar); ?></div>
+                                    <?php endif; ?>
+
                                 </div>
-                            <?php endif; ?>
 
-                        </div>
+                            <?php endforeach; ?>
 
-                    <?php endforeach; ?>
+                        <?php endif; ?>
+
+                    </div>
 
                 </div>
 
 
-                <!-- QUICK QUESTIONS -->
-                <div class="quick-section">
+                <?php if ($chatReady): ?>
 
-                    <span>Pertanyaan cepat</span>
+                    <div class="chat-quick">
 
-                    <div class="quick-list">
+                        <span>Pertanyaan cepat</span>
 
-                        <?php foreach ($currentQuickQuestions as $question): ?>
+                        <div class="chat-quick-list">
 
-                            <button
-                                type="button"
-                                class="quick-question"
-                                onclick="useQuickQuestion(this)"
-                            >
-                                <?= htmlspecialchars($question) ?>
-                            </button>
+                            <?php foreach ($currentQuickQuestions as $question): ?>
+                                <button type="button" class="quick-question" data-question="<?= e($question); ?>">
+                                    <?= e($question); ?>
+                                </button>
+                            <?php endforeach; ?>
+
+                        </div>
+
+                    </div>
+
+                <?php endif; ?>
+
+
+                <div class="chat-footer">
+
+                    <?php if ($messageError !== ''): ?>
+
+                        <div class="chat-error" role="alert">
+                            <i class="bi bi-exclamation-circle"></i>
+                            <span><?= e($messageError); ?></span>
+                        </div>
+
+                    <?php endif; ?>
+
+                    <form method="POST" action="chat.php?topic=<?= e($topic); ?>" class="message-form" id="messageForm">
+
+                        <input type="hidden" name="topic" value="<?= e($topic); ?>">
+                        <input type="hidden" name="csrf_token" value="<?= e($csrfToken); ?>">
+
+                        <div class="message-input-wrapper">
+
+                            <textarea
+                                name="message"
+                                id="messageInput"
+                                rows="1"
+                                placeholder="Tulis pesan Anda..."
+                                maxlength="2000"
+                                <?= $chatReady ? '' : 'disabled'; ?>
+                            ><?= e($draftMessage); ?></textarea>
+
+                            <span class="character-count" id="characterCount">0/2000</span>
+
+                        </div>
+
+                        <button
+                            type="submit"
+                            class="send-button"
+                            id="sendButton"
+                            title="Kirim pesan"
+                            aria-label="Kirim pesan"
+                            <?= $chatReady ? '' : 'disabled'; ?>
+                        >
+                            <i class="bi bi-send-fill"></i>
+                        </button>
+
+                    </form>
+
+                    <div class="chat-footer-info">
+                        <span>
+                            <i class="bi bi-shield-check"></i>
+                            <?= CHAT_RETENTION_HOURS > 0
+                                ? 'Pesan dihapus otomatis setelah ' . e(retentionLabel())
+                                : 'Pesan tersimpan di akun kamu'; ?>
+                        </span>
+                        <span>Enter untuk kirim · Shift+Enter baris baru</span>
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- PANEL INFO -->
+            <aside class="chat-side">
+
+                <div class="dashboard-card chat-side-card">
+
+                    <div class="card-heading compact">
+                        <div>
+                            <span class="card-kicker">TOPIK</span>
+                            <h3>Bantuan Cepat</h3>
+                        </div>
+                    </div>
+
+                    <div class="chat-help-list">
+
+                        <?php foreach (['wifi', 'billing', 'complaint', 'installation'] as $key): ?>
+
+                            <a href="chat.php?topic=<?= e($key); ?>">
+                                <i class="bi <?= e($topicIcons[$key]); ?>"></i>
+                                <span><?= e($topicLabels[$key]); ?></span>
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
 
                         <?php endforeach; ?>
 
@@ -658,241 +1664,453 @@ $currentQuickQuestions = $quickQuestions[$topic] ?? $quickQuestions['general'];
 
                 </div>
 
-            </div>
 
-            <div class="chat-footer">
+                <div class="dashboard-card chat-side-card">
 
-                <?php if ($messageError): ?>
-
-                    <div class="chat-error">
-                        <i class="bi bi-exclamation-circle"></i>
-                        <?= htmlspecialchars($messageError) ?>
+                    <div class="card-heading compact">
+                        <div>
+                            <span class="card-kicker">INFORMASI</span>
+                            <h3>Cara Kerja Chat</h3>
+                        </div>
                     </div>
 
-                <?php endif; ?>
+                    <div class="chat-info-list">
 
-                <form
-                    method="POST"
-                    action="chat.php?topic=<?= urlencode($topic) ?>"
-                    class="message-form"
-                    id="messageForm"
-                >
+                        <div>
+                            <i class="bi bi-stars"></i>
+                            <span>
+                                <strong>Asisten Virtual</strong>
+                                Menjawab otomatis dari FAQ dan AI. Untuk data akun, tagihan, atau masalah lanjutan, Customer Care yang akan membantu.
+                            </span>
+                        </div>
 
-                    <input
-                        type="hidden"
-                        name="topic"
-                        value="<?= htmlspecialchars($topic) ?>"
-                    >
+                        <div>
+                            <i class="bi bi-headset"></i>
+                            <span>
+                                <strong>Tim Customer Care</strong>
+                                Pesan kamu tersimpan dan dapat dibalas oleh Customer Care. Halaman ini memeriksa balasan baru secara berkala.
+                            </span>
+                        </div>
 
-                    <div class="message-input-wrapper">
-
-                        <textarea
-                            name="message"
-                            id="messageInput"
-                            rows="1"
-                            placeholder="Tulis pesan untuk Customer Service..."
-                            maxlength="2000"
-                        ></textarea>
-
-                        <span class="character-count" id="characterCount">
-                            0/2000
-                        </span>
+                        <div>
+                            <i class="bi bi-tools"></i>
+                            <span>
+                                <strong>Gangguan teknis?</strong>
+                                Gunakan <a href="complaint.php">Laporan Gangguan</a> agar tercatat dan ditindaklanjuti Technical Support.
+                            </span>
+                        </div>
 
                     </div>
-
-                    <button
-                        type="submit"
-                        class="send-button"
-                        title="Kirim pesan"
-                    >
-                        <i class="bi bi-send-fill"></i>
-                    </button>
-
-                </form>
-
-                <div class="chat-footer-info">
-
-                    <span>
-                        <i class="bi bi-shield-check"></i>
-                        Percakapan aman dan terlindungi
-                    </span>
-
-                    <span>Tekan Enter untuk mengirim</span>
 
                 </div>
 
-            </div>
+            </aside>
 
         </div>
 
-        <aside class="chat-info-panel">
+    </main>
 
-            <!-- CS CARD -->
-            <div class="info-card">
+</div>
 
-                <div class="info-card-title">
-                    <i class="bi bi-headset"></i>
-                    <h5>Customer Service</h5>
-                </div>
-
-                <div class="cs-status">
-                    <span></span>
-                    Semua CS sedang online
-                </div>
-
-                <p>
-                    Tim kami siap membantu kamu terkait layanan internet.
-                </p>
-
-            </div>
-
-
-            <!-- HELP CARD -->
-            <div class="info-card">
-
-                <div class="info-card-title">
-                    <i class="bi bi-question-circle"></i>
-                    <h5>Bantuan</h5>
-                </div>
-
-                <div class="help-list">
-
-                    <a href="chat.php?topic=wifi">
-                        <i class="bi bi-wifi"></i>
-                        <span>Masalah WiFi</span>
-                        <i class="bi bi-chevron-right"></i>
-                    </a>
-
-                    <a href="chat.php?topic=billing">
-                        <i class="bi bi-receipt"></i>
-                        <span>Masalah Tagihan</span>
-                        <i class="bi bi-chevron-right"></i>
-                    </a>
-
-                    <a href="chat.php?topic=complaint">
-                        <i class="bi bi-tools"></i>
-                        <span>Gangguan Internet</span>
-                        <i class="bi bi-chevron-right"></i>
-                    </a>
-
-                    <a href="chat.php?topic=installation">
-                        <i class="bi bi-calendar-check"></i>
-                        <span>Instalasi</span>
-                        <i class="bi bi-chevron-right"></i>
-                    </a>
-
-                </div>
-
-            </div>
-
-
-            <!-- CONTACT -->
-            <div class="info-card contact-card">
-
-                <div class="info-card-title">
-                    <i class="bi bi-info-circle"></i>
-                    <h5>Informasi</h5>
-                </div>
-
-                <div class="contact-item">
-                    <i class="bi bi-clock"></i>
-                    <div>
-                        <strong>Layanan 24/7</strong>
-                        <span>CS tersedia setiap hari</span>
-                    </div>
-                </div>
-
-                <div class="contact-item">
-                    <i class="bi bi-lightning-charge"></i>
-                    <div>
-                        <strong>Respon Cepat</strong>
-                        <span>Kami akan merespons secepatnya</span>
-                    </div>
-                </div>
-
-                <div class="contact-item">
-                    <i class="bi bi-shield-check"></i>
-                    <div>
-                        <strong>Aman</strong>
-                        <span>Data percakapan terlindungi</span>
-                    </div>
-                </div>
-
-            </div>
-
-        </aside>
-
-    </div>
-
-</main>
 
 <script>
 
-const chatBody       = document.getElementById('chatBody');
-const messageInput   = document.getElementById('messageInput');
-const characterCount = document.getElementById('characterCount');
-const messageForm    = document.getElementById('messageForm');
+document.addEventListener('DOMContentLoaded', function () {
 
-// Scroll otomatis ke pesan terbaru
-if (chatBody) {
-    chatBody.scrollTop = chatBody.scrollHeight;
-}
+    /* MOBILE SIDEBAR */
 
-function updateCharacterCount() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    const mobileButton = document.getElementById('mobileMenuButton');
+    const closeButton = document.getElementById('sidebarClose');
 
-    if (!messageInput || !characterCount) {
-        return;
+    function openSidebar() {
+        if (!sidebar) { return; }
+        sidebar.classList.add('show');
+        if (overlay) { overlay.classList.add('show'); }
+        document.body.classList.add('sidebar-open');
     }
 
-    characterCount.textContent = messageInput.value.length + '/2000';
-}
-
-function autoResize() {
-
-    if (!messageInput) {
-        return;
+    function closeSidebar() {
+        if (!sidebar) { return; }
+        sidebar.classList.remove('show');
+        if (overlay) { overlay.classList.remove('show'); }
+        document.body.classList.remove('sidebar-open');
     }
 
-    messageInput.style.height = 'auto';
-    messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
-}
+    if (mobileButton) { mobileButton.addEventListener('click', openSidebar); }
+    if (closeButton) { closeButton.addEventListener('click', closeSidebar); }
+    if (overlay) { overlay.addEventListener('click', closeSidebar); }
 
-// Pertanyaan cepat: isi ke input
-function useQuickQuestion(button) {
 
-    if (!messageInput) {
-        return;
+    /* THEME */
+
+    const themeToggle = document.getElementById('themeToggle');
+    const themeToggleIcon = document.getElementById('themeToggleIcon');
+
+    function applyTheme(theme) {
+        const isDark = theme === 'dark';
+        document.body.dataset.theme = isDark ? 'dark' : 'light';
+
+        if (themeToggle) {
+            themeToggle.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+            themeToggle.setAttribute('aria-label', isDark ? 'Aktifkan tema terang' : 'Aktifkan tema gelap');
+        }
+
+        if (themeToggleIcon) {
+            themeToggleIcon.className = isDark ? 'bi bi-sun' : 'bi bi-moon-stars';
+        }
     }
 
-    messageInput.value = button.textContent.trim();
-    messageInput.focus();
+    try {
+        applyTheme(localStorage.getItem('yesnet-customer-theme') || 'light');
+    } catch (error) {
+        console.warn('Preferensi tema tidak dapat dibaca.', error);
+        applyTheme('light');
+    }
 
+    if (themeToggle) {
+        themeToggle.addEventListener('click', function () {
+            const nextTheme = document.body.dataset.theme === 'dark' ? 'light' : 'dark';
+            applyTheme(nextTheme);
+
+            try {
+                localStorage.setItem('yesnet-customer-theme', nextTheme);
+            } catch (error) {
+                console.warn('Preferensi tema tidak dapat disimpan.', error);
+            }
+        });
+    }
+
+
+    /* CHAT */
+
+    const chatBody = document.getElementById('chatBody');
+    const chatMessages = document.getElementById('chatMessages');
+    const chatHandlerNote = document.getElementById('chatHandlerNote');
+    const messageInput = document.getElementById('messageInput');
+    const characterCount = document.getElementById('characterCount');
+    const messageForm = document.getElementById('messageForm');
+    const sendButton = document.getElementById('sendButton');
+
+    const currentTopic = <?= json_encode($topic, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+    const chatReady = <?= $chatReady ? 'true' : 'false'; ?>;
+    const customerAvatarText = <?= json_encode($avatar, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+    let lastMessageId = <?= (int) $lastMessageId; ?>;
+
+    function setHandlerNote(isHandled) {
+        if (chatHandlerNote) { chatHandlerNote.hidden = !isHandled; }
+    }
+
+    function scrollToBottom() {
+        if (chatBody) { chatBody.scrollTop = chatBody.scrollHeight; }
+    }
+
+    function updateCharacterCount() {
+        if (messageInput && characterCount) {
+            characterCount.textContent = messageInput.value.length + '/2000';
+        }
+    }
+
+    function autoResize() {
+        if (!messageInput) { return; }
+        messageInput.style.height = 'auto';
+        messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+    }
+
+    scrollToBottom();
     updateCharacterCount();
     autoResize();
-}
 
-if (messageInput) {
-
-    messageInput.addEventListener('input', function () {
-        updateCharacterCount();
-        autoResize();
+    document.querySelectorAll('.quick-question').forEach(function (button) {
+        button.addEventListener('click', function () {
+            if (!messageInput) { return; }
+            messageInput.value = button.dataset.question || '';
+            messageInput.focus();
+            updateCharacterCount();
+            autoResize();
+        });
     });
 
-    // Enter = kirim, Shift+Enter = baris baru
-    messageInput.addEventListener('keydown', function (event) {
+    if (messageInput) {
+        messageInput.addEventListener('input', function () {
+            updateCharacterCount();
+            autoResize();
+        });
 
-        if (event.key === 'Enter' && !event.shiftKey) {
+        // Enter = kirim, Shift+Enter = baris baru.
+        messageInput.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+                event.preventDefault();
 
+                if (messageInput.value.trim() !== '' && messageForm) {
+                    messageForm.requestSubmit();
+                }
+            }
+        });
+    }
+
+    function showSendError(message) {
+        let errorMessage = document.querySelector('.chat-error');
+
+        if (!errorMessage) {
+            errorMessage = document.createElement('div');
+            errorMessage.className = 'chat-error';
+            errorMessage.setAttribute('role', 'alert');
+            messageForm.parentNode.insertBefore(errorMessage, messageForm);
+        }
+
+        while (errorMessage.firstChild) {
+            errorMessage.removeChild(errorMessage.firstChild);
+        }
+
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-exclamation-circle';
+        const text = document.createElement('span');
+        text.textContent = message;
+        errorMessage.append(icon, text);
+        errorMessage.hidden = false;
+    }
+
+    /* Indikator "mengetik" saat menunggu balasan asisten */
+
+    function showTyping() {
+        if (!chatMessages || document.getElementById('typingIndicator')) { return; }
+
+        const row = document.createElement('div');
+        row.className = 'message-row cs-message typing-row';
+        row.id = 'typingIndicator';
+
+        const avatar = document.createElement('div');
+        avatar.className = 'message-avatar';
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-stars';
+        avatar.appendChild(icon);
+
+        const content = document.createElement('div');
+        content.className = 'message-content';
+
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble typing-bubble';
+        bubble.setAttribute('aria-label', 'Asisten sedang mengetik');
+        bubble.append(
+            document.createElement('span'),
+            document.createElement('span'),
+            document.createElement('span')
+        );
+
+        content.appendChild(bubble);
+        row.append(avatar, content);
+        chatMessages.appendChild(row);
+        scrollToBottom();
+    }
+
+    function hideTyping() {
+        const typing = document.getElementById('typingIndicator');
+        if (typing) { typing.remove(); }
+    }
+
+    function appendMessage(item, deliveryStatus) {
+        if (!chatMessages) { return; }
+
+        const messageId = Number(item.id) || 0;
+        const existingMessage = document.getElementById('chat-message-' + messageId);
+
+        if (existingMessage) {
+            if (deliveryStatus) {
+                let status = existingMessage.querySelector('.message-status');
+
+                if (!status) {
+                    status = document.createElement('div');
+                    status.className = 'message-status';
+                    existingMessage.querySelector('.message-content').appendChild(status);
+                }
+
+                status.textContent = deliveryStatus;
+            }
+
+            return;
+        }
+
+        const isCustomer = item.sender === 'customer';
+
+        const row = document.createElement('div');
+        row.className = 'message-row ' + (isCustomer ? 'customer-message' : 'cs-message');
+        row.id = 'chat-message-' + messageId;
+        row.dataset.id = String(messageId);
+
+        if (!isCustomer) {
+            const avatar = document.createElement('div');
+            avatar.className = 'message-avatar';
+            const icon = document.createElement('i');
+            icon.className = 'bi ' + (item.is_auto ? 'bi-stars' : 'bi-headset');
+            avatar.appendChild(icon);
+            row.appendChild(avatar);
+        }
+
+        const content = document.createElement('div');
+        content.className = 'message-content';
+
+        const name = document.createElement('div');
+        name.className = 'message-name';
+        name.textContent = String(item.label || '');
+
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+        bubble.textContent = String(item.message || '');
+
+        const time = document.createElement('div');
+        time.className = 'message-time';
+        time.textContent = String(item.time_label || '');
+
+        content.append(name, bubble, time);
+
+        if (deliveryStatus) {
+            const status = document.createElement('div');
+            status.className = 'message-status';
+            status.textContent = deliveryStatus;
+            content.appendChild(status);
+        }
+
+        row.appendChild(content);
+
+        if (isCustomer) {
+            const avatar = document.createElement('div');
+            avatar.className = 'message-avatar customer-avatar';
+            avatar.textContent = customerAvatarText;
+            row.appendChild(avatar);
+        }
+
+        chatMessages.appendChild(row);
+    }
+
+    // Kirim melalui Fetch; tetap berfungsi tanpa JavaScript (form POST biasa).
+    if (messageForm) {
+        messageForm.addEventListener('submit', async function (event) {
             event.preventDefault();
 
-            if (this.value.trim() !== '' && messageForm) {
-                messageForm.submit();
+            if (!messageInput || messageInput.value.trim() === '' || (sendButton && sendButton.disabled)) {
+                return;
             }
-        }
-    });
-}
 
-updateCharacterCount();
+            const formData = new FormData(messageForm);
+            const previousError = document.querySelector('.chat-error');
+
+            if (previousError) { previousError.remove(); }
+            if (sendButton) { sendButton.disabled = true; }
+
+            messageInput.disabled = true;
+            messageForm.setAttribute('aria-busy', 'true');
+            showTyping();
+
+            try {
+                const response = await fetch(messageForm.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    cache: 'no-store',
+                    credentials: 'same-origin'
+                });
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(payload.error || 'Pesan gagal dikirim. Silakan coba lagi.');
+                }
+
+                hideTyping();
+
+                const placeholder = document.getElementById('chatPlaceholder');
+                if (placeholder) { placeholder.remove(); }
+
+                (Array.isArray(payload.messages) ? payload.messages : []).forEach(function (item) {
+                    appendMessage(item, item.sender === 'customer' ? 'Terkirim' : '');
+
+                    if (Number(item.id) > lastMessageId) {
+                        lastMessageId = Number(item.id);
+                    }
+                });
+
+                setHandlerNote(Boolean(payload.handled_by_cs));
+
+                messageInput.value = '';
+                updateCharacterCount();
+                autoResize();
+                scrollToBottom();
+            } catch (error) {
+                hideTyping();
+                showSendError(error.message || 'Pesan gagal dikirim. Silakan coba lagi.');
+            } finally {
+                messageInput.disabled = false;
+                messageForm.removeAttribute('aria-busy');
+
+                if (sendButton) { sendButton.disabled = false; }
+
+                messageInput.focus();
+            }
+        });
+    }
+
+
+    /* POLLING PESAN BARU */
+
+    let pollPending = false;
+
+    async function pollMessages() {
+        if (!chatReady || pollPending || document.hidden) { return; }
+
+        pollPending = true;
+
+        try {
+            const url = 'chat.php?poll=1&topic=' + encodeURIComponent(currentTopic)
+                + '&after=' + encodeURIComponent(lastMessageId);
+
+            const response = await fetch(url, {
+                headers: { Accept: 'application/json' },
+                cache: 'no-store',
+                credentials: 'same-origin'
+            });
+
+            if (!response.ok) { return; }
+
+            const payload = await response.json();
+            const items = Array.isArray(payload.messages) ? payload.messages : [];
+
+            setHandlerNote(Boolean(payload.handled_by_cs));
+
+            if (items.length === 0) { return; }
+
+            const nearBottom = chatBody
+                ? chatBody.scrollHeight - chatBody.scrollTop - chatBody.clientHeight < 120
+                : true;
+
+            const placeholder = document.getElementById('chatPlaceholder');
+            if (placeholder) { placeholder.remove(); }
+
+            items.forEach(function (item) {
+                if (Number(item.id) > lastMessageId) {
+                    appendMessage(item);
+                    lastMessageId = Number(item.id);
+                }
+            });
+
+            if (nearBottom) { scrollToBottom(); }
+        } catch (error) {
+            console.error('Pembaruan chat gagal:', error);
+        } finally {
+            pollPending = false;
+        }
+    }
+
+    window.setInterval(pollMessages, 5000);
+
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) { pollMessages(); }
+    });
+
+});
 
 </script>
 
