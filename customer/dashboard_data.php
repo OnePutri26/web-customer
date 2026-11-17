@@ -170,13 +170,15 @@ try {
         'due_date'  => null,
     ];
 
-    if (dashboardDataHasColumns($conn, 'tagihan', ['id_customer'])) {
+    if (dashboardDataHasColumns($conn, 'tagihan', ['id_customer', 'status'])) {
         $invoice['available'] = true;
 
-        $sql = 'SELECT * FROM tagihan WHERE id_customer = ?';
-        if (dashboardDataColumnExists($conn, 'tagihan', 'status')) {
-            $sql .= " AND LOWER(status) IN ('unpaid', 'pending', 'belum bayar', 'belum dibayar')";
-        }
+        $sql = "SELECT * FROM tagihan
+                WHERE id_customer = ?
+                  AND LOWER(TRIM(status)) IN (
+                      'unpaid', 'pending', 'overdue', 'belum bayar', 'belum dibayar',
+                      'belum_bayar', 'terlambat', 'jatuh tempo'
+                  )";
         if (dashboardDataColumnExists($conn, 'tagihan', 'jatuh_tempo')) {
             $sql .= ' ORDER BY jatuh_tempo ASC';
         }

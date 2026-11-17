@@ -1,5 +1,4 @@
 @import url('theme.css');
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 /* =========================================================
    YESNET CUSTOMER DASHBOARD
@@ -636,6 +635,7 @@ button:focus-visible {
 
 .active-pill { padding: 5px 10px; border-radius: 20px; color: #159957; background: #ecfdf3; font-size: 11px; font-weight: 800; }
 .active-pill i { margin-right: 3px; }
+.active-pill.status-unknown { color: #64748b; background: #eef2f7; }
 .active-pill.status-pending { color: #b45309; background: #fff7e6; }
 .active-pill.status-suspended,
 .active-pill.status-terminated { color: #b42318; background: #fff0ef; }
@@ -1008,6 +1008,58 @@ button:focus-visible {
 .dashboard-page[data-theme="dark"] .top-profile:hover { background: #172437; }
 .dashboard-page[data-theme="dark"] .package-visual { background: #172437; }
 .dashboard-page[data-theme="dark"] .stat-tag { background: #1b2a40; color: #9cadc2; }
+.dashboard-page[data-theme="dark"] .stat-tag.green,
+.dashboard-page[data-theme="dark"] .active-pill,
+.dashboard-page[data-theme="dark"] .live-status.is-live,
+.dashboard-page[data-theme="dark"] .network-check.network-normal { color: #83d6a5; background: #20352d; }
+.dashboard-page[data-theme="dark"] .live-status.is-historical { color: #cbd7e8; background: #26354a; }
+.dashboard-page[data-theme="dark"] .status-strip-icon.active { color: #83d6a5; background: #20352d; }
+.dashboard-page[data-theme="dark"] .status-strip-icon.pending,
+.dashboard-page[data-theme="dark"] .state-icon { color: #f2c46d; background: #3a3020; }
+.dashboard-page[data-theme="dark"] .status-strip-icon.suspended,
+.dashboard-page[data-theme="dark"] .status-strip-icon.terminated,
+.dashboard-page[data-theme="dark"] .terminated-state .state-icon,
+.dashboard-page[data-theme="dark"] .network-check.network-outage { color: #ffaaa4; background: #3b252b; }
+.dashboard-page[data-theme="dark"] .unknown-state .state-icon,
+.dashboard-page[data-theme="dark"] .status-strip-icon.unknown { color: #cbd7e8; background: #26354a; }
+.dashboard-page[data-theme="dark"] .network-check.network-maintenance { color: #fff; background: #a56a11; }
+.dashboard-page[data-theme="dark"] .active-pill.status-unknown,
+.dashboard-page[data-theme="dark"] .live-status.is-unavailable { color: #cbd7e8; background: #26354a; }
+.dashboard-page[data-theme="dark"] .active-pill.status-pending,
+.dashboard-page[data-theme="dark"] .network-unavailable { color: #f2c46d; background: #3a3020; }
+.dashboard-page[data-theme="dark"] .active-pill.status-suspended,
+.dashboard-page[data-theme="dark"] .active-pill.status-terminated,
+.dashboard-page[data-theme="dark"] .network-unavailable.network-status-outage { color: #ffaaa4; background: #3b252b; }
+.dashboard-page[data-theme="dark"] .network-unavailable.network-status-normal { color: #83d6a5; background: #20352d; }
+.dashboard-page[data-theme="dark"] .network-unavailable.network-status-maintenance { color: #f2c46d; background: #3a3020; }
+.dashboard-page[data-theme="dark"] .payment-badge.success { color: #83d6a5; background: #20352d; }
+.dashboard-page[data-theme="dark"] .payment-badge.warning { color: #f2c46d; background: #3a3020; }
+.dashboard-page[data-theme="dark"] .status-strip-icon.blue,
+.dashboard-page[data-theme="dark"] .stat-icon.blue,
+.dashboard-page[data-theme="dark"] .quick-icon.blue,
+.dashboard-page[data-theme="dark"] .notification-icon,
+.dashboard-page[data-theme="dark"] .empty-icon { color: #9fc2ff; background: #1b2f4d; }
+.dashboard-page[data-theme="dark"] .status-strip-icon.green,
+.dashboard-page[data-theme="dark"] .stat-icon.green,
+.dashboard-page[data-theme="dark"] .quick-icon.green { color: #83d6a5; background: #20352d; }
+.dashboard-page[data-theme="dark"] .status-strip-icon.purple,
+.dashboard-page[data-theme="dark"] .stat-icon.purple,
+.dashboard-page[data-theme="dark"] .quick-icon.purple { color: #c0a8ff; background: #302748; }
+.dashboard-page[data-theme="dark"] .stat-icon.orange,
+.dashboard-page[data-theme="dark"] .quick-icon.orange { color: #f2c46d; background: #3a3020; }
+.dashboard-page[data-theme="dark"] .package-speed strong,
+.dashboard-page[data-theme="dark"] .package-price strong { color: #9fc2ff; }
+.dashboard-page[data-theme="dark"] .package-speed span,
+.dashboard-page[data-theme="dark"] .package-price span,
+.dashboard-page[data-theme="dark"] .stat-value small,
+.dashboard-page[data-theme="dark"] .payment-empty span { color: #9cadc2; }
+.dashboard-page[data-theme="dark"] .payment-empty strong { color: #d5deeb; }
+.dashboard-page[data-theme="dark"] .state-step strong { color: #d5deeb; }
+.dashboard-page[data-theme="dark"] .state-step.active { border-color: #37517a; background: #1b2f4d; }
+.dashboard-page[data-theme="dark"] .state-step.active > span { color: #9fc2ff; background: #243d60; }
+.dashboard-page[data-theme="dark"] .state-step.done > span { color: #fff; background: #16834b; }
+.dashboard-page[data-theme="dark"] .state-step > span { color: #9cadc2; background: #26354a; }
+.dashboard-page[data-theme="dark"] .network-check.network-unknown { color: #f2c46d; background: #3a3020; }
 .dashboard-page[data-theme="dark"] .pay-button { background: #3b82f6; }
 .dashboard-page[data-theme="dark"] .stat-bottom a,
 .dashboard-page[data-theme="dark"] .view-all,

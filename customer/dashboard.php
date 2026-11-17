@@ -1,11 +1,10 @@
 <?php
-session_start();
-require_once "../config/auth.php";
-requireLogin();
-require_once "../config/database.php";
+declare(strict_types=1);
+
+require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../config/database.php';
 requireRole('customer');
 date_default_timezone_set('Asia/Jakarta');
-mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 /* ======================== HELPER ======================== */
 
@@ -140,29 +139,21 @@ function normalizeSubscriptionStatus($status): string
 {
     $status = strtolower(trim((string) $status));
 
-    $map = [
-        'active'             => ['active', 'aktif'],
-        'pending'            => ['pending', 'proses', 'menunggu_pemasangan', 'menunggu pemasangan', 'menunggu_aktivasi', 'menunggu aktivasi'],
-        'suspended'          => ['suspended', 'ditangguhkan'],
-        'terminated'         => ['terminated', 'berakhir', 'nonaktif'],
-        'belum_berlangganan' => ['belum_berlangganan', 'belum berlangganan', 'not_subscribed', 'not subscribed'],
-    ];
-
-    foreach ($map as $normalized => $aliases) {
-        if (in_array($status, $aliases, true)) {
-            return $normalized;
-        }
+    if (in_array($status, ['terisolir', 'isolated'], true)) {
+        return 'suspended';
     }
-    return 'unknown';
+
+    if (in_array($status, ['berhenti berlangganan', 'dihentikan', 'berakhir', 'nonaktif'], true)) {
+        return 'terminated';
+    }
+
+    $normalized = normalizeCustomerStatus($status);
+    return $normalized === 'aktif' ? 'active' : $normalized;
 }
 
 /* ======================== CEK LOGIN ======================== */
 
 $userId = (int) ($_SESSION['user_id'] ?? 0);
-if ($userId <= 0) {
-    header("Location: ../login.php");
-    exit;
-}
 
 /* ======================== DEFAULT DATA ======================== */
 
@@ -196,13 +187,15 @@ $bandwidthDataUpdatedAt = null;
 /* ======================== CUSTOMER + PAKET ======================== */
 
 if (!tableExists($conn, 'customers')) {
-    die("Tabel customers tidak ditemukan.");
+    error_log('Dashboard YESNET: customer table is unavailable.');
+    http_response_code(503);
+    die("Dashboard sementara tidak tersedia. Silakan coba kembali nanti.");
 }
 
-if (!columnExists($conn, 'customers', 'user_id')) {
-    error_log("Dashboard YESNET: kolom customers.user_id tidak ditemukan.");
-    http_response_code(500);
-    die("Struktur tabel customers belum sesuai. Kolom user_id tidak ditemukan.");
+if (!columnExists($conn, 'customers', 'user_id') || !columnExists($conn, 'customers', 'id')) {
+    error_log('Dashboard YESNET: required customer columns are unavailable.');
+    http_response_code(503);
+    die("Dashboard sementara tidak tersedia. Silakan coba kembali nanti.");
 }
 
 $paketColumns = [
@@ -217,6 +210,13 @@ $paketTableAvailable = tableExists($conn, 'paket_wifi')
     && columnExists($conn, 'customers', 'paket_id');
 
 $joinPaket = $paketTableAvailable ? "LEFT JOIN paket_wifi p ON p.id = c.paket_id" : "";
+$customerSelect = ['c.id'];
+$customerStatusAvailable = columnExists($conn, 'customers', 'status_langganan');
+foreach (['paket_id', 'status_langganan', 'nama', 'name'] as $column) {
+    if (columnExists($conn, 'customers', $column)) {
+        $customerSelect[] = "c.`{$column}`";
+    }
+}
 $selectPaket = [];
 foreach ($paketColumns as $column => $alias) {
     $selectPaket[] = ($paketTableAvailable && columnExists($conn, 'paket_wifi', $column))
@@ -227,7 +227,7 @@ foreach ($paketColumns as $column => $alias) {
 try {
     $rows = queryRows(
         $conn,
-        "SELECT c.*, " . implode(', ', $selectPaket) . "
+        "SELECT " . implode(', ', array_merge($customerSelect, $selectPaket)) . "
          FROM customers c {$joinPaket}
          WHERE c.user_id = ? LIMIT 1",
         'i',
@@ -236,8 +236,8 @@ try {
 } catch (Throwable $e) {
     error_log("Dashboard YESNET customer query error: " . $e->getMessage()
         . " | file: " . $e->getFile() . " | line: " . $e->getLine());
-    http_response_code(500);
-    die("Data dashboard gagal dimuat. Periksa struktur tabel customers dan paket_wifi atau error log hosting.");
+    http_response_code(503);
+    die("Data dashboard sementara tidak tersedia. Silakan coba kembali nanti.");
 }
 
 if ($rows === []) {
@@ -253,7 +253,9 @@ if ($nama === '') {
     $nama = 'Customer';
 }
 
-$statusLangganan = normalizeSubscriptionStatus($customer['status_langganan'] ?? '');
+$statusLangganan = $customerStatusAvailable
+    ? normalizeSubscriptionStatus($customer['status_langganan'] ?? '')
+    : 'unknown';
 
 if (!empty($customer['nama_paket'])) {
     $paketNama = $customer['nama_paket'];
@@ -314,6 +316,9 @@ $statusMap = [
     'belum_berlangganan' => ['Belum Berlangganan', 'pending', 'bi-cart3'],
     'unknown'            => ['Status Belum Tersedia', 'unknown', 'bi-question-circle'],
 ];
+if (!isset($statusMap[$statusLangganan])) {
+    $statusLangganan = 'unknown';
+}
 [$statusLabel, $statusClass, $statusIcon] = $statusMap[$statusLangganan];
 
 /* ======================== TOTAL INSTALASI ======================== */
@@ -386,7 +391,10 @@ if (
     $tagihanDataAvailable = true;
 
     $sql = "SELECT * FROM tagihan WHERE id_customer = ?";
-    $sql .= " AND LOWER(status) IN ('unpaid', 'pending', 'belum bayar', 'belum dibayar')";
+    $sql .= " AND LOWER(TRIM(status)) IN (
+        'unpaid', 'pending', 'overdue', 'belum bayar', 'belum dibayar',
+        'belum_bayar', 'terlambat', 'jatuh tempo'
+    )";
     if (columnExists($conn, 'tagihan', 'jatuh_tempo')) {
         $sql .= " ORDER BY jatuh_tempo ASC";
     }
@@ -514,53 +522,11 @@ $quickServices = [
     <meta name="theme-color" content="#0f4cdb">
     <title>Dashboard Pelanggan - YESNET</title>
 
-<<<<<<< HEAD
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
-    <meta
-        name="theme-color"
-        content="#0f4cdb"
-    >
-
-    <title>
-        Dashboard Pelanggan - YESNET
-    </title>
-
-
-    <!-- Bootstrap -->
-
-    <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-        rel="stylesheet"
-    >
-
-
-    <!-- Bootstrap Icons -->
-
-    <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
-        rel="stylesheet"
-    >
-
-
-    <!-- Dashboard CSS -->
-
-    <link
-        rel="stylesheet"
-        href="assets/css/dashboard.css"
-    >
-
-    <link rel="stylesheet" href="assets/css/portal-unified.css">
-    <script defer src="assets/js/portal-ui.js"></script>
-
-=======
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/dashboard.css">
->>>>>>> 087063f454993fe1c671edb6d2cef597f3d93c20
+    <link rel="stylesheet" href="assets/css/portal-unified.css">
+    <script defer src="assets/js/portal-ui.js"></script>
 </head>
 
 <body class="dashboard-page">
@@ -760,7 +726,7 @@ $quickServices = [
                     </div>
 
                     <a id="dashboardPayButton" class="pay-button"
-                       href="billing.php?bayar=<?= $tagihanId; ?>"
+                       href="../pembayaran.php?tagihan=<?= $tagihanId; ?>"
                        <?= ($tagihanId > 0 && !empty($tagihan)) ? '' : 'hidden'; ?>>
                         <i class="bi bi-credit-card-2-front-fill"></i> Bayar online
                     </a>
@@ -943,7 +909,11 @@ $quickServices = [
                                     if ($paymentStatus === '') {
                                         $paymentStatus = 'Tidak diketahui';
                                     }
-                                    $isSuccess = in_array(strtolower($paymentStatus), ['paid', 'lunas', 'success', 'berhasil'], true);
+                                    $isSuccess = in_array(
+                                        strtolower($paymentStatus),
+                                        ['paid', 'lunas', 'success', 'berhasil', 'settlement', 'capture'],
+                                        true
+                                    );
                                     ?>
                                     <div class="payment-row">
                                         <span data-label="Tanggal"><?= formatTanggal($paymentDate); ?></span>
@@ -1627,7 +1597,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const canPay = Boolean(invoice.has_open && invoice.id > 0);
             payButton.hidden = !canPay;
             if (canPay) {
-                payButton.href = 'billing.php?bayar=' + encodeURIComponent(invoice.id);
+                payButton.href = '../pembayaran.php?tagihan=' + encodeURIComponent(invoice.id);
             }
         }
     }
