@@ -2,46 +2,12 @@
 <?php
 declare(strict_types=1);
 
-<<<<<<< HEAD
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-=======
->>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
 /*
 |--------------------------------------------------------------------------
 | YESNET ADMIN SESSION MANAGEMENT
 |--------------------------------------------------------------------------
 | Session khusus aplikasi internal YESNET.
 | Tidak mengubah session Customer.
-<<<<<<< HEAD
-|--------------------------------------------------------------------------
-*/
-
-/*
-|--------------------------------------------------------------------------
-| SESSION PATH
-|--------------------------------------------------------------------------
-*/
-
-function adminSessionPath(): string
-{
-    $scriptName = str_replace(
-        '\\',
-        '/',
-        (string) ($_SERVER['SCRIPT_NAME'] ?? '')
-    );
-
-    $adminPosition = strpos($scriptName, '/admin/');
-
-    $basePath = $adminPosition === false
-        ? ''
-        : substr($scriptName, 0, $adminPosition);
-
-    return rtrim($basePath, '/') . '/admin/';
-}
-
-=======
 |
 | PENTING:
 | - Jangan memanggil session_start() di tempat lain sebelum file ini.
@@ -116,7 +82,6 @@ function adminIsHttps(): bool
     return strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
 }
 
->>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
 /*
 |--------------------------------------------------------------------------
 | START SESSION
@@ -127,11 +92,7 @@ function adminStartSession(): void
 {
     if (session_status() === PHP_SESSION_ACTIVE) {
 
-<<<<<<< HEAD
-        if (session_name() !== 'YESNET_ADMIN_SESSID') {
-=======
         if (session_name() !== ADMIN_SESSION_NAME) {
->>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
             http_response_code(500);
             exit('Sesi administrator tidak dapat diinisialisasi dengan aman. '
                 . 'Ada session_start() lain yang berjalan sebelum session.php.');
@@ -145,9 +106,6 @@ function adminStartSession(): void
         exit('Sesi administrator tidak tersedia.');
     }
 
-<<<<<<< HEAD
-    session_name('YESNET_ADMIN_SESSID');
-=======
     if (headers_sent($file, $line)) {
         http_response_code(500);
         exit('Sesi administrator tidak dapat dimulai: output sudah dikirim '
@@ -155,7 +113,6 @@ function adminStartSession(): void
     }
 
     session_name(ADMIN_SESSION_NAME);
->>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
 
     ini_set('session.use_strict_mode', '1');
     ini_set('session.use_only_cookies', '1');
@@ -163,16 +120,9 @@ function adminStartSession(): void
 
     session_set_cookie_params([
         'lifetime' => 0,
-<<<<<<< HEAD
-        'path' => adminSessionPath(),
-        'domain' => '',
-        'secure' => isset($_SERVER['HTTPS'])
-            && strtolower((string) $_SERVER['HTTPS']) !== 'off',
-=======
         'path'     => adminSessionPath(),
         'domain'   => '',
         'secure'   => adminIsHttps(),
->>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
         'httponly' => true,
         'samesite' => 'Lax',
     ]);
@@ -204,14 +154,6 @@ function adminStartSession(): void
 
 /*
 |--------------------------------------------------------------------------
-<<<<<<< HEAD
-| CLEAR SESSION
-|--------------------------------------------------------------------------
-*/
-
-function adminClearSession(): void
-{
-=======
 | LOGIN / LOGOUT HELPER
 |--------------------------------------------------------------------------
 | Panggil adminLogin() dari login.php setelah password terverifikasi.
@@ -241,7 +183,6 @@ function adminClearSession(): void
         return;
     }
 
->>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
     $_SESSION = [];
 
     if (ini_get('session.use_cookies')) {
@@ -252,14 +193,6 @@ function adminClearSession(): void
             session_name(),
             '',
             [
-<<<<<<< HEAD
-                'expires' => time() - 42000,
-                'path' => $params['path'],
-                'domain' => $params['domain'],
-                'secure' => $params['secure'],
-                'httponly' => $params['httponly'],
-                'samesite' => $params['samesite'] ?? 'Lax',
-=======
                 'expires'  => time() - 42000,
                 'path'     => $params['path'],
                 'domain'   => $params['domain'],
@@ -268,7 +201,6 @@ function adminClearSession(): void
                 'samesite' => ($params['samesite'] ?? '') !== ''
                     ? $params['samesite']
                     : 'Lax',
->>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
             ]
         );
     }
@@ -284,11 +216,8 @@ function adminClearSession(): void
 
 function adminRequireLogin(): void
 {
-<<<<<<< HEAD
-=======
     adminStartSession();
 
->>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
     $userId = $_SESSION['user_id'] ?? null;
 
     $role = strtolower(
@@ -348,28 +277,20 @@ function adminPermissionsForRole(string $role): array
 |--------------------------------------------------------------------------
 | CHECK PERMISSION
 |--------------------------------------------------------------------------
-<<<<<<< HEAD
-=======
 | Izin selalu dihitung dari role di session, sehingga tidak bergantung
 | pada login.php yang harus mengisi $_SESSION['admin_permissions'].
 |--------------------------------------------------------------------------
->>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
 */
 
 function adminHasPermission(string $permission): bool
 {
     $role = (string) ($_SESSION['role'] ?? '');
 
-<<<<<<< HEAD
-    return is_array($permissions)
-        && in_array($permission, $permissions, true);
-=======
     $permissions = adminPermissionsForRole($role);
 
     $_SESSION['admin_permissions'] = $permissions;
 
     return in_array($permission, $permissions, true);
->>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
 }
 
 function adminRequirePermission(string $permission): void
@@ -384,49 +305,13 @@ function adminRequirePermission(string $permission): void
 
 /*
 |--------------------------------------------------------------------------
-<<<<<<< HEAD
-| LOGIN URL
-|--------------------------------------------------------------------------
-*/
-
-function adminLoginUrl(): string
-{
-    $scriptName = str_replace(
-        '\\',
-        '/',
-        (string) ($_SERVER['SCRIPT_NAME'] ?? '')
-    );
-
-    $adminPosition = strpos($scriptName, '/admin/');
-
-    $basePath = $adminPosition === false
-        ? ''
-        : substr($scriptName, 0, $adminPosition);
-
-    return rtrim($basePath, '/') . '/admin/login.php';
-}
-
-/*
-|--------------------------------------------------------------------------
-=======
->>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
 | REQUEST PERMISSION
 |--------------------------------------------------------------------------
 */
 
 function adminPermissionForRequest(): string
 {
-<<<<<<< HEAD
-    $scriptName = strtolower(
-        str_replace(
-            '\\',
-            '/',
-            (string) ($_SERVER['SCRIPT_NAME'] ?? '')
-        )
-    );
-=======
     $scriptName = strtolower(adminScriptName());
->>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
 
     $adminPosition = strpos($scriptName, '/admin/');
 
@@ -456,7 +341,9 @@ function adminPermissionForRequest(): string
 
     if (
         $route === 'complaints.php' ||
-        $route === 'update_complaint.php'
+        $route === 'update_complaint.php' ||
+        $route === 'complaint_detail.php' ||
+        $route === 'complaint_attachment.php'
     ) {
         return 'complaints.manage';
     }
@@ -466,10 +353,6 @@ function adminPermissionForRequest(): string
     }
 
     /*
-<<<<<<< HEAD
-    | Route di bawah sudah disesuaikan.
-=======
->>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
     | $route tidak diawali dengan admin/.
     */
 
@@ -501,14 +384,7 @@ function adminPermissionForRequest(): string
         return 'customers.view';
     }
 
-<<<<<<< HEAD
-    if (
-        str_starts_with($route, 'pengaduan/') ||
-        str_starts_with($route, 'admin/pengaduan/')
-    ) {
-=======
     if (str_starts_with($route, 'pengaduan/')) {
->>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd
         return 'tickets.manage';
     }
 
@@ -550,8 +426,4 @@ function adminVerifyCsrf(mixed $token): bool
 |--------------------------------------------------------------------------
 */
 
-<<<<<<< HEAD
 adminStartSession();
-=======
-adminStartSession();
->>>>>>> 2e8e65c84bbb867b5db25bcb10d50c4c51c6f3cd

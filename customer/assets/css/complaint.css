@@ -1,19 +1,3 @@
-/* =========================================================
-   COMPLAINT (Laporan Gangguan)
-   ---------------------------------------------------------
-   Dipakai oleh complaint.php dan complaint_create.php.
-   Melengkapi dashboard.css, jadi dashboard.css harus dimuat
-   lebih dulu. dashboard.css sudah meng-import theme.css.
-
-   Semua class khusus halaman ini memakai prefix "cp-".
-   Jangan menambah reset global (* { }) atau style body di sini.
-========================================================= */
-
-
-/* =========================================================
-   HEADER + TOMBOL
-========================================================= */
-
 .cp-head {
     margin-top: 0;
     gap: 12px;

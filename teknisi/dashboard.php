@@ -6,6 +6,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../inc/complaint.php';
 requireRole('teknisi');
 
 $namaTeknisi = trim((string) ($_SESSION['nama'] ?? ''));
@@ -24,6 +25,91 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!csrf_ok()) {
         $error = 'Sesi kedaluwarsa. Muat ulang halaman lalu coba lagi.';
+    } elseif ($action === 'complaint_update') {
+        $complaintId = filter_input(INPUT_POST, 'complaint_id', FILTER_VALIDATE_INT);
+        $statusInput = $_POST['complaint_status'] ?? '';
+        $noteInput = $_POST['complaint_note'] ?? '';
+        $complaintStatus = is_string($statusInput) ? $statusInput : '';
+        $complaintNote = is_string($noteInput) ? trim($noteInput) : '';
+        $noteLength = preg_match_all('/./us', $complaintNote);
+        $technicianId = (int) $_SESSION['user_id'];
+
+        if (
+            !is_string($statusInput) || !is_string($noteInput)
+            || !$complaintId || $complaintId < 1
+            || !in_array($complaintStatus, ['in_progress', 'waiting_confirmation', 'resolved'], true)
+            || $noteLength === false || $noteLength > 2000
+        ) {
+            $error = 'Data penanganan laporan tidak valid.';
+        } else {
+            try {
+                $conn->begin_transaction();
+                $stmt = $conn->prepare("
+                    SELECT status
+                    FROM complaint
+                    WHERE id = ? AND assigned_user_id = ?
+                    LIMIT 1
+                    FOR UPDATE
+                ");
+                $stmt->bind_param('ii', $complaintId, $technicianId);
+                $stmt->execute();
+                $assignedComplaint = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if (!$assignedComplaint) {
+                    throw new InvalidArgumentException('Laporan tidak ditugaskan kepada akun Anda.');
+                }
+
+                $oldStatus = yesnetComplaintStatus((string) $assignedComplaint['status']);
+                $stmt = $conn->prepare('UPDATE complaint SET status = ? WHERE id = ? AND assigned_user_id = ?');
+                $stmt->bind_param('sii', $complaintStatus, $complaintId, $technicianId);
+                $stmt->execute();
+                $stmt->close();
+
+                $technicianName = trim((string) ($_SESSION['nama'] ?? 'Teknisi')) ?: 'Teknisi';
+                if ($oldStatus !== $complaintStatus) {
+                    yesnetComplaintAddHistory(
+                        $conn,
+                        $complaintId,
+                        $technicianId,
+                        $technicianName,
+                        $complaintStatus === 'resolved' ? 'resolved' : 'status_changed',
+                        $complaintStatus === 'resolved'
+                            ? 'Teknisi menyelesaikan laporan.'
+                            : 'Teknisi mengubah status menjadi ' . YESNET_COMPLAINT_STATUSES[$complaintStatus] . '.',
+                        $oldStatus,
+                        $complaintStatus
+                    );
+                }
+                if ($complaintNote !== '') {
+                    yesnetComplaintAddHistory(
+                        $conn,
+                        $complaintId,
+                        $technicianId,
+                        $technicianName,
+                        'note',
+                        $complaintNote
+                    );
+                }
+                $conn->commit();
+                header('Location: dashboard.php', true, 303);
+                exit;
+            } catch (InvalidArgumentException $e) {
+                try {
+                    $conn->rollback();
+                } catch (Throwable $rollbackError) {
+                    error_log('Technician complaint rollback failed: ' . $rollbackError->getMessage());
+                }
+                $error = $e->getMessage();
+            } catch (Throwable $e) {
+                try {
+                    $conn->rollback();
+                } catch (Throwable $rollbackError) {
+                    error_log('Technician complaint rollback failed: ' . $rollbackError->getMessage());
+                }
+                error_log('Technician complaint update failed: ' . $e->getMessage());
+                $error = 'Laporan gagal diperbarui. Pastikan laporan masih ditugaskan kepada Anda.';
+            }
+        }
     } elseif (in_array($action, ['approve_expansion', 'reject_expansion'], true)) {
         $surveyLength = preg_match_all('/./us', $surveyNote);
         if (!$coverageRequestId || $surveyLength === false || $surveyLength > 500) {
@@ -136,6 +222,21 @@ $coverageRequests = $conn->query("
     ORDER BY created_at ASC
 ");
 
+$technicianId = (int) $_SESSION['user_id'];
+$stmt = $conn->prepare("
+    SELECT c.id, c.complaint_code, c.category, c.subject, c.description, c.status,
+           cu.nama AS customer_name,
+           EXISTS(SELECT 1 FROM complaint_attachments a WHERE a.complaint_id = c.id) AS has_attachment
+    FROM complaint c
+    JOIN customers cu ON cu.id = c.id_customer
+    WHERE c.assigned_user_id = ?
+      AND c.status NOT IN ('resolved', 'rejected')
+    ORDER BY c.created_at ASC
+");
+$stmt->bind_param('i', $technicianId);
+$stmt->execute();
+$assignedComplaints = $stmt->get_result();
+
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -198,6 +299,44 @@ $coverageRequests = $conn->query("
             </tbody>
         </table>
     </div>
+
+    <section class="mt-5">
+        <h2 class="h4 mb-3">Complaint yang Ditugaskan</h2>
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered align-middle">
+                <thead><tr><th>Tiket</th><th>Pelanggan</th><th>Gangguan</th><th>Status</th><th>Perkembangan</th></tr></thead>
+                <tbody>
+                <?php if ($assignedComplaints->num_rows === 0): ?>
+                    <tr><td colspan="5" class="text-center">Belum ada complaint aktif yang ditugaskan kepada Anda.</td></tr>
+                <?php else: while ($assignedComplaint = $assignedComplaints->fetch_assoc()): ?>
+                    <?php $currentComplaintStatus = yesnetComplaintStatus((string) $assignedComplaint['status']); ?>
+                    <tr>
+                        <td><?= e($assignedComplaint['complaint_code']) ?></td>
+                        <td><?= e($assignedComplaint['customer_name']) ?></td>
+                        <td><strong><?= e($assignedComplaint['subject']) ?></strong><br><small><?= e(YESNET_COMPLAINT_CATEGORIES[$assignedComplaint['category']] ?? $assignedComplaint['category']) ?></small><br><?= e($assignedComplaint['description']) ?>
+                            <?php if ((int) $assignedComplaint['has_attachment'] === 1): ?><br><a href="complaint_attachment.php?id=<?= (int) $assignedComplaint['id'] ?>" target="_blank" rel="noopener">Lihat foto bukti</a><?php endif; ?>
+                        </td>
+                        <td><?= e(YESNET_COMPLAINT_STATUSES[$currentComplaintStatus]) ?></td>
+                        <td style="min-width:260px">
+                            <form method="post" class="d-grid gap-2">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="action" value="complaint_update">
+                                <input type="hidden" name="complaint_id" value="<?= (int) $assignedComplaint['id'] ?>">
+                                <select class="form-select form-select-sm" name="complaint_status" required>
+                                    <?php foreach (['in_progress', 'waiting_confirmation', 'resolved'] as $allowedComplaintStatus): ?>
+                                        <option value="<?= e($allowedComplaintStatus) ?>" <?= $currentComplaintStatus === $allowedComplaintStatus ? 'selected' : '' ?>><?= e(YESNET_COMPLAINT_STATUSES[$allowedComplaintStatus]) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <textarea class="form-control form-control-sm" name="complaint_note" maxlength="2000" rows="2" placeholder="Catatan penanganan untuk pelanggan"></textarea>
+                                <button class="btn btn-sm btn-primary" type="submit">Simpan perkembangan</button>
+                            </form>
+                        </td>
+                    </tr>
+                <?php endwhile; endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
 
     <section class="mt-5">
         <h2 class="h4 mb-3">Survei Perluasan Jaringan</h2>

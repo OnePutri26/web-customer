@@ -66,8 +66,8 @@ try {
 
     $complaintStats = $conn->query("
         SELECT COUNT(*) AS total
-        FROM complaints
-        WHERE LOWER(status) NOT IN ('resolved', 'closed')
+        FROM complaint
+        WHERE LOWER(status) NOT IN ('resolved', 'rejected')
     ")->fetch_assoc();
     $stats['active_complaints'] = (int) $complaintStats['total'];
 

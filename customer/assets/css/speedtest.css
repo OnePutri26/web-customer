@@ -1,630 +1,1029 @@
 @import url('theme.css');
 
 /* =========================================================
+
    SPEEDTEST PAGE
+
    Melengkapi dashboard.css. Pastikan dashboard.css dimuat
+
    lebih dulu di speedtest.php, lalu file ini.
+
    Semua class khusus halaman ini memakai prefix "st-".
+
    (Tidak memakai .progress-bar agar tidak bentrok dengan Bootstrap.)
+
 ========================================================= */
 
-
 .st-head {
+
     margin-top: 0;
+
 }
 
 .st-sr-only {
+
     position: absolute;
+
     width: 1px;
+
     height: 1px;
+
     margin: -1px;
+
     padding: 0;
+
     overflow: hidden;
+
     clip: rect(0, 0, 0, 0);
+
     white-space: nowrap;
+
     border: 0;
+
 }
 
-
 /* =========================================================
+
    CATATAN CAKUPAN
+
 ========================================================= */
 
 .st-scope {
+
     margin-bottom: 14px;
+
     padding: 13px 16px;
+
     display: flex;
+
     align-items: flex-start;
+
     gap: 10px;
+
     border: 1px solid #dbeafe;
+
     border-radius: 13px;
+
     background: linear-gradient(135deg, #eff6ff, #f7faff);
+
 }
 
 .st-scope i {
+
     margin-top: 1px;
+
     color: #2563eb;
+
     font-size: 15px;
+
 }
 
 .st-scope span {
+
     color: #64748b;
+
     font-size: 10px;
+
     line-height: 1.65;
+
 }
 
-
 /* =========================================================
+
    KARTU PENGUJIAN
+
 ========================================================= */
 
 .st-test {
+
     padding: 38px 24px 30px;
+
     display: flex;
+
     flex-direction: column;
+
     align-items: center;
+
 }
 
 .st-test:hover {
+
     transform: none;
+
 }
 
-
 /* =========================================================
+
    GAUGE
+
 ========================================================= */
 
 .st-gauge {
+
     --st-deg: 0deg;
+
     --st-fill: #2563eb;
+
     --st-track: #e3ecfb;
+
     --st-surface: #ffffff;
 
     position: relative;
+
     width: 250px;
+
     height: 250px;
+
     display: flex;
+
     align-items: center;
+
     justify-content: center;
+
     border-radius: 50%;
+
     background: conic-gradient(var(--st-fill) var(--st-deg), var(--st-track) 0);
+
     transition: background .35s ease;
+
 }
 
 .st-gauge::before {
+
     content: "";
+
     position: absolute;
+
     inset: 12px;
+
     border-radius: 50%;
+
     background: var(--st-surface);
+
     box-shadow: inset 0 2px 14px rgba(15, 23, 42, .05);
+
 }
 
 .st-gauge.is-running {
+
     --st-fill: #2563eb;
+
 }
 
 .st-gauge.is-running::after {
+
     content: "";
+
     position: absolute;
+
     inset: -7px;
+
     border: 2px solid rgba(37, 99, 235, .18);
+
     border-radius: 50%;
+
     animation: stPulse 1.6s ease-out infinite;
+
 }
 
 .st-gauge.is-done {
+
     --st-fill: #16a34a;
+
 }
 
 .st-gauge.is-error {
+
     --st-fill: #dc2626;
+
     --st-track: #fde4e4;
+
 }
 
 @keyframes stPulse {
+
     0% {
+
         opacity: .9;
+
         transform: scale(.985);
+
     }
+
     100% {
+
         opacity: 0;
+
         transform: scale(1.06);
+
     }
+
 }
 
 .st-gauge-inner {
+
     position: relative;
+
     z-index: 1;
+
     max-width: 170px;
+
     text-align: center;
+
 }
 
 .st-state {
+
     display: block;
+
     color: #2563eb;
+
     font-size: 10px;
+
     font-weight: 800;
+
     letter-spacing: 1.5px;
+
 }
 
 .st-gauge.is-done .st-state {
+
     color: #16a34a;
+
 }
 
 .st-gauge.is-error .st-state {
+
     color: #dc2626;
+
 }
 
 .st-speed {
+
     margin-top: 6px;
+
     display: flex;
+
     align-items: baseline;
+
     justify-content: center;
+
     gap: 5px;
+
 }
 
 .st-speed strong {
+
     color: #172033;
+
     font-size: 44px;
+
     line-height: 1;
+
     font-weight: 800;
+
     letter-spacing: -1.8px;
+
     font-variant-numeric: tabular-nums;
+
 }
 
 .st-speed span {
+
     color: #7b8798;
+
     font-size: 12px;
+
     font-weight: 700;
+
 }
 
 .st-gauge-inner small {
+
     display: block;
+
     margin-top: 9px;
+
     color: #94a3b8;
+
     font-size: 10px;
+
     line-height: 1.5;
+
 }
 
 .st-scale {
+
     margin: 12px 0 0;
+
     color: #a0aaba;
+
     font-size: 9px;
+
     font-weight: 600;
+
 }
 
-
 /* =========================================================
+
    TOMBOL MULAI
+
 ========================================================= */
 
 .st-start {
+
     min-width: 220px;
+
     min-height: 46px;
+
     margin-top: 20px;
+
     padding: 0 22px;
+
     display: inline-flex;
+
     align-items: center;
+
     justify-content: center;
+
     gap: 9px;
+
     border: 0;
+
     border-radius: 12px;
+
     background: linear-gradient(135deg, #2563eb, #397be4);
+
     color: #fff;
+
     font-size: 13px;
+
     font-weight: 800;
+
     cursor: pointer;
+
     box-shadow: 0 10px 24px rgba(37, 99, 235, .22);
+
     transition: transform .2s ease, box-shadow .2s ease, opacity .2s ease;
+
 }
 
 .st-start:hover:not(:disabled) {
+
     transform: translateY(-2px);
+
     box-shadow: 0 14px 28px rgba(37, 99, 235, .28);
+
 }
 
 .st-start:focus-visible {
+
     outline: 3px solid rgba(37, 99, 235, .35);
+
     outline-offset: 3px;
+
 }
 
 .st-start:disabled {
+
     opacity: .7;
+
     cursor: progress;
+
 }
 
-
 /* =========================================================
+
    PROGRES
+
 ========================================================= */
 
 .st-progress {
+
     width: min(520px, 100%);
+
     margin-top: 24px;
+
 }
 
 .st-progress-track {
+
     height: 7px;
+
     overflow: hidden;
+
     border-radius: 999px;
+
     background: #e9eef6;
+
 }
 
 .st-progress-track span {
+
     display: block;
+
     width: 0;
+
     height: 100%;
+
     border-radius: inherit;
+
     background: linear-gradient(90deg, #2563eb, #5a95f7);
+
     transition: width .4s ease;
+
 }
 
 .st-progress-info {
+
     margin-top: 8px;
+
     display: flex;
+
     justify-content: space-between;
+
     gap: 10px;
+
     color: #94a3b8;
+
     font-size: 10px;
+
     font-weight: 600;
+
 }
 
-
 /* =========================================================
+
    HASIL
+
 ========================================================= */
 
 .st-results {
+
     margin-top: 14px;
+
     display: grid;
+
     grid-template-columns: repeat(4, 1fr);
+
     gap: 13px;
+
 }
 
 .st-result .stat-value {
+
     font-size: 22px;
+
     font-variant-numeric: tabular-nums;
+
 }
 
 .st-result .stat-label {
+
     font-size: 10px;
+
 }
 
 .st-result .stat-tag {
+
     font-size: 7px;
+
 }
 
-
 /* =========================================================
+
    INFORMASI PENGUJIAN
+
 ========================================================= */
 
 .st-info {
+
     margin-top: 14px;
+
 }
 
 .card-heading h3 {
+
     font-size: 13px;
+
 }
 
 .card-heading p {
+
     font-size: 9px;
+
 }
 
 .st-server-pill {
+
     padding: 5px 10px;
+
     display: inline-flex;
+
     align-items: center;
+
     gap: 6px;
+
     border-radius: 999px;
+
     color: #159957;
+
     background: #ecfdf3;
+
     font-size: 9px;
+
     font-weight: 800;
+
 }
 
 .st-server-pill span {
+
     width: 6px;
+
     height: 6px;
+
     border-radius: 50%;
+
     background: #22c55e;
+
     box-shadow: 0 0 0 3px rgba(34, 197, 94, .12);
+
 }
 
 .st-info-grid {
+
     margin: 16px 0 0;
+
     display: grid;
+
     grid-template-columns: repeat(3, minmax(0, 1fr));
+
     gap: 10px;
+
 }
 
 .st-info-grid > div {
+
     min-width: 0;
+
     padding: 11px 12px;
+
     border-radius: 10px;
+
     background: #f8fafc;
+
 }
 
 .st-info-grid dt {
+
     display: flex;
+
     align-items: center;
+
     gap: 6px;
+
     color: #94a3b8;
+
     font-size: 9px;
+
     font-weight: 600;
+
 }
 
 .st-info-grid dt i {
+
     color: #2563eb;
+
 }
 
 .st-info-grid dd {
+
     margin: 5px 0 0;
+
     color: #263246;
+
     font-size: 11px;
+
     font-weight: 700;
+
     overflow-wrap: anywhere;
+
 }
 
-
 /* =========================================================
+
    RIWAYAT
+
 ========================================================= */
 
 .st-history {
+
     margin-top: 14px;
+
 }
 
 .st-history .card-heading p {
+
     margin-top: 4px;
+
 }
 
 .st-history-status {
+
     color: #94a3b8;
+
     font-size: 10px;
+
     font-weight: 600;
+
 }
 
 .st-history-head,
+
 .st-history-row {
+
     display: grid;
+
     grid-template-columns: 1.6fr repeat(4, 1fr);
+
     align-items: center;
+
     gap: 12px;
+
 }
 
 .st-history-head {
+
     margin-top: 14px;
+
     padding: 0 12px 9px;
+
     border-bottom: 1px solid #edf1f5;
+
     color: #a0aaba;
+
     font-size: 8px;
+
     font-weight: 800;
+
     letter-spacing: .06em;
+
     text-transform: uppercase;
+
 }
 
 .st-history-list {
+
     display: grid;
+
 }
 
 .st-history-row {
+
     padding: 12px;
+
     border-bottom: 1px solid #f1f3f7;
+
     color: #64748b;
+
     font-size: 10px;
+
     transition: background .15s ease;
+
 }
 
 .st-history-row:last-child {
+
     border-bottom: 0;
+
 }
 
 .st-history-row:hover {
+
     background: #f8fbff;
+
 }
 
 .st-history-row time {
+
     color: #7b8798;
+
 }
 
 .st-history-row i {
+
     margin-right: 2px;
+
     color: #94a3b8;
+
 }
 
 .st-cell-download {
+
     color: #16a34a;
+
     font-weight: 700;
+
 }
 
 .st-cell-download i {
+
     color: #16a34a;
+
 }
 
 .st-cell-upload {
+
     color: #2563eb;
+
     font-weight: 700;
+
 }
 
 .st-cell-upload i {
+
     color: #2563eb;
+
 }
 
 .st-history-empty {
+
     margin: 0;
+
     padding: 34px 12px;
+
     color: #94a3b8;
+
     font-size: 10px;
+
     text-align: center;
+
 }
 
-
 /* =========================================================
+
    TIPS
+
 ========================================================= */
 
 .st-tips {
+
     margin-top: 14px;
+
     padding: 14px 16px;
+
     display: flex;
+
     align-items: flex-start;
+
     gap: 12px;
+
     border: 1px solid #fde9bd;
+
     border-radius: 13px;
+
     background: linear-gradient(135deg, #fffaf0, #fffdf8);
+
 }
 
 .st-tips-icon {
+
     width: 34px;
+
     height: 34px;
+
     flex-shrink: 0;
+
     display: flex;
+
     align-items: center;
+
     justify-content: center;
+
     border-radius: 10px;
+
     color: #d97706;
+
     background: #fff3d6;
+
     font-size: 14px;
+
 }
 
 .st-tips strong {
+
     display: block;
+
     color: #5f4a1c;
+
     font-size: 11px;
+
     font-weight: 800;
+
 }
 
 .st-tips p {
+
     margin: 4px 0 0;
+
     color: #7c6a45;
+
     font-size: 10px;
+
     line-height: 1.65;
+
 }
 
-
 /* =========================================================
+
    DARK THEME
+
 ========================================================= */
 
 .dashboard-page[data-theme="dark"] .st-gauge {
+
     --st-track: #1f2f47;
+
     --st-surface: #121c2c;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-gauge::before {
+
     box-shadow: none;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-gauge.is-error {
+
     --st-track: #3b1c1f;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-state {
+
     color: #8bb7ff;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-gauge.is-done .st-state {
+
     color: #6ee7a0;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-gauge.is-error .st-state {
+
     color: #ff9c96;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-speed strong,
+
 .dashboard-page[data-theme="dark"] .st-info-grid dd,
+
 .dashboard-page[data-theme="dark"] .section-title-row h2 {
+
     color: #e7eef9;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-speed span,
+
 .dashboard-page[data-theme="dark"] .st-gauge-inner small,
+
 .dashboard-page[data-theme="dark"] .st-scale,
+
 .dashboard-page[data-theme="dark"] .st-progress-info,
+
 .dashboard-page[data-theme="dark"] .st-info-grid dt,
+
 .dashboard-page[data-theme="dark"] .st-history-status,
+
 .dashboard-page[data-theme="dark"] .st-history-empty,
+
 .dashboard-page[data-theme="dark"] .st-history-row time,
+
 .dashboard-page[data-theme="dark"] .card-heading p {
+
     color: #8fa1b8;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-progress-track {
+
     background: #26354a;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-scope,
+
 .dashboard-page[data-theme="dark"] .st-info-grid > div {
+
     border-color: #2b3a51;
+
     background: #172437;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-scope span,
+
 .dashboard-page[data-theme="dark"] .st-history-row {
+
     color: #9cadc2;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-history-head {
+
     border-color: #26354a;
+
     color: #7f90a8;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-history-row {
+
     border-color: #1f2d42;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-history-row:hover {
+
     background: #162234;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-cell-download,
+
 .dashboard-page[data-theme="dark"] .st-cell-download i {
+
     color: #6ee7a0;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-cell-upload,
+
 .dashboard-page[data-theme="dark"] .st-cell-upload i {
+
     color: #8bb7ff;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-tips {
+
     border-color: #4a3b1c;
+
     background: #2a2314;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-tips strong {
+
     color: #f0d899;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-tips p {
+
     color: #c9b98c;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-tips-icon {
+
     color: #f0c36a;
+
     background: #3a2f16;
+
 }
 
 .dashboard-page[data-theme="dark"] .st-server-pill {
+
     color: #6ee7a0;
+
     background: #12301f;
+
 }
 
-
 /* =========================================================
+
    RESPONSIVE
+
 ========================================================= */
 
 @media (max-width: 1100px) {
 
     .st-results {
+
         grid-template-columns: repeat(2, 1fr);
+
     }
 
     .st-info-grid {
+
         grid-template-columns: repeat(2, minmax(0, 1fr));
+
     }
 
 }
@@ -632,42 +1031,65 @@
 @media (max-width: 700px) {
 
     .st-test {
+
         padding: 30px 16px 26px;
+
     }
 
     .st-gauge {
+
         width: 220px;
+
         height: 220px;
+
     }
 
     .st-speed strong {
+
         font-size: 38px;
+
     }
 
     .st-history-head {
+
         display: none;
+
     }
 
     .st-history-row {
+
         grid-template-columns: repeat(2, minmax(0, 1fr));
+
         gap: 8px;
+
         border: 1px solid #edf1f5;
+
         border-radius: 10px;
+
         margin-bottom: 8px;
+
     }
 
     .st-history-row:last-child {
+
         margin-bottom: 0;
+
         border-bottom: 1px solid #edf1f5;
+
     }
 
     .st-history-row time {
+
         grid-column: 1 / -1;
+
     }
 
     .dashboard-page[data-theme="dark"] .st-history-row,
+
     .dashboard-page[data-theme="dark"] .st-history-row:last-child {
+
         border-color: #26354a;
+
     }
 
 }
@@ -675,28 +1097,41 @@
 @media (max-width: 500px) {
 
     .st-results {
+
         grid-template-columns: 1fr;
+
     }
 
     .st-info-grid {
+
         grid-template-columns: 1fr;
+
     }
 
     .st-gauge {
+
         width: 200px;
+
         height: 200px;
+
     }
 
     .st-gauge-inner {
+
         max-width: 140px;
+
     }
 
     .st-speed strong {
+
         font-size: 34px;
+
     }
 
     .st-start {
+
         width: 100%;
+
     }
 
 }
@@ -704,13 +1139,134 @@
 @media (prefers-reduced-motion: reduce) {
 
     .st-gauge,
+
     .st-progress-track span,
+
     .st-start {
+
         transition: none;
+
     }
 
     .st-gauge.is-running::after {
+
         animation: none;
+
     }
 
+}
+
+/* =========================================================
+   PENYEMPURNAAN KOMPATIBILITAS
+========================================================= */
+
+.st-test,
+.st-scope,
+.st-results,
+.st-info,
+.st-history,
+.st-tips {
+    min-width: 0;
+}
+
+.st-test,
+.st-test *,
+.st-scope,
+.st-scope *,
+.st-results,
+.st-results *,
+.st-info,
+.st-info *,
+.st-history,
+.st-history *,
+.st-tips,
+.st-tips * {
+    box-sizing: border-box;
+}
+
+.st-gauge {
+    flex: 0 0 auto;
+    isolation: isolate;
+}
+
+.st-gauge::before {
+    z-index: 0;
+}
+
+.st-gauge-inner {
+    overflow-wrap: anywhere;
+}
+
+.st-progress-track span {
+    min-width: 0;
+}
+
+.st-history-list {
+    min-width: 0;
+}
+
+.st-history-row > * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.st-start:focus:not(:focus-visible) {
+    outline: none;
+}
+
+.st-start:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.st-start:disabled {
+    box-shadow: none;
+}
+
+.st-server-pill {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 700px) {
+    .st-history-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 380px) {
+    .st-test {
+        padding-right: 12px;
+        padding-left: 12px;
+    }
+
+    .st-gauge {
+        width: 184px;
+        height: 184px;
+    }
+
+    .st-gauge::before {
+        inset: 10px;
+    }
+
+    .st-speed strong {
+        font-size: 31px;
+    }
+
+    .st-results {
+        gap: 9px;
+    }
+
+    .st-info-grid > div {
+        padding: 10px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .st-start,
+    .st-history-row,
+    .st-gauge,
+    .st-progress-track span {
+        transition-duration: 0.01ms !important;
+    }
 }

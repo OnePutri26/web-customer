@@ -7,6 +7,7 @@ require_once "../config/auth.php";
 requireLogin();
 
 require_once "../config/database.php";
+require_once __DIR__ . '/../inc/complaint.php';
 
 requireRole('customer');
 
@@ -119,8 +120,8 @@ function normalizeSubscriptionStatus($status): string
 */
 const COMPLAINT_STATUS_GROUPS = [
     'open'    => ['open', 'baru', 'new', 'pending'],
-    'process' => ['process', 'proses', 'diproses', 'on progress', 'in progress', 'in_progress'],
-    'closed'  => ['closed', 'selesai', 'resolved'],
+    'process' => ['process', 'proses', 'diproses', 'on progress', 'in progress', 'in_progress', 'waiting_confirmation', 'waiting_customer'],
+    'closed'  => ['closed', 'selesai', 'resolved', 'rejected'],
 ];
 
 function normalizeComplaintStatus($status): string
@@ -163,17 +164,21 @@ function normalizePriority($priority): string
 | Label jenis gangguan. Harus sama dengan daftar di complaint_create.php.
 */
 const CATEGORY_LABELS = [
-    'internet_down'   => 'Internet Mati',
-    'slow_connection' => 'Internet Lambat',
-    'intermittent'    => 'Koneksi Putus-Putus',
-    'high_latency'    => 'Ping Tinggi / Lag',
-    'site_blocked'    => 'Situs / Aplikasi Error',
-    'los_red_light'   => 'Lampu LOS Merah / Kabel Fiber',
-    'wifi_problem'    => 'Masalah WiFi',
-    'router_problem'  => 'Masalah Router / ONT',
-    'ip_dns'          => 'Masalah IP / DNS',
-    'billing'         => 'Billing',
-    'other'           => 'Gangguan Lainnya',
+    'internet_down' => 'Internet mati',
+    'slow_connection' => 'Internet lambat',
+    'unstable_connection' => 'Koneksi tidak stabil',
+    'modem_ont' => 'Modem / ONT bermasalah',
+    'wifi_not_detected' => 'WiFi tidak terdeteksi',
+    'los_red' => 'Lampu LOS merah',
+    'intermittent' => 'Koneksi putus-putus',
+    'high_latency' => 'Ping tinggi / lag',
+    'site_blocked' => 'Situs / aplikasi error',
+    'los_red_light' => 'Lampu LOS merah / kabel fiber',
+    'wifi_problem' => 'Masalah WiFi',
+    'router_problem' => 'Masalah router / ONT',
+    'ip_dns' => 'Masalah IP / DNS',
+    'billing' => 'Billing',
+    'other' => 'Gangguan lainnya',
 ];
 
 function categoryLabel($category): string
@@ -221,15 +226,13 @@ $priorityMeta = [
 | Jalan pintas pelaporan: [kode kategori, label, ikon Bootstrap Icons].
 */
 $quickCategories = [
-    ['internet_down',   'Internet Mati',          'bi-wifi-off'],
-    ['slow_connection', 'Internet Lambat',        'bi-speedometer2'],
-    ['intermittent',    'Putus-Putus',            'bi-activity'],
-    ['high_latency',    'Ping Tinggi / Lag',      'bi-controller'],
-    ['site_blocked',    'Situs / Aplikasi Error', 'bi-ban'],
-    ['los_red_light',   'Lampu LOS Merah',        'bi-router-fill'],
-    ['wifi_problem',    'Masalah WiFi',           'bi-wifi-2'],
-    ['router_problem',  'Router / ONT',           'bi-hdd-network'],
-    ['other',           'Gangguan Lainnya',       'bi-three-dots'],
+    ['internet_down', 'Internet Mati', 'bi-wifi-off'],
+    ['slow_connection', 'Internet Lambat', 'bi-speedometer2'],
+    ['unstable_connection', 'Koneksi Tidak Stabil', 'bi-activity'],
+    ['modem_ont', 'Modem / ONT', 'bi-hdd-network'],
+    ['wifi_not_detected', 'WiFi Tidak Terdeteksi', 'bi-wifi-2'],
+    ['los_red', 'Lampu LOS Merah', 'bi-router-fill'],
+    ['other', 'Gangguan Lainnya', 'bi-three-dots'],
 ];
 
 
@@ -524,9 +527,9 @@ if (
 
 $filterLabels = [
     'all'     => 'Semua',
-    'open'    => 'Baru',
-    'process' => 'Diproses',
-    'closed'  => 'Selesai',
+    'open'    => 'Pending',
+    'process' => 'In Progress / Waiting',
+    'closed'  => 'Resolved / Rejected',
 ];
 
 function complaintPageUrl(string $filter, int $page): string
@@ -575,7 +578,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     <link rel="stylesheet" href="assets/css/dashboard.css">
 
     <!-- Complaint CSS (khusus halaman laporan) -->
-    <link rel="stylesheet" href="assets/css/complaint.css?v=13">
+    <link rel="stylesheet" href="assets/css/complaint.css?v=14">
 
     <link rel="stylesheet" href="assets/css/portal-unified.css">
     <script defer src="assets/js/portal-ui.js"></script>
@@ -861,7 +864,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <div class="stat-card">
                     <div class="stat-top">
                         <div class="stat-icon orange"><i class="bi bi-exclamation-circle-fill"></i></div>
-                        <span class="stat-tag">BARU</span>
+                        <span class="stat-tag">PENDING</span>
                     </div>
                     <div class="stat-value"><?= (int) $counts['open']; ?></div>
                     <div class="stat-label">Menunggu ditangani</div>
@@ -870,7 +873,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <div class="stat-card">
                     <div class="stat-top">
                         <div class="stat-icon purple"><i class="bi bi-arrow-repeat"></i></div>
-                        <span class="stat-tag">DIPROSES</span>
+                        <span class="stat-tag">IN PROGRESS</span>
                     </div>
                     <div class="stat-value"><?= (int) $counts['process']; ?></div>
                     <div class="stat-label">Sedang ditangani tim</div>
@@ -879,7 +882,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <div class="stat-card">
                     <div class="stat-top">
                         <div class="stat-icon green"><i class="bi bi-check-circle-fill"></i></div>
-                        <span class="stat-tag green">SELESAI</span>
+                        <span class="stat-tag green">RESOLVED / REJECTED</span>
                     </div>
                     <div class="stat-value"><?= (int) $counts['closed']; ?></div>
                     <div class="stat-label">Sudah terselesaikan</div>
@@ -1006,14 +1009,11 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
                             [$statusLabel, $statusClass, $statusIcon] =
                                 $complaintStatusMeta[$row['_status']] ?? $complaintStatusMeta['other'];
+                            $actualStatus = yesnetComplaintStatus((string) ($row['status'] ?? ''));
+                            $statusLabel = YESNET_COMPLAINT_STATUSES[$actualStatus] ?? $statusLabel;
 
                             [$priorityLabel, $priorityClass] =
                                 $priorityMeta[$row['_priority']] ?? $priorityMeta['other'];
-
-                            // Status asli ditampilkan bila tidak dikenali.
-                            if ($row['_status'] === 'other' && trim((string) ($row['status'] ?? '')) !== '') {
-                                $statusLabel = ucfirst(trim((string) $row['status']));
-                            }
 
                             $subject = trim((string) ($row['subject'] ?? $row['judul'] ?? ''));
 

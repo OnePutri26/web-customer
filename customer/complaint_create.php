@@ -7,6 +7,7 @@ require_once "../config/auth.php";
 requireLogin();
 
 require_once "../config/database.php";
+require_once __DIR__ . '/../inc/complaint.php';
 
 requireRole('customer');
 
@@ -118,6 +119,13 @@ function textLength(string $text): int
     return function_exists('mb_strlen') ? mb_strlen($text) : strlen($text);
 }
 
+function complaintCreateInput(array $input, string $key): string
+{
+    $value = $input[$key] ?? '';
+
+    return is_string($value) ? trim($value) : '';
+}
+
 
 /*
 |--------------------------------------------------------------------------
@@ -128,27 +136,7 @@ function textLength(string $text): int
 */
 
 $categoryGroups = [
-
-    'Koneksi Internet' => [
-        'internet_down'   => 'Internet Mati / Tidak Bisa Terhubung',
-        'slow_connection' => 'Internet Lambat',
-        'intermittent'    => 'Koneksi Putus-Putus',
-        'high_latency'    => 'Ping Tinggi / Lag (Game & Streaming)',
-        'site_blocked'    => 'Situs atau Aplikasi Tertentu Tidak Bisa Dibuka',
-        'los_red_light'   => 'Lampu LOS Merah / Kabel Fiber Bermasalah',
-    ],
-
-    'WiFi & Perangkat' => [
-        'wifi_problem'    => 'Masalah WiFi (sinyal lemah / tidak muncul)',
-        'router_problem'  => 'Masalah Router / ONT / Modem',
-    ],
-
-    'Lainnya' => [
-        'ip_dns'          => 'Masalah IP / DNS',
-        'billing'         => 'Billing / Tagihan',
-        'other'           => 'Gangguan Lainnya',
-    ],
-
+    'Gangguan Internet' => YESNET_COMPLAINT_CATEGORIES,
 ];
 
 $categories = [];
@@ -168,14 +156,10 @@ $priorities = [
 $suggestedPriority = [
     'internet_down'   => 'high',
     'slow_connection' => 'medium',
-    'intermittent'    => 'medium',
-    'high_latency'    => 'medium',
-    'site_blocked'    => 'medium',
-    'los_red_light'   => 'high',
-    'wifi_problem'    => 'medium',
-    'router_problem'  => 'medium',
-    'ip_dns'          => 'medium',
-    'billing'         => 'low',
+    'unstable_connection' => 'medium',
+    'modem_ont'       => 'medium',
+    'wifi_not_detected' => 'medium',
+    'los_red'         => 'high',
     'other'           => 'medium',
 ];
 
@@ -261,7 +245,7 @@ $old = [
 
 // Jalan pintas dari complaint.php: complaint_create.php?category=internet_down
 if (!$isPost) {
-    $presetCategory = trim((string) ($_GET['category'] ?? ''));
+    $presetCategory = complaintCreateInput($_GET, 'category');
 
     if (isset($categories[$presetCategory])) {
         $old['category'] = $presetCategory;
@@ -345,9 +329,13 @@ $canCreate = in_array($statusLangganan, ['active', 'suspended', 'pending'], true
 
 $complaintReady = tableExists($conn, 'complaint');
 
-foreach (['id_customer', 'complaint_code', 'category', 'subject', 'description', 'priority'] as $requiredColumn) {
+foreach (['id_customer', 'complaint_code', 'category', 'subject', 'description', 'priority', 'status', 'assigned_user_id'] as $requiredColumn) {
     $complaintReady = $complaintReady && columnExists($conn, 'complaint', $requiredColumn);
 }
+
+$complaintReady = $complaintReady
+    && tableExists($conn, 'complaint_histories')
+    && tableExists($conn, 'complaint_attachments');
 
 $hasCreatedAt = $complaintReady && columnExists($conn, 'complaint', 'created_at');
 $hasStatus = $complaintReady && columnExists($conn, 'complaint', 'status');
@@ -361,14 +349,14 @@ $hasStatus = $complaintReady && columnExists($conn, 'complaint', 'status');
 
 if ($isPost) {
 
-    $old['category'] = trim((string) ($_POST['category'] ?? ''));
-    $old['subject'] = trim((string) ($_POST['subject'] ?? ''));
-    $old['priority'] = trim((string) ($_POST['priority'] ?? 'medium'));
-    $old['started'] = trim((string) ($_POST['started'] ?? ''));
-    $old['scope'] = trim((string) ($_POST['scope'] ?? ''));
-    $old['description'] = trim((string) ($_POST['description'] ?? ''));
+    $old['category'] = complaintCreateInput($_POST, 'category');
+    $old['subject'] = complaintCreateInput($_POST, 'subject');
+    $old['priority'] = complaintCreateInput($_POST, 'priority') ?: 'medium';
+    $old['started'] = complaintCreateInput($_POST, 'started');
+    $old['scope'] = complaintCreateInput($_POST, 'scope');
+    $old['description'] = complaintCreateInput($_POST, 'description');
 
-    $postToken = (string) ($_POST['csrf_token'] ?? '');
+    $postToken = complaintCreateInput($_POST, 'csrf_token');
 
     if (!hash_equals($csrfToken, $postToken)) {
 
@@ -440,6 +428,15 @@ if ($isPost) {
             }
         }
 
+        $upload = null;
+        if ($errors === [] && isset($_FILES['photo'])) {
+            try {
+                $upload = yesnetComplaintReadUpload($_FILES['photo']);
+            } catch (RuntimeException $e) {
+                $errors[] = $e->getMessage();
+            }
+        }
+
         if ($errors === []) {
 
             // Detail tambahan ditempelkan di akhir deskripsi sehingga tidak
@@ -462,16 +459,17 @@ if ($isPost) {
 
             $savedCode = null;
 
-            // Ulangi dengan kode baru jika terjadi bentrok kode (error duplicate key 1062).
+            // A unique database index protects ticket codes across concurrent requests.
             for ($attempt = 1; $attempt <= 3 && $savedCode === null; $attempt++) {
 
-                $code = 'CMP' . date('YmdHis') . random_int(10, 99);
+                $code = 'CMP' . date('YmdHis') . strtoupper(bin2hex(random_bytes(3)));
 
                 try {
+                    $conn->begin_transaction();
                     $stmt = $conn->prepare("
                         INSERT INTO complaint
-                            (id_customer, complaint_code, category, subject, description, priority)
-                        VALUES (?, ?, ?, ?, ?, ?)
+                            (id_customer, complaint_code, category, subject, description, priority, status)
+                        VALUES (?, ?, ?, ?, ?, ?, 'pending')
                     ");
                     $stmt->bind_param(
                         "isssss",
@@ -483,10 +481,40 @@ if ($isPost) {
                         $old['priority']
                     );
                     $stmt->execute();
+                    $complaintId = (int) $stmt->insert_id;
                     $stmt->close();
 
+                    if ($upload !== null) {
+                        $attachmentStmt = $conn->prepare("
+                            INSERT INTO complaint_attachments (complaint_id, mime_type, contents)
+                            VALUES (?, ?, ?)
+                        ");
+                        $attachmentMime = $upload['mime'];
+                        $attachmentContents = null;
+                        $attachmentStmt->bind_param('isb', $complaintId, $attachmentMime, $attachmentContents);
+                        $attachmentStmt->send_long_data(2, $upload['contents']);
+                        $attachmentStmt->execute();
+                        $attachmentStmt->close();
+                    }
+
+                    yesnetComplaintAddHistory(
+                        $conn,
+                        $complaintId,
+                        $userId,
+                        $nama,
+                        'created',
+                        'Laporan dibuat oleh pelanggan.',
+                        null,
+                        'pending'
+                    );
+                    $conn->commit();
                     $savedCode = $code;
                 } catch (Throwable $e) {
+                    try {
+                        $conn->rollback();
+                    } catch (Throwable $rollbackError) {
+                        error_log('Complaint create rollback failed: ' . $rollbackError->getMessage());
+                    }
                     $isDuplicate = $e instanceof mysqli_sql_exception && (int) $e->getCode() === 1062;
 
                     if (!$isDuplicate || $attempt === 3) {
@@ -607,7 +635,7 @@ foreach ($priorities as $priorityKey => $priorityInfo) {
     <link rel="stylesheet" href="assets/css/dashboard.css">
 
     <!-- Complaint CSS (daftar + form) -->
-    <link rel="stylesheet" href="assets/css/complaint.css?v=13">
+    <link rel="stylesheet" href="assets/css/complaint.css?v=14">
 
 </head>
 
@@ -931,7 +959,7 @@ foreach ($priorities as $priorityKey => $priorityInfo) {
 
                     <?php else: ?>
 
-                        <form method="POST" action="complaint_create.php" class="cp-form" id="complaintForm" novalidate>
+                        <form method="POST" action="complaint_create.php" class="cp-form" id="complaintForm" enctype="multipart/form-data" novalidate>
 
                             <input type="hidden" name="csrf_token" value="<?= e($csrfToken); ?>">
 
@@ -1050,6 +1078,18 @@ foreach ($priorities as $priorityKey => $priorityInfo) {
                                     <span id="descriptionCount">0/<?= DESCRIPTION_MAX; ?></span>
                                 </div>
 
+                            </div>
+
+                            <div class="cp-field">
+                                <label for="photo">Foto bukti <em>(opsional, maksimal 5 MB)</em></label>
+                                <input
+                                    type="file"
+                                    name="photo"
+                                    id="photo"
+                                    class="cp-input"
+                                    accept="image/jpeg,image/png,image/webp"
+                                >
+                                <small class="cp-select-hint">Format JPG, PNG, atau WebP. Foto hanya dapat dilihat oleh customer pemilik laporan dan petugas YESNET.</small>
                             </div>
 
                             <div class="cp-form-actions">

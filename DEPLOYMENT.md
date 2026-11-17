@@ -1,8 +1,9 @@
 # YesNet deployment and Xendit payments
 
-The application requires PHP 8.3 with `mysqli`, `curl`, and a reachable MariaDB
-database. Payment credentials must be configured as server-side environment
-variables; do not put them in PHP source, browser code, or source control.
+The application requires PHP 8.3 with `mysqli`, `curl`, `fileinfo`, and a
+reachable MariaDB database. Payment credentials must be configured as
+server-side environment variables; do not put them in PHP source, browser code,
+or source control.
 
 ## Database migration
 
@@ -13,6 +14,17 @@ Xendit identifiers/provider metadata and widens status fields while retaining
 old payment rows and Midtrans identifiers. The migration marks rows as
 `midtrans` only when both old Midtrans identifier columns exist and a row has
 an order ID or Snap token; other historical rows are marked `legacy`.
+
+For customer internet complaints, back up the database and apply
+[`database/migrasi_complaint.sql`](./database/migrasi_complaint.sql) before
+deploying the Complaint pages. It continues to use the existing
+`customers`/`users` records and `complaint` table, normalizes old status values,
+and creates append-only `complaint_histories` plus private
+`complaint_attachments` storage. Existing tickets receive a migration-baseline
+history entry. The migration uses MariaDB `ADD COLUMN IF NOT EXISTS`; check for
+duplicate `complaint_code` values first if the unique index step reports an
+error. Complaint evidence is limited to 5 MB and validated JPG, PNG, or WebP
+images; it is served only after the customer-owner or admin role check.
 
 To configure package promotions, back up the database and run
 [`database/migrasi_promo_paket.sql`](./database/migrasi_promo_paket.sql) once.
