@@ -297,6 +297,45 @@
     background: rgba(255, 255, 255, .22);
 }
 
+.cp-search {
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.cp-search input {
+    min-width: 220px;
+    min-height: 38px;
+    flex: 1;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    color: var(--text);
+    background: #fff;
+}
+
+.cp-search-button {
+    min-height: 38px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 0;
+    border-radius: 9px;
+    color: #fff;
+    background: linear-gradient(135deg, #2563eb, #397be4);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.cp-search-reset {
+    color: var(--primary);
+    font-size: 12px;
+    font-weight: 700;
+}
+
 
 /* =========================================================
    DAFTAR LAPORAN
@@ -905,6 +944,16 @@ select.cp-input {
 .dashboard-page[data-theme="dark"] .cp-help {
     border-color: #2b3a51;
     background: #172437;
+}
+
+.dashboard-page[data-theme="dark"] .cp-search input {
+    border-color: #34445c;
+    color: #e7eef8;
+    background: #111c2c;
+}
+
+.dashboard-page[data-theme="dark"] .cp-search-reset {
+    color: #9dc0ff;
 }
 
 .dashboard-page[data-theme="dark"] .cp-tab {

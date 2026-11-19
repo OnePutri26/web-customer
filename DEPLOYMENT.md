@@ -164,6 +164,9 @@ check the public route:
 php -l config/xendit.php
 php -l pembayaran.php
 php -l payment_webhook.php
+php -l customer/complaint.php
+php -l customer/complaint_create.php
+php -l inc/complaint.php
 curl -I https://your-public-domain.example/
 ```
 

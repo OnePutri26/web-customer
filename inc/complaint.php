@@ -10,13 +10,21 @@ const YESNET_COMPLAINT_STATUSES = [
 ];
 
 const YESNET_COMPLAINT_CATEGORIES = [
-    'internet_down' => 'Internet mati',
-    'slow_connection' => 'Internet lambat',
+    'internet_down' => 'Internet Mati / Tidak Bisa Terhubung',
+    'slow_connection' => 'Internet Lambat',
+    'intermittent' => 'Koneksi Putus-Putus',
+    'high_latency' => 'Ping Tinggi / Lag',
+    'site_blocked' => 'Situs atau Aplikasi Error',
+    'los_red_light' => 'Lampu LOS Merah / Kabel Fiber Bermasalah',
+    'wifi_problem' => 'Masalah WiFi',
+    'router_problem' => 'Masalah Router / ONT / Modem',
+    'ip_dns' => 'Masalah IP / DNS',
+    'billing' => 'Billing / Tagihan',
+    'other' => 'Gangguan lainnya',
     'unstable_connection' => 'Koneksi tidak stabil',
     'modem_ont' => 'Modem / ONT bermasalah',
     'wifi_not_detected' => 'WiFi tidak terdeteksi',
     'los_red' => 'Lampu LOS merah',
-    'other' => 'Gangguan lainnya',
 ];
 
 function yesnetComplaintStatus(string $status): string
@@ -28,6 +36,7 @@ function yesnetComplaintStatus(string $status): string
         'process', 'processing', 'proses', 'in progress' => 'in_progress',
         'waiting_customer', 'waiting confirmation' => 'waiting_confirmation',
         'closed', 'selesai' => 'resolved',
+        'ditolak' => 'rejected',
         default => $status === '' ? 'pending' : $status,
     };
 }

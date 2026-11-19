@@ -7,7 +7,6 @@ require_once "../config/auth.php";
 requireLogin();
 
 require_once "../config/database.php";
-require_once __DIR__ . '/../inc/complaint.php';
 
 requireRole('customer');
 
@@ -20,6 +19,7 @@ mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 |--------------------------------------------------------------------------
 | HELPER
 |--------------------------------------------------------------------------
+| Mengikuti runtime PHP 8.1+ yang disyaratkan project.
 */
 
 function e($value): string
@@ -121,7 +121,8 @@ function normalizeSubscriptionStatus($status): string
 const COMPLAINT_STATUS_GROUPS = [
     'open'    => ['open', 'baru', 'new', 'pending'],
     'process' => ['process', 'proses', 'diproses', 'on progress', 'in progress', 'in_progress', 'waiting_confirmation', 'waiting_customer'],
-    'closed'  => ['closed', 'selesai', 'resolved', 'rejected'],
+    'closed'  => ['closed', 'selesai', 'resolved'],
+    'rejected' => ['rejected', 'ditolak'],
 ];
 
 function normalizeComplaintStatus($status): string
@@ -164,21 +165,21 @@ function normalizePriority($priority): string
 | Label jenis gangguan. Harus sama dengan daftar di complaint_create.php.
 */
 const CATEGORY_LABELS = [
-    'internet_down' => 'Internet mati',
-    'slow_connection' => 'Internet lambat',
-    'unstable_connection' => 'Koneksi tidak stabil',
-    'modem_ont' => 'Modem / ONT bermasalah',
-    'wifi_not_detected' => 'WiFi tidak terdeteksi',
-    'los_red' => 'Lampu LOS merah',
-    'intermittent' => 'Koneksi putus-putus',
-    'high_latency' => 'Ping tinggi / lag',
-    'site_blocked' => 'Situs / aplikasi error',
-    'los_red_light' => 'Lampu LOS merah / kabel fiber',
-    'wifi_problem' => 'Masalah WiFi',
-    'router_problem' => 'Masalah router / ONT',
-    'ip_dns' => 'Masalah IP / DNS',
-    'billing' => 'Billing',
-    'other' => 'Gangguan lainnya',
+    'internet_down'   => 'Internet Mati',
+    'slow_connection' => 'Internet Lambat',
+    'unstable_connection' => 'Koneksi Tidak Stabil',
+    'modem_ont'       => 'Modem / ONT Bermasalah',
+    'wifi_not_detected' => 'WiFi Tidak Terdeteksi',
+    'los_red'         => 'Lampu LOS Merah',
+    'intermittent'    => 'Koneksi Putus-Putus',
+    'high_latency'    => 'Ping Tinggi / Lag',
+    'site_blocked'    => 'Situs / Aplikasi Error',
+    'los_red_light'   => 'Lampu LOS Merah / Kabel Fiber',
+    'wifi_problem'    => 'Masalah WiFi',
+    'router_problem'  => 'Masalah Router / ONT',
+    'ip_dns'          => 'Masalah IP / DNS',
+    'billing'         => 'Billing',
+    'other'           => 'Gangguan Lainnya',
 ];
 
 function categoryLabel($category): string
@@ -194,13 +195,17 @@ function categoryLabel($category): string
 
 function truncateText(string $text, int $limit = 140): string
 {
-    $text = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
+    $text = trim((string) preg_replace('/\s+/u', ' ', $text));
 
-    if (function_exists('mb_strlen') && mb_strlen($text) > $limit) {
-        return rtrim(mb_substr($text, 0, $limit)) . '…';
+    if (function_exists('mb_strlen')) {
+        if (mb_strlen($text) > $limit) {
+            return rtrim(mb_substr($text, 0, $limit)) . '…';
+        }
+
+        return $text;
     }
 
-    if (!function_exists('mb_strlen') && strlen($text) > $limit) {
+    if (strlen($text) > $limit) {
         return rtrim(substr($text, 0, $limit)) . '…';
     }
 
@@ -211,6 +216,7 @@ $complaintStatusMeta = [
     'open'    => ['Baru', 'open', 'bi-exclamation-circle-fill'],
     'process' => ['Diproses', 'process', 'bi-arrow-repeat'],
     'closed'  => ['Selesai', 'closed', 'bi-check-circle-fill'],
+    'rejected' => ['Ditolak', 'other', 'bi-x-circle-fill'],
     'other'   => ['Tidak diketahui', 'other', 'bi-question-circle-fill'],
 ];
 
@@ -226,13 +232,15 @@ $priorityMeta = [
 | Jalan pintas pelaporan: [kode kategori, label, ikon Bootstrap Icons].
 */
 $quickCategories = [
-    ['internet_down', 'Internet Mati', 'bi-wifi-off'],
-    ['slow_connection', 'Internet Lambat', 'bi-speedometer2'],
-    ['unstable_connection', 'Koneksi Tidak Stabil', 'bi-activity'],
-    ['modem_ont', 'Modem / ONT', 'bi-hdd-network'],
-    ['wifi_not_detected', 'WiFi Tidak Terdeteksi', 'bi-wifi-2'],
-    ['los_red', 'Lampu LOS Merah', 'bi-router-fill'],
-    ['other', 'Gangguan Lainnya', 'bi-three-dots'],
+    ['internet_down',   'Internet Mati',          'bi-wifi-off'],
+    ['slow_connection', 'Internet Lambat',        'bi-speedometer2'],
+    ['intermittent',    'Putus-Putus',            'bi-activity'],
+    ['high_latency',    'Ping Tinggi / Lag',      'bi-controller'],
+    ['site_blocked',    'Situs / Aplikasi Error', 'bi-ban'],
+    ['los_red_light',   'Lampu LOS Merah',        'bi-router-fill'],
+    ['wifi_problem',    'Masalah WiFi',           'bi-wifi-2'],
+    ['router_problem',  'Router / ONT',           'bi-hdd-network'],
+    ['other',           'Gangguan Lainnya',       'bi-three-dots'],
 ];
 
 
@@ -287,9 +295,11 @@ $counts = [
     'open'    => 0,
     'process' => 0,
     'closed'  => 0,
+    'rejected' => 0,
 ];
 
 $perPage = 10;
+$complaintLoadError = false;
 
 
 /*
@@ -370,14 +380,30 @@ $canReport = in_array($statusLangganan, ['active', 'suspended', 'pending'], true
 |--------------------------------------------------------------------------
 */
 
-$allowedFilters = ['all', 'open', 'process', 'closed'];
-$filter = (string) ($_GET['status'] ?? 'all');
+$allowedFilters = ['all', 'open', 'process', 'closed', 'rejected'];
+$filterInput = $_GET['status'] ?? 'all';
+$filter = is_string($filterInput) ? $filterInput : 'all';
 
 if (!in_array($filter, $allowedFilters, true)) {
     $filter = 'all';
 }
 
-$page = max(1, (int) ($_GET['page'] ?? 1));
+$searchInput = $_GET['q'] ?? '';
+$search = is_string($searchInput) ? trim($searchInput) : '';
+if (function_exists('mb_substr')) {
+    $search = mb_substr($search, 0, 100);
+} else {
+    $search = substr($search, 0, 100);
+}
+$searchPattern = '%' . strtr($search, ['!' => '!!', '%' => '!%', '_' => '!_']) . '%';
+$searchWhereSql = $search === ''
+    ? ''
+    : " AND (complaint_code LIKE ? ESCAPE '!' OR subject LIKE ? ESCAPE '!' OR category LIKE ? ESCAPE '!' OR description LIKE ? ESCAPE '!')";
+
+$pageInput = $_GET['page'] ?? '1';
+$page = is_string($pageInput) && ctype_digit($pageInput)
+    ? max(1, (int) $pageInput)
+    : 1;
 
 
 /*
@@ -402,10 +428,14 @@ if (
             $stmt = $conn->prepare("
                 SELECT LOWER(TRIM(status)) AS status_key, COUNT(*) AS total
                 FROM complaint
-                WHERE id_customer = ?
+                WHERE id_customer = ?{$searchWhereSql}
                 GROUP BY LOWER(TRIM(status))
             ");
-            $stmt->bind_param("i", $customerId);
+            if ($search === '') {
+                $stmt->bind_param("i", $customerId);
+            } else {
+                $stmt->bind_param("issss", $customerId, $searchPattern, $searchPattern, $searchPattern, $searchPattern);
+            }
             $stmt->execute();
             $countRows = statementFetchAll($stmt);
             $stmt->close();
@@ -421,8 +451,12 @@ if (
                 }
             }
         } else {
-            $stmt = $conn->prepare("SELECT COUNT(*) AS total FROM complaint WHERE id_customer = ?");
-            $stmt->bind_param("i", $customerId);
+            $stmt = $conn->prepare("SELECT COUNT(*) AS total FROM complaint WHERE id_customer = ?{$searchWhereSql}");
+            if ($search === '') {
+                $stmt->bind_param("i", $customerId);
+            } else {
+                $stmt->bind_param("issss", $customerId, $searchPattern, $searchPattern, $searchPattern, $searchPattern);
+            }
             $stmt->execute();
             $countRows = statementFetchAll($stmt);
             $stmt->close();
@@ -431,6 +465,7 @@ if (
         }
     } catch (Throwable $e) {
         error_log('Complaint YESNET count query failed: ' . $e->getMessage());
+        $complaintLoadError = true;
     }
 }
 
@@ -440,7 +475,7 @@ if (!$hasStatusColumn) {
 }
 
 // Badge menu: complaint yang belum selesai.
-$totalGangguan = max(0, $counts['all'] - $counts['closed']);
+$totalGangguan = max(0, $counts['all'] - $counts['closed'] - $counts['rejected']);
 
 $filterTotal = (int) ($counts[$filter] ?? 0);
 $totalPages = max(1, (int) ceil($filterTotal / $perPage));
@@ -460,12 +495,15 @@ if ($complaintTableAvailable && $filterTotal > 0) {
 
         if ($filter !== 'all') {
             $quoted = array_map(
-                static fn (string $value): string => "'" . $conn->real_escape_string($value) . "'",
+                function ($value) use ($conn) {
+                    return "'" . $conn->real_escape_string($value) . "'";
+                },
                 COMPLAINT_STATUS_GROUPS[$filter]
             );
 
             $where .= " AND LOWER(TRIM(status)) IN (" . implode(', ', $quoted) . ")";
         }
+        $where .= $searchWhereSql;
 
         $stmt = $conn->prepare("
             SELECT *
@@ -474,13 +512,27 @@ if ($complaintTableAvailable && $filterTotal > 0) {
             ORDER BY id DESC
             LIMIT ? OFFSET ?
         ");
-        $stmt->bind_param("iii", $customerId, $perPage, $offset);
+        if ($search === '') {
+            $stmt->bind_param("iii", $customerId, $perPage, $offset);
+        } else {
+            $stmt->bind_param(
+                "issssii",
+                $customerId,
+                $searchPattern,
+                $searchPattern,
+                $searchPattern,
+                $searchPattern,
+                $perPage,
+                $offset
+            );
+        }
         $stmt->execute();
         $complaints = statementFetchAll($stmt);
         $stmt->close();
     } catch (Throwable $e) {
         error_log('Complaint YESNET complaint query failed: ' . $e->getMessage());
         $complaints = [];
+        $complaintLoadError = true;
     }
 }
 
@@ -527,17 +579,21 @@ if (
 
 $filterLabels = [
     'all'     => 'Semua',
-    'open'    => 'Pending',
-    'process' => 'In Progress / Waiting',
-    'closed'  => 'Resolved / Rejected',
+    'open'    => 'Baru',
+    'process' => 'Diproses',
+    'closed'  => 'Selesai',
+    'rejected' => 'Ditolak',
 ];
 
-function complaintPageUrl(string $filter, int $page): string
+function complaintPageUrl(string $filter, int $page, string $search = ''): string
 {
     $query = ['status' => $filter];
 
     if ($page > 1) {
         $query['page'] = $page;
+    }
+    if ($search !== '') {
+        $query['q'] = $search;
     }
 
     return 'complaint.php?' . http_build_query($query);
@@ -578,7 +634,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     <link rel="stylesheet" href="assets/css/dashboard.css">
 
     <!-- Complaint CSS (khusus halaman laporan) -->
-    <link rel="stylesheet" href="assets/css/complaint.css?v=14">
+    <link rel="stylesheet" href="assets/css/complaint.css?v=13">
 
     <link rel="stylesheet" href="assets/css/portal-unified.css">
     <script defer src="assets/js/portal-ui.js"></script>
@@ -864,7 +920,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <div class="stat-card">
                     <div class="stat-top">
                         <div class="stat-icon orange"><i class="bi bi-exclamation-circle-fill"></i></div>
-                        <span class="stat-tag">PENDING</span>
+                        <span class="stat-tag">BARU</span>
                     </div>
                     <div class="stat-value"><?= (int) $counts['open']; ?></div>
                     <div class="stat-label">Menunggu ditangani</div>
@@ -873,7 +929,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <div class="stat-card">
                     <div class="stat-top">
                         <div class="stat-icon purple"><i class="bi bi-arrow-repeat"></i></div>
-                        <span class="stat-tag">IN PROGRESS</span>
+                        <span class="stat-tag">DIPROSES</span>
                     </div>
                     <div class="stat-value"><?= (int) $counts['process']; ?></div>
                     <div class="stat-label">Sedang ditangani tim</div>
@@ -882,7 +938,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <div class="stat-card">
                     <div class="stat-top">
                         <div class="stat-icon green"><i class="bi bi-check-circle-fill"></i></div>
-                        <span class="stat-tag green">RESOLVED / REJECTED</span>
+                        <span class="stat-tag green">SELESAI</span>
                     </div>
                     <div class="stat-value"><?= (int) $counts['closed']; ?></div>
                     <div class="stat-label">Sudah terselesaikan</div>
@@ -909,7 +965,13 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
                     <div class="cp-quick-grid">
 
-                        <?php foreach ($quickCategories as [$quickKey, $quickLabel, $quickIcon]): ?>
+                        <?php foreach ($quickCategories as $quick): ?>
+
+                            <?php
+                            $quickKey   = $quick[0];
+                            $quickLabel = $quick[1];
+                            $quickIcon  = $quick[2];
+                            ?>
 
                             <a href="complaint_create.php?category=<?= e($quickKey); ?>" class="cp-quick-item">
                                 <i class="bi <?= e($quickIcon); ?>"></i>
@@ -946,7 +1008,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                     <nav class="cp-tabs" aria-label="Filter status laporan">
                         <?php foreach ($filterLabels as $key => $label): ?>
                             <a
-                                href="complaint.php?status=<?= e($key); ?>"
+                                href="<?= e(complaintPageUrl($key, 1, $search)); ?>"
                                 class="cp-tab <?= $filter === $key ? 'active' : ''; ?>"
                                 <?= $filter === $key ? 'aria-current="true"' : ''; ?>
                             >
@@ -958,8 +1020,38 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
                 <?php endif; ?>
 
+                <?php if ($complaintTableAvailable): ?>
+                    <form class="cp-search" method="get" action="complaint.php">
+                        <input type="hidden" name="status" value="<?= e($filter); ?>">
+                        <label class="visually-hidden" for="complaintSearch">Cari laporan</label>
+                        <input
+                            type="search"
+                            id="complaintSearch"
+                            name="q"
+                            value="<?= e($search); ?>"
+                            maxlength="100"
+                            placeholder="Cari nomor tiket, judul, kategori, atau deskripsi"
+                        >
+                        <button type="submit" class="cp-search-button">
+                            <i class="bi bi-search"></i>
+                            Cari
+                        </button>
+                        <?php if ($search !== ''): ?>
+                            <a class="cp-search-reset" href="<?= e(complaintPageUrl($filter, 1)); ?>">Hapus pencarian</a>
+                        <?php endif; ?>
+                    </form>
+                <?php endif; ?>
 
-                <?php if (!$complaintTableAvailable): ?>
+
+                <?php if ($complaintLoadError): ?>
+
+                    <div class="cp-empty">
+                        <div class="cp-empty-icon"><i class="bi bi-exclamation-triangle"></i></div>
+                        <h4>Data laporan belum dapat dimuat</h4>
+                        <p>Terjadi kendala saat membaca laporan. Silakan muat ulang halaman atau hubungi Customer Care.</p>
+                    </div>
+
+                <?php elseif (!$complaintTableAvailable): ?>
 
                     <div class="cp-empty">
                         <div class="cp-empty-icon"><i class="bi bi-plug"></i></div>
@@ -1007,13 +1099,25 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                             <?php
                             $complaintId = (int) ($row['id'] ?? 0);
 
-                            [$statusLabel, $statusClass, $statusIcon] =
-                                $complaintStatusMeta[$row['_status']] ?? $complaintStatusMeta['other'];
-                            $actualStatus = yesnetComplaintStatus((string) ($row['status'] ?? ''));
-                            $statusLabel = YESNET_COMPLAINT_STATUSES[$actualStatus] ?? $statusLabel;
+                            $statusMeta = isset($complaintStatusMeta[$row['_status']])
+                                ? $complaintStatusMeta[$row['_status']]
+                                : $complaintStatusMeta['other'];
 
-                            [$priorityLabel, $priorityClass] =
-                                $priorityMeta[$row['_priority']] ?? $priorityMeta['other'];
+                            $statusLabel = $statusMeta[0];
+                            $statusClass = $statusMeta[1];
+                            $statusIcon  = $statusMeta[2];
+
+                            $priorityInfo = isset($priorityMeta[$row['_priority']])
+                                ? $priorityMeta[$row['_priority']]
+                                : $priorityMeta['other'];
+
+                            $priorityLabel = $priorityInfo[0];
+                            $priorityClass = $priorityInfo[1];
+
+                            // Status asli ditampilkan bila tidak dikenali.
+                            if ($row['_status'] === 'other' && trim((string) ($row['status'] ?? '')) !== '') {
+                                $statusLabel = ucfirst(trim((string) $row['status']));
+                            }
 
                             $subject = trim((string) ($row['subject'] ?? $row['judul'] ?? ''));
 
@@ -1120,7 +1224,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                         <nav class="cp-pagination" aria-label="Halaman laporan">
 
                             <?php if ($page > 1): ?>
-                                <a href="<?= e(complaintPageUrl($filter, $page - 1)); ?>" class="cp-page-btn">
+                                <a href="<?= e(complaintPageUrl($filter, $page - 1, $search)); ?>" class="cp-page-btn">
                                     <i class="bi bi-chevron-left"></i> Sebelumnya
                                 </a>
                             <?php else: ?>
@@ -1134,7 +1238,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                             </span>
 
                             <?php if ($page < $totalPages): ?>
-                                <a href="<?= e(complaintPageUrl($filter, $page + 1)); ?>" class="cp-page-btn">
+                                <a href="<?= e(complaintPageUrl($filter, $page + 1, $search)); ?>" class="cp-page-btn">
                                     Berikutnya <i class="bi bi-chevron-right"></i>
                                 </a>
                             <?php else: ?>
