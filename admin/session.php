@@ -326,6 +326,10 @@ function adminPermissionForRequest(): string
         return 'dashboard.view';
     }
 
+    if ($route === 'notifications.php') {
+        return 'network.manage';
+    }
+
     if ($route === 'overview.php') {
 
         return match ((string) ($_GET['section'] ?? '')) {

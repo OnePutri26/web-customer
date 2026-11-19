@@ -3,7 +3,9 @@ session_start();
 
 require_once "../config/database.php";
 require_once "../config/auth.php";
+require_once __DIR__ . '/../inc/service_notifications.php';
 requireRole('customer');
+date_default_timezone_set('Asia/Jakarta');
 
 /*
 |--------------------------------------------------------------------------
@@ -29,9 +31,11 @@ $userId = (int) ($_SESSION['user_id'] ?? 0);
 */
 
 $customerName = "Customer";
+$customerId = 0;
+$notificationCsrf = $_SESSION['csrf_notification'] ??= bin2hex(random_bytes(32));
 
 $customerStmt = $conn->prepare(
-    "SELECT nama FROM customers WHERE user_id = ? LIMIT 1"
+    "SELECT id, nama FROM customers WHERE user_id = ? LIMIT 1"
 );
 
 if ($customerStmt) {
@@ -43,6 +47,7 @@ if ($customerStmt) {
     if ($customerResult && $customerResult->num_rows > 0) {
 
         $customerData = $customerResult->fetch_assoc();
+        $customerId = (int) ($customerData['id'] ?? 0);
 
         if (!empty($customerData['nama'])) {
             $customerName = $customerData['nama'];
@@ -58,7 +63,13 @@ if ($customerStmt) {
 |--------------------------------------------------------------------------
 */
 
-if (isset($_GET['read_all']) && $_GET['read_all'] === '1') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'read_all') {
+    $postToken = (string) ($_POST['csrf_token'] ?? '');
+    if ($postToken === '' || !hash_equals($notificationCsrf, $postToken)) {
+        http_response_code(403);
+        exit('Sesi notifikasi tidak valid. Muat ulang halaman lalu coba kembali.');
+    }
+    yesnetNotificationMarkAllRead($conn, $userId);
 
     $updateQuery = "
         UPDATE notifications
@@ -150,6 +161,45 @@ if ($result) {
 
 mysqli_stmt_close($stmt);
 
+$serviceNotifications = [];
+$detailNotification = null;
+try {
+    if ($customerId > 0) {
+        yesnetNotificationSyncPayments($conn, $userId, $customerId);
+        yesnetNotificationSyncIncidents($conn, $userId, $customerId);
+    }
+    $serviceNotifications = yesnetNotificationList($conn, $userId, 100);
+    if (isset($_GET['id']) && preg_match('/^(service|legacy):(\d+)$/', (string) $_GET['id'], $matches)) {
+        $detailSource = $matches[1];
+        $detailId = (int) $matches[2];
+        foreach ($serviceNotifications as &$serviceNotification) {
+            if ($detailSource === 'service' && (int) $serviceNotification['id'] === $detailId) {
+                yesnetNotificationMarkRead($conn, $userId, $detailId);
+                $serviceNotification['dibaca'] = 1;
+                $detailNotification = $serviceNotification;
+                break;
+            }
+        }
+        unset($serviceNotification);
+        if ($detailSource === 'legacy') {
+            foreach ($notifications as $legacyNotification) {
+                if ((int) ($legacyNotification['id'] ?? 0) === $detailId) {
+                    $detailNotification = $legacyNotification;
+                    break;
+                }
+            }
+        }
+    }
+    $notifications = array_merge($notifications, $serviceNotifications);
+    usort($notifications, static function (array $a, array $b): int {
+        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+    });
+} catch (Throwable $e) {
+    error_log('Customer notification history failed: ' . $e->getMessage());
+    http_response_code(503);
+    exit('Riwayat notifikasi belum dapat dimuat. Coba kembali beberapa saat lagi.');
+}
+
 /*
 |--------------------------------------------------------------------------
 | HITUNG NOTIFIKASI BELUM DIBACA
@@ -181,6 +231,21 @@ $typeDataList = [
     'gangguan' => [
         'icon' => 'bi-exclamation-triangle-fill',
         'name' => 'Gangguan'
+    ],
+
+    'tidak_stabil' => [
+        'icon' => 'bi-wifi-off',
+        'name' => 'Koneksi tidak stabil'
+    ],
+
+    'pemeliharaan' => [
+        'icon' => 'bi-wrench-adjustable-circle-fill',
+        'name' => 'Pemeliharaan jaringan'
+    ],
+
+    'selesai' => [
+        'icon' => 'bi-check-circle-fill',
+        'name' => 'Gangguan selesai'
     ],
 
     'pembayaran' => [
@@ -463,20 +528,39 @@ function formatNotificationDate($date)
 
                 <?php if ($unreadCount > 0): ?>
 
-                    <a
-                        href="notifikasi.php?read_all=1"
-                        class="read-all-btn"
-                    >
+                    <form method="post" class="read-all-form">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($notificationCsrf, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="read_all">
+                        <button type="submit" class="read-all-btn">
 
                         <i class="bi bi-check2-all"></i>
 
                         Tandai semua sudah dibaca
 
-                    </a>
+                        </button>
+                    </form>
 
                 <?php endif; ?>
 
             </div>
+
+            <?php if ($detailNotification !== null): ?>
+                <?php
+                $detailType = strtolower((string) ($detailNotification['type'] ?? 'info'));
+                $detailIcon = $typeDataList[$detailType]['icon'] ?? 'bi-info-circle-fill';
+                ?>
+                <article class="notification-detail-panel">
+                    <a class="notification-detail-back" href="notifikasi.php"><i class="bi bi-arrow-left"></i> Kembali ke riwayat</a>
+                    <div class="notification-detail-heading">
+                        <i class="bi <?= htmlspecialchars($detailIcon, ENT_QUOTES, 'UTF-8'); ?>"></i>
+                        <div><span>Detail notifikasi</span><h2><?= htmlspecialchars($detailNotification['judul'], ENT_QUOTES, 'UTF-8'); ?></h2></div>
+                    </div>
+                    <p><?= nl2br(htmlspecialchars($detailNotification['message'], ENT_QUOTES, 'UTF-8')); ?></p>
+                    <?php if (!empty($detailNotification['action_url']) && $detailType === 'pembayaran'): ?>
+                        <a class="notification-detail-pay" href="<?= htmlspecialchars($detailNotification['action_url'], ENT_QUOTES, 'UTF-8'); ?>"><i class="bi bi-credit-card-fill"></i> Bayar Sekarang</a>
+                    <?php endif; ?>
+                </article>
+            <?php endif; ?>
 
 
             <!-- STAT -->
@@ -626,6 +710,14 @@ function formatNotificationDate($date)
                                         )
                                     ); ?>
                                 </p>
+                                <?php if (($notification['source'] ?? '') === 'service'): ?>
+                                    <a class="notification-open-link" href="notifikasi.php?id=service:<?= (int) $notification['id']; ?>">Lihat detail</a>
+                                    <?php if (!empty($notification['action_url']) && $type === 'pembayaran'): ?>
+                                        <a class="notification-pay-link" href="<?= htmlspecialchars($notification['action_url'], ENT_QUOTES, 'UTF-8'); ?>">Bayar Sekarang</a>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <a class="notification-open-link" href="notifikasi.php?id=legacy:<?= (int) $notification['id']; ?>">Lihat detail</a>
+                                <?php endif; ?>
 
                             </div>
 

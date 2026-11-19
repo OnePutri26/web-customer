@@ -288,6 +288,48 @@ button:focus-visible {
     text-align: center;
 }
 
+.topbar-notifications { position: relative; }
+.notification-new-dot { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border: 1px solid #fff; border-radius: 50%; background: #ef4444; }
+.notification-dropdown {
+    position: absolute; top: calc(100% + 12px); right: 0; z-index: 1100;
+    width: min(360px, calc(100vw - 28px)); padding: 8px; border: 1px solid #e7edf5;
+    border-radius: 15px; background: #fff; box-shadow: 0 18px 50px rgba(15, 23, 42, .16);
+}
+.notification-dropdown-heading { display: flex; align-items: center; justify-content: space-between; padding: 9px 10px 11px; border-bottom: 1px solid #eef2f7; }
+.notification-dropdown-heading strong { color: #172033; font-size: 13px; }
+.notification-dropdown-heading a { color: #2563eb; font-size: 11px; font-weight: 700; }
+.notification-dropdown-item { display: flex; gap: 11px; padding: 11px 9px; border-radius: 10px; color: #64748b; }
+.notification-dropdown-item:hover, .notification-dropdown-item.is-unread { background: #f5f8ff; }
+.notification-dropdown-item > i { flex: 0 0 auto; margin-top: 2px; color: #e27731; }
+.notification-dropdown-item > i.bi-credit-card-fill { color: #2867de; }
+.notification-dropdown-item span { min-width: 0; }
+.notification-dropdown-item strong, .notification-dropdown-item small { display: block; overflow: hidden; text-overflow: ellipsis; }
+.notification-dropdown-item strong { color: #26364f; font-size: 11px; }
+.notification-dropdown-item small { margin-top: 3px; color: #738198; font-size: 10px; white-space: nowrap; }
+.notification-dropdown-empty { display: block; padding: 16px 10px; color: #8190a4; font-size: 11px; text-align: center; }
+.notification-modal-open { overflow: hidden; }
+.notification-modal-backdrop {
+    position: fixed; inset: 0; z-index: 1500; display: grid; place-items: center; padding: 20px;
+    background: rgba(15, 23, 42, .46); backdrop-filter: blur(4px);
+}
+.notification-modal {
+    position: relative; width: min(440px, 100%); padding: 31px 30px 25px; border: 1px solid #edf1f7;
+    border-radius: 22px; background: #fff; box-shadow: 0 24px 80px rgba(15, 23, 42, .24);
+    text-align: center; animation: notification-pop-in .2s ease-out;
+}
+.notification-modal-close { position: absolute; top: 13px; right: 13px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: #f4f6fa; color: #64748b; }
+.notification-modal-icon { display: grid; width: 56px; height: 56px; margin: 0 auto 15px; place-items: center; border-radius: 17px; background: #fff2e9; color: #e17a30; font-size: 23px; }
+.notification-modal-kicker { color: #2563eb; font-size: 10px; font-weight: 800; letter-spacing: .12em; }
+.notification-modal h2 { margin: 8px 0; color: #172033; font-size: 20px; font-weight: 800; }
+.notification-modal p { margin: 0; color: #637187; font-size: 13px; line-height: 1.65; white-space: pre-line; }
+.notification-modal .notification-action-error { margin-top: 12px; color: #c62828; font-size: 11px; }
+.notification-modal-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 9px; margin-top: 23px; }
+.notification-modal-actions a, .notification-modal-ack { min-height: 39px; padding: 10px 14px; border-radius: 10px; font-size: 11px; font-weight: 750; }
+.notification-modal-secondary { border: 1px solid #e2e8f0; color: #526179; }
+.notification-modal-pay { background: #eaf1ff; color: #2563eb; }
+.notification-modal-ack { border: 0; background: #2563eb; color: #fff; cursor: pointer; }
+@keyframes notification-pop-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
 .top-profile {
     display: flex;
     align-items: center;

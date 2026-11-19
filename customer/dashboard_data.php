@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../inc/service_notifications.php';
 
 requireRole('customer');
 
@@ -158,6 +159,9 @@ try {
 
     $customer = $customerRows[0];
     $customerId = (int) ($customer['id'] ?? 0);
+
+    yesnetNotificationSyncPayments($conn, $userId, $customerId);
+    yesnetNotificationSyncIncidents($conn, $userId, $customerId);
 
     /* ---------------- TAGIHAN ---------------- */
 
@@ -370,6 +374,14 @@ try {
             [$userId]
         );
     }
+
+    $serviceNotifications = yesnetNotificationList($conn, $userId, 20);
+    $unreadNotifications += yesnetNotificationUnreadCount($conn, $userId);
+    $notifications = array_merge($notifications, $serviceNotifications);
+    usort($notifications, static function (array $a, array $b): int {
+        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+    });
+    $notifications = array_slice($notifications, 0, 4);
 
     dashboardDataResponse([
         'data' => [

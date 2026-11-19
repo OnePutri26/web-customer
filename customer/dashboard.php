@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../config/auth.php';
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../inc/service_notifications.php';
 requireRole('customer');
 date_default_timezone_set('Asia/Jakarta');
 
@@ -248,6 +249,13 @@ if ($rows === []) {
 $customer = $rows[0];
 $customerId = (int) ($customer['id'] ?? 0);
 
+try {
+    yesnetNotificationSyncPayments($conn, $userId, $customerId);
+    yesnetNotificationSyncIncidents($conn, $userId, $customerId);
+} catch (Throwable $e) {
+    error_log('Dashboard YESNET notification sync failed: ' . $e->getMessage());
+}
+
 $nama = trim((string) pick($customer, ['nama', 'name'], $_SESSION['nama'] ?? $_SESSION['username'] ?? 'Customer'));
 if ($nama === '') {
     $nama = 'Customer';
@@ -363,6 +371,23 @@ if (allColumnsExist($conn, 'notifications', ['id_user', 'dibaca'])) {
         $notificationFeedAvailable = false;
         error_log('Dashboard YESNET notification failed: ' . $e->getMessage());
     }
+}
+
+$serviceNotifications = [];
+try {
+    $serviceNotifications = yesnetNotificationList($conn, $userId, 20);
+    $unreadNotifications += yesnetNotificationUnreadCount($conn, $userId);
+    $latestNotifications = array_merge($latestNotifications, $serviceNotifications);
+    usort($latestNotifications, static function (array $a, array $b): int {
+        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+    });
+    $latestNotifications = array_slice($latestNotifications, 0, 4);
+    if ($serviceNotifications !== []) {
+        $notificationFeedAvailable = true;
+    }
+    $notificationFeedAvailable = $notificationFeedAvailable || yesnetNotificationTablesAvailable($conn);
+} catch (Throwable $e) {
+    error_log('Dashboard YESNET service notifications failed: ' . $e->getMessage());
 }
 
 /* ======================== TOTAL GANGGUAN ======================== */
@@ -526,6 +551,7 @@ $quickServices = [
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/dashboard.css">
     <link rel="stylesheet" href="assets/css/portal-unified.css">
+    <meta name="notification-csrf" content="<?= e($_SESSION['csrf_notification'] ??= bin2hex(random_bytes(32))); ?>">
     <script defer src="assets/js/portal-ui.js"></script>
 </head>
 
@@ -622,11 +648,20 @@ $quickServices = [
                     <i class="bi bi-moon-stars" id="themeToggleIcon"></i>
                 </button>
 
-                <a href="notifikasi.php" class="notification-button" title="Notifikasi">
+                <div class="topbar-notifications">
+                <button type="button" class="notification-button" id="notificationBell"
+                        aria-label="Buka notifikasi" aria-expanded="false" aria-controls="notificationDropdown"
+                        title="Notifikasi">
                     <i class="bi bi-bell"></i>
                     <span class="notification-count" id="dashboardUnreadCount"
                         <?= $unreadNotifications > 0 ? '' : 'hidden'; ?>><?= $unreadNotifications > 99 ? '99+' : $unreadNotifications; ?></span>
-                </a>
+                    <span class="notification-new-dot" id="notificationNewDot" <?= $unreadNotifications > 0 ? '' : 'hidden'; ?>></span>
+                </button>
+                <div class="notification-dropdown" id="notificationDropdown" hidden>
+                    <div class="notification-dropdown-heading"><strong>Notifikasi terbaru</strong><a href="notifikasi.php">Lihat Semua</a></div>
+                    <div id="notificationDropdownList"><span class="notification-dropdown-empty">Memuat notifikasi...</span></div>
+                </div>
+                </div>
 
                 <a href="profile.php" class="top-profile" aria-label="Buka pengaturan akun">
                     <div class="top-profile-avatar"><?= e($avatar); ?></div>
@@ -1031,6 +1066,9 @@ $quickServices = [
                                         'gangguan'   => 'bi-exclamation-triangle-fill',
                                         'pembayaran' => 'bi-credit-card-fill',
                                         'promo'      => 'bi-gift-fill',
+                                        'tidak_stabil' => 'bi-wifi-off',
+                                        'pemeliharaan' => 'bi-wrench-adjustable-circle-fill',
+                                        'selesai' => 'bi-check-circle-fill',
                                         default      => 'bi-info-circle-fill',
                                     };
                                     ?>
@@ -1166,6 +1204,21 @@ $quickServices = [
     </main>
 </div>
 
+<div class="notification-modal-backdrop" id="notificationModal" hidden>
+    <section class="notification-modal" role="dialog" aria-modal="true" aria-labelledby="notificationModalTitle">
+        <button type="button" class="notification-modal-close" id="notificationModalClose" aria-label="Tutup notifikasi"><i class="bi bi-x-lg"></i></button>
+        <span class="notification-modal-icon" id="notificationModalIcon"><i class="bi bi-bell-fill"></i></span>
+        <span class="notification-modal-kicker">INFO YESNET</span>
+        <h2 id="notificationModalTitle"></h2>
+        <p id="notificationModalMessage"></p>
+        <p class="notification-action-error" id="notificationActionError" role="alert" hidden></p>
+        <div class="notification-modal-actions">
+            <a href="notifikasi.php" class="notification-modal-secondary">Lihat Semua</a>
+                <a href="billing.php" class="notification-modal-pay" id="notificationModalPay" hidden>Bayar Sekarang</a>
+            <button type="button" class="notification-modal-ack" id="notificationModalAck">Mengerti</button>
+        </div>
+    </section>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
@@ -1524,11 +1577,47 @@ document.addEventListener('DOMContentLoaded', function () {
     function updateNotifications(notifications, unreadCount) {
         const feed = document.getElementById('dashboardNotificationFeed');
         const badge = document.getElementById('dashboardUnreadCount');
+        const newDot = document.getElementById('notificationNewDot');
+        const dropdown = document.getElementById('notificationDropdownList');
 
         if (badge) {
             const count = Number(unreadCount) || 0;
             badge.textContent = count > 99 ? '99+' : String(count);
             badge.hidden = count === 0;
+        }
+        if (newDot) { newDot.hidden = Number(unreadCount) <= 0; }
+        if (dropdown) {
+            dropdown.textContent = '';
+            if (!Array.isArray(notifications) || notifications.length === 0) {
+                const empty = document.createElement('span');
+                empty.className = 'notification-dropdown-empty';
+                empty.textContent = 'Belum ada notifikasi terbaru.';
+                dropdown.appendChild(empty);
+            } else {
+                notifications.slice(0, 4).forEach(function (n) {
+                    const item = document.createElement('a');
+                    item.className = 'notification-dropdown-item' + (Number(n.dibaca) === 0 ? ' is-unread' : '');
+                    item.href = n.source === 'service'
+                        ? 'notifikasi.php?id=service:' + encodeURIComponent(String(n.id))
+                        : 'notifikasi.php';
+                    const icon = document.createElement('i');
+                    icon.className = 'bi ' + (String(n.type || '').toLowerCase() === 'pembayaran'
+                        ? 'bi-credit-card-fill'
+                        : (String(n.type || '').toLowerCase() === 'gangguan'
+                            || String(n.type || '').toLowerCase() === 'tidak_stabil'
+                            || String(n.type || '').toLowerCase() === 'pemeliharaan'
+                            ? 'bi-wifi-off'
+                            : 'bi-info-circle-fill'));
+                    const copy = document.createElement('span');
+                    const title = document.createElement('strong');
+                    title.textContent = String(n.judul || 'Informasi YESNET');
+                    const message = document.createElement('small');
+                    message.textContent = String(n.message || '');
+                    copy.append(title, message);
+                    item.append(icon, copy);
+                    dropdown.appendChild(item);
+                });
+            }
         }
         if (!feed) { return; }
         if (feed.dataset.sourceAvailable !== 'true') { return; }
@@ -1547,13 +1636,18 @@ document.addEventListener('DOMContentLoaded', function () {
         const icons = {
             gangguan: 'bi-exclamation-triangle-fill',
             pembayaran: 'bi-credit-card-fill',
-            promo: 'bi-gift-fill'
+            promo: 'bi-gift-fill',
+            tidak_stabil: 'bi-wifi-off',
+            pemeliharaan: 'bi-wrench-adjustable-circle-fill',
+            selesai: 'bi-check-circle-fill'
         };
 
         notifications.forEach(function (n) {
             const link = document.createElement('a');
             link.className = 'dashboard-notification' + (Number(n.dibaca) === 0 ? ' is-unread' : '');
-            link.href = 'notifikasi.php';
+            link.href = n.source === 'service'
+                ? 'notifikasi.php?id=service:' + encodeURIComponent(String(n.id))
+                : 'notifikasi.php';
 
             const icon = document.createElement('span');
             icon.className = 'notification-icon';
@@ -1573,6 +1667,94 @@ document.addEventListener('DOMContentLoaded', function () {
             copy.append(title, message, time);
             link.append(icon, copy);
             feed.appendChild(link);
+        });
+
+        const unreadIncident = notifications.find(function (n) {
+            return n.source === 'service' && Number(n.dibaca) === 0;
+        });
+        const modal = document.getElementById('notificationModal');
+        if (unreadIncident && modal) {
+            let shown;
+            try { shown = sessionStorage.getItem('yesnet-notification-' + unreadIncident.id); } catch (error) { shown = null; }
+            if (!shown) {
+                try { sessionStorage.setItem('yesnet-notification-' + unreadIncident.id, '1'); } catch (error) {}
+                const isPayment = String(unreadIncident.type || '').toLowerCase() === 'pembayaran';
+                const icon = document.querySelector('#notificationModalIcon i');
+                if (icon) { icon.className = 'bi ' + (isPayment ? 'bi-credit-card-fill' : 'bi-wifi-off'); }
+                document.getElementById('notificationModalTitle').textContent = String(unreadIncident.judul || 'Notifikasi YESNET');
+                document.getElementById('notificationModalMessage').textContent = String(unreadIncident.message || '');
+                document.getElementById('notificationModalAck').dataset.notificationId = String(unreadIncident.id);
+                const payLink = document.getElementById('notificationModalPay');
+                payLink.hidden = !isPayment || !unreadIncident.action_url;
+                if (!payLink.hidden) { payLink.href = String(unreadIncident.action_url); }
+                document.getElementById('notificationActionError').hidden = true;
+                modal.hidden = false;
+                document.body.classList.add('notification-modal-open');
+            }
+        }
+    }
+
+    const bell = document.getElementById('notificationBell');
+    const dropdownPanel = document.getElementById('notificationDropdown');
+    if (bell && dropdownPanel) {
+        bell.addEventListener('click', function () {
+            const isOpen = !dropdownPanel.hidden;
+            dropdownPanel.hidden = isOpen;
+            bell.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+        });
+        document.addEventListener('click', function (event) {
+            if (!event.target.closest('.topbar-notifications')) {
+                dropdownPanel.hidden = true;
+                bell.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+
+    const modal = document.getElementById('notificationModal');
+    const modalClose = document.getElementById('notificationModalClose');
+    const modalAck = document.getElementById('notificationModalAck');
+    async function closeNotificationModal(markRead) {
+        if (!modal) { return; }
+        if (markRead && modalAck && modalAck.dataset.notificationId) {
+            const csrf = document.querySelector('meta[name="notification-csrf"]');
+            const body = new URLSearchParams({ action: 'read', id: modalAck.dataset.notificationId });
+            try {
+                const response = await fetch('notification_action.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-YESNET-CSRF': csrf ? csrf.content : ''
+                    },
+                    body: body.toString(),
+                    credentials: 'same-origin',
+                    cache: 'no-store'
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.error || 'Status baca notifikasi gagal diperbarui.');
+                }
+                refreshDashboardData();
+            } catch (error) {
+                console.error('Status baca notifikasi gagal diperbarui:', error);
+                const errorMessage = document.getElementById('notificationActionError');
+                if (errorMessage) {
+                    errorMessage.textContent = error.message || 'Status baca notifikasi gagal diperbarui. Coba lagi.';
+                    errorMessage.hidden = false;
+                }
+                return;
+            }
+        }
+        modal.hidden = true;
+        document.body.classList.remove('notification-modal-open');
+    }
+    if (modalClose) { modalClose.addEventListener('click', function () { closeNotificationModal(false); }); }
+    if (modalAck) { modalAck.addEventListener('click', function () { closeNotificationModal(true); }); }
+    if (modal) {
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) { closeNotificationModal(false); }
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && !modal.hidden) { closeNotificationModal(false); }
         });
     }
 

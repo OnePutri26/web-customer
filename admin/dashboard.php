@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/auth_check.php';
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../inc/service_notifications.php';
 
 date_default_timezone_set('Asia/Jakarta');
 
@@ -32,6 +33,20 @@ $incomeLabels = [];
 $incomeValues = [];
 $customerValues = [];
 $customerGrowthAvailable = false;
+$activeNoticeCount = 0;
+$latestIncidents = [];
+
+if (yesnetNotificationTablesAvailable($conn)) {
+    $activeNoticeCount = (int) $conn->query(
+        'SELECT COUNT(*) AS total FROM yesnet_network_incidents WHERE is_active = 1'
+    )->fetch_assoc()['total'];
+    $incidentResult = $conn->query(
+        'SELECT id, judul, message, type, area_name
+         FROM yesnet_network_incidents WHERE is_active = 1
+         ORDER BY updated_at DESC, id DESC LIMIT 4'
+    );
+    $latestIncidents = $incidentResult->fetch_all(MYSQLI_ASSOC);
+}
 
 try {
     $customerStats = $conn->query("
@@ -183,6 +198,7 @@ $chartIncome = array_values($incomeValues);
             <a href="coverage_requests.php"><i class="bi bi-geo-alt"></i> Coverage</a>
             <a href="overview.php?section=technicians"><i class="bi bi-person-gear"></i> Teknisi</a>
             <a href="overview.php?section=network"><i class="bi bi-router"></i> Area Jaringan</a>
+            <a href="notifications.php"><i class="bi bi-bell"></i> Notifikasi Layanan</a>
         </nav>
         <div class="sidebar-bottom">
             <div class="admin-profile">
@@ -197,7 +213,26 @@ $chartIncome = array_values($incomeValues);
         <header class="topbar">
             <button class="sidebar-toggle" type="button" aria-label="Buka navigasi" aria-expanded="false"><i class="bi bi-list"></i></button>
             <div><span class="eyebrow">OVERVIEW</span><h1>Dashboard Operasional</h1></div>
-            <div class="topbar-meta"><span class="live-dot"></span> Data operasional <span class="topbar-date"><?= date('d M Y') ?></span></div>
+            <div class="topbar-meta">
+                <div class="admin-notification-wrap">
+                    <button class="admin-notification-button" id="adminNotificationBell" type="button" aria-label="Notifikasi layanan" aria-expanded="false">
+                        <i class="bi bi-bell-fill"></i>
+                        <?php if ($activeNoticeCount > 0): ?><span class="admin-notification-badge"><?= $activeNoticeCount > 99 ? '99+' : $activeNoticeCount ?></span><span class="admin-notification-dot"></span><?php endif; ?>
+                    </button>
+                    <div class="admin-notification-menu" id="adminNotificationMenu" hidden>
+                        <div class="admin-notification-menu-head"><strong>Notifikasi layanan aktif</strong><a href="notifications.php">Lihat Semua</a></div>
+                        <?php if ($latestIncidents === []): ?>
+                            <div class="admin-notification-empty">Belum ada notifikasi aktif.</div>
+                        <?php else: foreach ($latestIncidents as $incident): ?>
+                            <a class="admin-notification-item" href="notifications.php?edit=<?= (int) $incident['id'] ?>">
+                                <i class="bi <?= $incident['type'] === 'selesai' ? 'bi-check-circle-fill' : 'bi-wifi-off' ?>"></i>
+                                <span><strong><?= adminDashboardEscape($incident['judul']) ?></strong><small><?= adminDashboardEscape($incident['area_name']) ?> · <?= adminDashboardEscape($incident['message']) ?></small></span>
+                            </a>
+                        <?php endforeach; endif; ?>
+                    </div>
+                </div>
+                <span class="live-dot"></span> Data operasional <span class="topbar-date"><?= date('d M Y') ?></span>
+            </div>
         </header>
 
         <section class="page-content">
@@ -286,5 +321,22 @@ window.yesnetDashboard = {
 };
 </script>
 <script src="assets/admin.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var bell = document.getElementById('adminNotificationBell');
+    var menu = document.getElementById('adminNotificationMenu');
+    if (!bell || !menu) { return; }
+    bell.addEventListener('click', function () {
+        menu.hidden = !menu.hidden;
+        bell.setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
+    });
+    document.addEventListener('click', function (event) {
+        if (!event.target.closest('.admin-notification-wrap')) {
+            menu.hidden = true;
+            bell.setAttribute('aria-expanded', 'false');
+        }
+    });
+});
+</script>
 </body>
 </html>

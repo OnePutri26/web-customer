@@ -472,9 +472,12 @@ a {
 
     font-size: 12px;
     font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
 
     transition: 0.2s;
 }
+.read-all-form { margin: 0; }
 
 .read-all-btn:hover {
     background: #dbeafe;
@@ -638,6 +641,17 @@ a {
     color: #ea580c;
 }
 
+.notification-icon.type-tidak_stabil,
+.notification-icon.type-pemeliharaan {
+    background: #fff7ed;
+    color: #ea580c;
+}
+
+.notification-icon.type-selesai {
+    background: #ecfdf5;
+    color: #059669;
+}
+
 .notification-icon.type-pembayaran {
     background: #f0fdf4;
     color: #16a34a;
@@ -699,6 +713,17 @@ a {
 .type-badge.type-gangguan {
     background: #fff7ed;
     color: #ea580c;
+}
+
+.type-badge.type-tidak_stabil,
+.type-badge.type-pemeliharaan {
+    background: #fff7ed;
+    color: #ea580c;
+}
+
+.type-badge.type-selesai {
+    background: #ecfdf5;
+    color: #059669;
 }
 
 .type-badge.type-pembayaran {
@@ -978,3 +1003,14 @@ a {
         display: none;
     }
 }
+
+.notification-detail-panel { margin: 0 0 22px; padding: 22px; border: 1px solid #e5eaf2; border-radius: 14px; background: #fff; box-shadow: 0 8px 25px rgba(15, 23, 42, .05); }
+.notification-detail-back { display: inline-flex; gap: 7px; align-items: center; margin-bottom: 18px; color: #64748b; font-size: 11px; font-weight: 650; }
+.notification-detail-heading { display: flex; align-items: center; gap: 12px; }
+.notification-detail-heading > i { display: grid; width: 42px; height: 42px; flex: 0 0 auto; place-items: center; border-radius: 12px; background: #fff2e9; color: #e27731; font-size: 18px; }
+.notification-detail-heading span { color: #2563eb; font-size: 10px; font-weight: 750; text-transform: uppercase; }
+.notification-detail-heading h2 { margin: 3px 0 0; color: #172033; font-size: 17px; }
+.notification-detail-panel > p { margin: 16px 0 0; color: #5f6e82; font-size: 13px; line-height: 1.7; white-space: pre-line; }
+.notification-detail-pay, .notification-pay-link { display: inline-flex; align-items: center; gap: 7px; margin-top: 13px; padding: 9px 13px; border-radius: 8px; background: #2563eb; color: #fff; font-size: 11px; font-weight: 700; }
+.notification-open-link { display: inline-block; margin-top: 10px; color: #2563eb; font-size: 11px; font-weight: 700; }
+.notification-pay-link { margin: 10px 0 0 7px; padding: 7px 10px; }

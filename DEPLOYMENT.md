@@ -26,6 +26,18 @@ duplicate `complaint_code` values first if the unique index step reports an
 error. Complaint evidence is limited to 5 MB and validated JPG, PNG, or WebP
 images; it is served only after the customer-owner or admin role check.
 
+For service-incident and customer payment notifications, back up the database
+and apply [`database/migrasi_notifikasi_yesnet.sql`](./database/migrasi_notifikasi_yesnet.sql)
+before deploying the updated dashboards. The migration creates feature-specific
+incident, customer notification, and per-customer read-state tables; it does not
+alter the existing `notifications`, billing, customer, or payment tables.
+Incident targeting uses `customers.network_area_id` or `customers.area_id` to
+match `network_areas.id`; if neither customer-area relationship exists, only
+all-customer announcements can be targeted. Reminder and payment-status
+notifications are generated idempotently from the current `tagihan` and
+`pembayaran` records when a customer opens or refreshes the dashboard or
+notification history.
+
 To configure package promotions, back up the database and run
 [`database/migrasi_promo_paket.sql`](./database/migrasi_promo_paket.sql) once.
 The migration adds nullable discount type/value and inclusive start/end dates
