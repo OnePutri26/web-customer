@@ -1,34 +1,11 @@
 <?php
-session_start();
-
-require_once "../config/database.php";
-require_once "../config/auth.php";
+require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../inc/service_notifications.php';
 requireRole('customer');
 date_default_timezone_set('Asia/Jakarta');
 
-/*
-|--------------------------------------------------------------------------
-| CEK LOGIN CUSTOMER
-|--------------------------------------------------------------------------
-| Jangan langsung bergantung pada satu nama session.
-| Beberapa project memakai id_user, sebagian memakai id_user.
-|--------------------------------------------------------------------------
-*/
-
 $userId = (int) ($_SESSION['user_id'] ?? 0);
-
-/*
-|--------------------------------------------------------------------------
-| CEK ROLE
-|--------------------------------------------------------------------------
-*/
-
-/*
-|--------------------------------------------------------------------------
-| DATA CUSTOMER
-|--------------------------------------------------------------------------
-*/
 
 $customerName = "Customer";
 $customerId = 0;
@@ -69,30 +46,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'read_
         http_response_code(403);
         exit('Sesi notifikasi tidak valid. Muat ulang halaman lalu coba kembali.');
     }
-    yesnetNotificationMarkAllRead($conn, $userId);
-
-    $updateQuery = "
-        UPDATE notifications
-        SET dibaca = 1
-        WHERE id_user = ? OR id_user IS NULL
-    ";
-
-    $updateStmt = mysqli_prepare(
-        $conn,
-        $updateQuery
-    );
-
-    if ($updateStmt) {
-
-        mysqli_stmt_bind_param(
-            $updateStmt,
-            "i",
-            $userId
-        );
-
-        mysqli_stmt_execute($updateStmt);
-
-        mysqli_stmt_close($updateStmt);
+    try {
+        yesnetNotificationMarkAllRead($conn, $userId);
+        yesnetLegacyNotificationMarkAllRead($conn, $userId);
+    } catch (Throwable $e) {
+        error_log('Customer mark-all-read failed: ' . $e->getMessage());
+        http_response_code(503);
+        exit('Status notifikasi belum dapat diperbarui. Coba kembali beberapa saat lagi.');
     }
 
     header("Location: notifikasi.php");
@@ -110,61 +70,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'read_
 */
 
 $notifications = [];
-
-$query = "
-    SELECT
-        id,
-        id_user,
-        judul,
-        message,
-        type,
-        dibaca,
-        created_at
-    FROM notifications
-    WHERE id_user = ? OR id_user IS NULL
-    ORDER BY created_at DESC
-";
-
-$stmt = mysqli_prepare(
-    $conn,
-    $query
-);
-
-if (!$stmt) {
-    die(
-        "Gagal menyiapkan query notifikasi: " .
-        htmlspecialchars(mysqli_error($conn))
-    );
-}
-
-mysqli_stmt_bind_param(
-    $stmt,
-    "i",
-    $userId
-);
-
-if (!mysqli_stmt_execute($stmt)) {
-    die(
-        "Gagal menjalankan query notifikasi: " .
-        htmlspecialchars(mysqli_stmt_error($stmt))
-    );
-}
-
-$result = mysqli_stmt_get_result($stmt);
-
-if ($result) {
-
-    while ($row = mysqli_fetch_assoc($result)) {
-        $notifications[] = $row;
-    }
-}
-
-mysqli_stmt_close($stmt);
-
 $serviceNotifications = [];
 $detailNotification = null;
 try {
-    if ($customerId > 0) {
+    $notifications = yesnetLegacyNotificationList($conn, $userId);
+    $serviceNotificationsAvailable = yesnetNotificationTablesAvailable($conn);
+    if ($serviceNotificationsAvailable && $customerId > 0) {
         yesnetNotificationSyncPayments($conn, $userId, $customerId);
         yesnetNotificationSyncIncidents($conn, $userId, $customerId);
     }
@@ -182,12 +93,17 @@ try {
         }
         unset($serviceNotification);
         if ($detailSource === 'legacy') {
-            foreach ($notifications as $legacyNotification) {
+            foreach ($notifications as &$legacyNotification) {
                 if ((int) ($legacyNotification['id'] ?? 0) === $detailId) {
+                    if ((int) ($legacyNotification['id_user'] ?? 0) === $userId) {
+                        yesnetLegacyNotificationMarkRead($conn, $userId, $detailId);
+                        $legacyNotification['dibaca'] = 1;
+                    }
                     $detailNotification = $legacyNotification;
                     break;
                 }
             }
+            unset($legacyNotification);
         }
     }
     $notifications = array_merge($notifications, $serviceNotifications);
@@ -507,6 +423,12 @@ function formatNotificationDate($date)
         ================================================== -->
 
         <section class="notification-page">
+
+            <?php if (!$serviceNotificationsAvailable): ?>
+                <div class="notification-detail-panel" role="status">
+                    Notifikasi layanan dan pembayaran belum tersedia. Hubungi administrator untuk memeriksa migration notifikasi.
+                </div>
+            <?php endif; ?>
 
             <div class="notification-header">
 

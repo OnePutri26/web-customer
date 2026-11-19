@@ -28,20 +28,34 @@ $types = [
 $error = '';
 $success = isset($_GET['saved']) && $_GET['saved'] === '1'
     ? 'Notifikasi berhasil disimpan.'
-    : '';
+    : (isset($_GET['deleted']) && $_GET['deleted'] === '1'
+        ? 'Notifikasi berhasil dihapus.'
+        : '');
 $areas = [];
+$customers = [];
+$customerNames = [];
 $incidents = [];
+$customerNotifications = [];
+$unreadCustomerNotifications = 0;
 $editing = null;
 
-if (!yesnetNotificationTablesAvailable($conn)) {
+try {
+    $notificationTablesAvailable = yesnetNotificationTablesAvailable($conn);
+} catch (Throwable $e) {
+    error_log('Admin notification schema check failed: ' . $e->getMessage());
+    http_response_code(503);
+    exit('Skema notifikasi belum dapat diperiksa. Coba kembali beberapa saat lagi.');
+}
+
+if (!$notificationTablesAvailable) {
     http_response_code(503);
     exit('Fitur notifikasi belum tersedia. Terapkan database/migrasi_notifikasi_yesnet.sql terlebih dahulu.');
 }
 
-if ($conn->query("
-    SELECT COUNT(*) AS total FROM information_schema.tables
-    WHERE table_schema = DATABASE() AND table_name = 'network_areas'
-")->fetch_assoc()['total'] > 0) {
+if (
+    yesnetNotificationColumnExists($conn, 'network_areas', 'id')
+    && yesnetNotificationColumnExists($conn, 'network_areas', 'nama_area')
+) {
     $areaResult = $conn->query('SELECT id, nama_area FROM network_areas ORDER BY nama_area');
     $areas = $areaResult->fetch_all(MYSQLI_ASSOC);
 }
@@ -50,13 +64,51 @@ foreach ($areas as $area) {
     $areaNames[(int) $area['id']] = (string) $area['nama_area'];
 }
 
+if (
+    yesnetNotificationColumnExists($conn, 'customers', 'id')
+    && yesnetNotificationColumnExists($conn, 'customers', 'user_id')
+    && yesnetNotificationColumnExists($conn, 'customers', 'nama')
+) {
+    $customerResult = $conn->query(
+        'SELECT id, nama FROM customers WHERE user_id IS NOT NULL AND user_id > 0 ORDER BY nama'
+    );
+    $customers = $customerResult->fetch_all(MYSQLI_ASSOC);
+}
+foreach ($customers as $customer) {
+    $customerNames[(int) $customer['id']] = (string) $customer['nama'];
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $token = $_POST['csrf'] ?? null;
     $incidentId = filter_var($_POST['incident_id'] ?? '0', FILTER_VALIDATE_INT);
+    if ((string) ($_POST['action'] ?? '') === 'delete') {
+        if (!adminVerifyCsrf($token)) {
+            $error = 'Sesi kedaluwarsa. Muat ulang halaman lalu coba lagi.';
+        } elseif ($incidentId === false || $incidentId === null || $incidentId < 1) {
+            $error = 'Notifikasi yang akan dihapus tidak valid.';
+        } else {
+            try {
+                $stmt = $conn->prepare('DELETE FROM yesnet_network_incidents WHERE id = ?');
+                $stmt->bind_param('i', $incidentId);
+                $stmt->execute();
+                $deleted = $stmt->affected_rows > 0;
+                $stmt->close();
+                if (!$deleted) {
+                    throw new RuntimeException('Notifikasi gangguan tidak ditemukan.');
+                }
+                header('Location: notifications.php?deleted=1');
+                exit;
+            } catch (Throwable $e) {
+                error_log('Admin network notification delete failed: ' . $e->getMessage());
+                $error = 'Notifikasi gagal dihapus.';
+            }
+        }
+    } else {
     $title = trim((string) ($_POST['title'] ?? ''));
     $message = trim((string) ($_POST['message'] ?? ''));
     $type = (string) ($_POST['type'] ?? '');
     $areaId = filter_var($_POST['area_id'] ?? '0', FILTER_VALIDATE_INT);
+    $targetCustomerId = filter_var($_POST['target_customer_id'] ?? '0', FILTER_VALIDATE_INT);
     $startsAtRaw = (string) ($_POST['starts_at'] ?? '');
     $estimateRaw = (string) ($_POST['estimate'] ?? '');
     $active = (string) ($_POST['is_active'] ?? '') === '1' ? 1 : 0;
@@ -72,11 +124,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message === '' || adminNotificationLength($message) > 5000 ||
         $areaId === false || $areaId < 0 ||
         ($areaId > 0 && !isset($areaNames[$areaId])) ||
+        $targetCustomerId === false || $targetCustomerId < 0 ||
+        ($targetCustomerId > 0 && !isset($customerNames[$targetCustomerId])) ||
+        ($areaId > 0 && $targetCustomerId > 0) ||
         !$startsAt || $startsAt->format('Y-m-d\TH:i') !== $startsAtRaw ||
         ($estimateRaw !== '' && (!$estimate || $estimate->format('Y-m-d\TH:i') !== $estimateRaw)) ||
         ($estimate !== null && $startsAt !== false && $estimate < $startsAt)
     ) {
         $error = 'Periksa kembali judul, pesan, wilayah, jenis, dan waktu notifikasi.';
+    } elseif ($targetCustomerId > 0 && !yesnetNotificationColumnExists($conn, 'yesnet_network_incidents', 'customer_id')) {
+        $error = 'Penargetan customer belum tersedia. Terapkan migration notifikasi terlebih dahulu.';
     } elseif ($areaId > 0 && !yesnetNotificationColumnExists($conn, 'customers', 'network_area_id')
         && !yesnetNotificationColumnExists($conn, 'customers', 'area_id')) {
         $error = 'Penargetan wilayah belum tersedia karena relasi area pelanggan belum dikonfigurasi.';
@@ -84,7 +141,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         || !yesnetNotificationColumnExists($conn, 'customers', 'id')) {
         $error = 'Data akun pelanggan belum memiliki relasi yang diperlukan untuk pengiriman notifikasi.';
     } else {
-        $areaName = $areaId > 0 ? $areaNames[$areaId] : 'Semua wilayah';
+        $areaName = $targetCustomerId > 0
+            ? 'Pelanggan #' . $targetCustomerId
+            : ($areaId > 0 ? $areaNames[$areaId] : 'Semua wilayah');
         $adminId = (int) $_SESSION['user_id'];
         $startSql = $startsAt->format('Y-m-d H:i:s');
         $estimateSql = $estimate ? $estimate->format('Y-m-d H:i:s') : null;
@@ -109,17 +168,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $stmt = $conn->prepare(
                     'UPDATE yesnet_network_incidents
-                     SET judul = ?, message = ?, type = ?, area_id = NULLIF(?, 0), area_name = ?,
+                     SET judul = ?, message = ?, type = ?, area_id = NULLIF(?, 0),
+                         customer_id = NULLIF(?, 0), area_name = ?,
                          mulai = ?, estimasi_selesai = ?, is_active = ?, version = version + 1,
                          updated_by = ?
                      WHERE id = ?'
                 );
                 $stmt->bind_param(
-                    'sssisssiii',
+                    'sssiisssiii',
                     $title,
                     $message,
                     $type,
                     $areaId,
+                    $targetCustomerId,
                     $areaName,
                     $startSql,
                     $estimateSql,
@@ -136,16 +197,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $stmt = $conn->prepare(
                     'INSERT INTO yesnet_network_incidents
-                        (judul, message, type, area_id, area_name, mulai, estimasi_selesai,
+                        (judul, message, type, area_id, customer_id, area_name, mulai, estimasi_selesai,
                          is_active, created_by, updated_by)
-                     VALUES (?, ?, ?, NULLIF(?, 0), ?, ?, ?, ?, ?, ?)'
+                     VALUES (?, ?, ?, NULLIF(?, 0), NULLIF(?, 0), ?, ?, ?, ?, ?, ?)'
                 );
                 $stmt->bind_param(
-                    'sssisssiii',
+                    'sssiisssiii',
                     $title,
                     $message,
                     $type,
                     $areaId,
+                    $targetCustomerId,
                     $areaName,
                     $startSql,
                     $estimateSql,
@@ -165,18 +227,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $version = (int) $stmt->get_result()->fetch_assoc()['version'];
                 $stmt->close();
 
-                $selectArea = $areaColumn !== null ? ', `' . $areaColumn . '` AS area_id' : '';
-                $sql = 'SELECT id, user_id' . $selectArea . ' FROM customers WHERE user_id IS NOT NULL AND user_id > 0';
-                $typesBind = '';
-                $params = [];
-                if ($areaId > 0) {
-                    $sql .= ' AND `' . $areaColumn . '` = ?';
-                    $typesBind = 'i';
-                    $params[] = $areaId;
-                }
-                $recipientStmt = $conn->prepare($sql);
-                if ($typesBind !== '') {
-                    $recipientStmt->bind_param($typesBind, ...$params);
+                if ($targetCustomerId > 0) {
+                    $recipientStmt = $conn->prepare(
+                        'SELECT id, user_id FROM customers WHERE id = ? AND user_id IS NOT NULL AND user_id > 0'
+                    );
+                    $recipientStmt->bind_param('i', $targetCustomerId);
+                } else {
+                    $selectArea = $areaColumn !== null ? ', `' . $areaColumn . '` AS area_id' : '';
+                    $sql = 'SELECT id, user_id' . $selectArea . ' FROM customers WHERE user_id IS NOT NULL AND user_id > 0';
+                    if ($areaId > 0) {
+                        $sql .= ' AND `' . $areaColumn . '` = ?';
+                    }
+                    $recipientStmt = $conn->prepare($sql);
+                    if ($areaId > 0) {
+                        $recipientStmt->bind_param('i', $areaId);
+                    }
                 }
                 $recipientStmt->execute();
                 $recipients = $recipientStmt->get_result()->fetch_all(MYSQLI_ASSOC);
@@ -215,6 +280,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Notifikasi gagal disimpan. Periksa koneksi database dan struktur tabel pelanggan.';
         }
     }
+    }
 }
 
 if (isset($_GET['edit']) && ctype_digit((string) $_GET['edit']) && (int) $_GET['edit'] > 0) {
@@ -228,12 +294,32 @@ if (isset($_GET['edit']) && ctype_digit((string) $_GET['edit']) && (int) $_GET['
 
 $result = $conn->query('SELECT * FROM yesnet_network_incidents ORDER BY created_at DESC, id DESC LIMIT 100');
 $incidents = $result->fetch_all(MYSQLI_ASSOC);
+$unreadCustomerNotifications = (int) $conn->query(
+    'SELECT COUNT(*) AS total
+     FROM yesnet_customer_notifications n
+     LEFT JOIN yesnet_customer_notification_reads r
+       ON r.notification_id = n.id AND r.user_id = n.user_id
+     WHERE r.notification_id IS NULL'
+)->fetch_assoc()['total'];
+$notificationResult = $conn->query(
+    'SELECT n.id, n.customer_id, n.judul, n.message, n.type, n.created_at,
+            c.nama AS customer_name,
+            IF(r.notification_id IS NULL, 0, 1) AS dibaca
+     FROM yesnet_customer_notifications n
+     LEFT JOIN customers c ON c.id = n.customer_id
+     LEFT JOIN yesnet_customer_notification_reads r
+       ON r.notification_id = n.id AND r.user_id = n.user_id
+     ORDER BY n.created_at DESC, n.id DESC
+     LIMIT 100'
+);
+$customerNotifications = $notificationResult->fetch_all(MYSQLI_ASSOC);
 $formIncident = $editing ?: [
     'id' => 0,
     'judul' => '',
     'message' => '',
     'type' => 'gangguan',
     'area_id' => null,
+    'customer_id' => null,
     'mulai' => date('Y-m-d H:i:s'),
     'estimasi_selesai' => '',
     'is_active' => 0,
@@ -296,7 +382,7 @@ $formatInputDate = static function (mixed $value): string {
             <?php if ($error !== ''): ?><div class="alert alert-danger" role="alert"><?= adminNotificationEscape($error) ?></div><?php endif; ?>
             <?php if ($success !== ''): ?><div class="alert alert-success" role="status"><?= adminNotificationEscape($success) ?></div><?php endif; ?>
             <div class="welcome-row">
-                <div><h2>Gangguan internet</h2><p>Buat dan kelola pengumuman yang dikirim ke pelanggan di wilayah terdampak.</p></div>
+                <div><h2>Gangguan internet</h2><p>Buat dan kelola pengumuman untuk seluruh pelanggan, wilayah tertentu, atau satu customer.</p></div>
             </div>
             <div class="notice-grid">
                 <section class="panel notice-form">
@@ -321,7 +407,17 @@ $formatInputDate = static function (mixed $value): string {
                                     <option value="<?= (int) $area['id'] ?>" <?= (int) ($formIncident['area_id'] ?? 0) === (int) $area['id'] ? 'selected' : '' ?>><?= adminNotificationEscape($area['nama_area']) ?></option>
                                 <?php endforeach; ?>
                             </select>
-                            <?php if ($areas === []): ?><small class="text-muted">Tabel wilayah belum tersedia; pengiriman hanya dapat ditujukan ke semua pelanggan.</small><?php endif; ?>
+                        </div>
+                        <div class="mb-3"><label class="form-label" for="target_customer_id">Customer tertentu (opsional)</label>
+                            <select class="form-select" id="target_customer_id" name="target_customer_id">
+                                <option value="0">Tidak ada - gunakan pilihan wilayah</option>
+                                <?php foreach ($customers as $customer): ?>
+                                    <option value="<?= (int) $customer['id'] ?>" <?= (int) ($formIncident['customer_id'] ?? 0) === (int) $customer['id'] ? 'selected' : '' ?>>
+                                        <?= adminNotificationEscape($customer['nama']) ?> (#<?= (int) $customer['id'] ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <?php if ($customers === []): ?><small class="text-muted">Belum ada customer dengan akun terhubung.</small><?php endif; ?>
                         </div>
                         <div class="row g-2">
                             <div class="col-12 col-md-6 mb-3"><label class="form-label" for="starts_at">Waktu mulai</label>
@@ -349,17 +445,54 @@ $formatInputDate = static function (mixed $value): string {
                             <div class="notice-copy">
                                 <h3><?= adminNotificationEscape($incident['judul']) ?></h3>
                                 <p><?= adminNotificationEscape($incident['message']) ?></p>
-                                <div class="notice-meta"><?= adminNotificationEscape($incidentType) ?> · <?= adminNotificationEscape($incident['area_name']) ?>
+                                <?php
+                                $incidentTarget = !empty($incident['customer_id'])
+                                    ? ($customerNames[(int) $incident['customer_id']] ?? 'Pelanggan #' . (int) $incident['customer_id'])
+                                    : $incident['area_name'];
+                                ?>
+                                <div class="notice-meta"><?= adminNotificationEscape($incidentType) ?> · <?= adminNotificationEscape($incidentTarget) ?>
                                     · Mulai <?= adminNotificationEscape(date('d M Y, H:i', strtotime($incident['mulai']))) ?>
                                     <?php if (!empty($incident['estimasi_selesai'])): ?> · Estimasi <?= adminNotificationEscape(date('d M Y, H:i', strtotime($incident['estimasi_selesai']))) ?><?php endif; ?>
                                     · <?= (int) $incident['is_active'] === 1 ? 'Aktif' : 'Nonaktif' ?>
                                 </div>
                             </div>
-                            <div class="notice-controls"><a class="btn btn-outline-primary btn-sm" href="notifications.php?edit=<?= (int) $incident['id'] ?>"><i class="bi bi-pencil"></i> Edit</a></div>
+                            <div class="notice-controls">
+                                <a class="btn btn-outline-primary btn-sm" href="notifications.php?edit=<?= (int) $incident['id'] ?>"><i class="bi bi-pencil"></i> Edit</a>
+                                <form method="post" onsubmit="return confirm('Hapus pengumuman ini? Notifikasi yang sudah terkirim tetap tersimpan pada customer.');">
+                                    <input type="hidden" name="csrf" value="<?= adminNotificationEscape(adminCsrfToken()) ?>">
+                                    <input type="hidden" name="incident_id" value="<?= (int) $incident['id'] ?>">
+                                    <input type="hidden" name="action" value="delete">
+                                    <button class="btn btn-outline-danger btn-sm" type="submit"><i class="bi bi-trash"></i> Hapus</button>
+                                </form>
+                            </div>
                         </article>
                     <?php endforeach; ?>
                 </section>
             </div>
+            <section class="panel notice-list mt-3">
+                <div class="panel-heading">
+                    <div><h3>Notifikasi customer</h3><p><?= count($customerNotifications) ?> terbaru · <?= $unreadCustomerNotifications ?> belum dibaca</p></div>
+                    <i class="bi bi-people text-primary"></i>
+                </div>
+                <?php if ($customerNotifications === []): ?>
+                    <div class="empty-state">Belum ada notifikasi customer.</div>
+                <?php endif; ?>
+                <?php foreach ($customerNotifications as $customerNotification): ?>
+                    <article class="notice-item <?= (int) $customerNotification['dibaca'] === 0 ? 'notice-inactive' : '' ?>">
+                        <span class="notice-symbol"><i class="bi <?= $customerNotification['type'] === 'pembayaran' ? 'bi-credit-card-fill' : 'bi-bell-fill' ?>"></i></span>
+                        <div class="notice-copy">
+                            <h3><?= adminNotificationEscape($customerNotification['judul']) ?></h3>
+                            <p><?= adminNotificationEscape($customerNotification['message']) ?></p>
+                            <div class="notice-meta">
+                                Customer: <?= adminNotificationEscape($customerNotification['customer_name'] ?: 'Customer #' . (int) $customerNotification['customer_id']) ?>
+                                · <?= adminNotificationEscape($customerNotification['type']) ?>
+                                · <?= adminNotificationEscape(date('d M Y, H:i', strtotime($customerNotification['created_at']))) ?>
+                                · <?= (int) $customerNotification['dibaca'] === 1 ? 'Sudah dibaca' : 'Belum dibaca' ?>
+                            </div>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </section>
             <footer class="page-footer">YESNET Internal Operations <span>·</span> <?= date('Y') ?></footer>
         </section>
     </main>

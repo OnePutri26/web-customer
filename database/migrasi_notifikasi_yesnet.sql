@@ -44,3 +44,37 @@ CREATE TABLE IF NOT EXISTS `yesnet_customer_notification_reads` (
   PRIMARY KEY (`notification_id`, `user_id`),
   KEY `idx_yesnet_notification_reads_user` (`user_id`, `read_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Add customer-specific targeting to installations that already have the
+-- incident table. The conditional ALTER is safe to run more than once.
+SET @yesnet_customer_target_column_exists := (
+  SELECT COUNT(*)
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'yesnet_network_incidents'
+    AND column_name = 'customer_id'
+);
+SET @yesnet_customer_target_sql := IF(
+  @yesnet_customer_target_column_exists = 0,
+  'ALTER TABLE `yesnet_network_incidents` ADD COLUMN `customer_id` INT UNSIGNED DEFAULT NULL AFTER `area_id`',
+  'SELECT 1'
+);
+PREPARE yesnet_customer_target_stmt FROM @yesnet_customer_target_sql;
+EXECUTE yesnet_customer_target_stmt;
+DEALLOCATE PREPARE yesnet_customer_target_stmt;
+
+SET @yesnet_customer_target_index_exists := (
+  SELECT COUNT(*)
+  FROM information_schema.statistics
+  WHERE table_schema = DATABASE()
+    AND table_name = 'yesnet_network_incidents'
+    AND index_name = 'idx_yesnet_incident_customer'
+);
+SET @yesnet_customer_target_index_sql := IF(
+  @yesnet_customer_target_index_exists = 0,
+  'ALTER TABLE `yesnet_network_incidents` ADD KEY `idx_yesnet_incident_customer` (`customer_id`)',
+  'SELECT 1'
+);
+PREPARE yesnet_customer_target_index_stmt FROM @yesnet_customer_target_index_sql;
+EXECUTE yesnet_customer_target_index_stmt;
+DEALLOCATE PREPARE yesnet_customer_target_index_stmt;

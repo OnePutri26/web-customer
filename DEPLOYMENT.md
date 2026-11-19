@@ -31,12 +31,15 @@ and apply [`database/migrasi_notifikasi_yesnet.sql`](./database/migrasi_notifika
 before deploying the updated dashboards. The migration creates feature-specific
 incident, customer notification, and per-customer read-state tables; it does not
 alter the existing `notifications`, billing, customer, or payment tables.
-Incident targeting uses `customers.network_area_id` or `customers.area_id` to
-match `network_areas.id`; if neither customer-area relationship exists, only
-all-customer announcements can be targeted. Reminder and payment-status
+The migration adds a nullable customer target to the incident table on existing
+installations; it can be rerun safely. Incident targeting supports all
+customers, a specific customer, or `customers.network_area_id` /
+`customers.area_id` matching `network_areas.id` when that relationship exists.
+Reminder and payment-status
 notifications are generated idempotently from the current `tagihan` and
 `pembayaran` records when a customer opens or refreshes the dashboard or
-notification history.
+notification history. Existing legacy notifications are read only when their
+expected columns are present; shared broadcasts are not marked read globally.
 
 To configure package promotions, back up the database and run
 [`database/migrasi_promo_paket.sql`](./database/migrasi_promo_paket.sql) once.

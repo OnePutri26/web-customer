@@ -33,9 +33,80 @@ function yesnetNotificationTablesAvailable(mysqli $conn): bool
                   'yesnet_customer_notification_reads'
               )
         ");
-        $available = (int) $result->fetch_assoc()['total'] === 3;
+        $available = (int) $result->fetch_assoc()['total'] === 3
+            && yesnetNotificationColumnExists($conn, 'yesnet_network_incidents', 'customer_id');
     }
     return $available;
+}
+
+function yesnetLegacyNotificationAvailable(mysqli $conn): bool
+{
+    foreach (['id', 'id_user', 'judul', 'message', 'type', 'dibaca', 'created_at'] as $column) {
+        if (!yesnetNotificationColumnExists($conn, 'notifications', $column)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function yesnetLegacyNotificationList(mysqli $conn, int $userId): array
+{
+    if (!yesnetLegacyNotificationAvailable($conn)) {
+        return [];
+    }
+
+    $stmt = $conn->prepare(
+        'SELECT id, id_user, judul, message, type,
+                CASE WHEN id_user IS NULL THEN 1 ELSE dibaca END AS dibaca, created_at
+         FROM notifications
+         WHERE id_user = ? OR id_user IS NULL
+         ORDER BY created_at DESC, id DESC'
+    );
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    foreach ($rows as &$row) {
+        $row['source'] = 'legacy';
+        $row['id'] = (int) $row['id'];
+        $row['dibaca'] = (int) $row['dibaca'];
+    }
+    unset($row);
+
+    return $rows;
+}
+
+function yesnetLegacyNotificationMarkRead(mysqli $conn, int $userId, int $notificationId): bool
+{
+    if (!yesnetLegacyNotificationAvailable($conn) || $notificationId <= 0) {
+        return false;
+    }
+
+    $stmt = $conn->prepare(
+        'UPDATE notifications SET dibaca = 1 WHERE id = ? AND id_user = ?'
+    );
+    $stmt->bind_param('ii', $notificationId, $userId);
+    $stmt->execute();
+    $changed = $stmt->affected_rows > 0;
+    $stmt->close();
+
+    return $changed;
+}
+
+function yesnetLegacyNotificationMarkAllRead(mysqli $conn, int $userId): void
+{
+    if (!yesnetLegacyNotificationAvailable($conn)) {
+        return;
+    }
+
+    $stmt = $conn->prepare(
+        'UPDATE notifications SET dibaca = 1 WHERE id_user = ?'
+    );
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $stmt->close();
 }
 
 function yesnetNotificationCreate(
@@ -253,20 +324,22 @@ function yesnetNotificationSyncIncidents(mysqli $conn, int $userId, int $custome
 
     if ($areaId > 0) {
         $stmt = $conn->prepare(
-            'SELECT id, judul, message, type, mulai, estimasi_selesai, version
+            'SELECT id, customer_id, judul, message, type, mulai, estimasi_selesai, version
              FROM yesnet_network_incidents
              WHERE is_active = 1 AND mulai <= NOW()
-               AND (area_id IS NULL OR area_id = ?)
+               AND (customer_id = ? OR (customer_id IS NULL AND (area_id IS NULL OR area_id = ?)))
              ORDER BY mulai DESC, id DESC'
         );
-        $stmt->bind_param('i', $areaId);
+        $stmt->bind_param('ii', $customerId, $areaId);
     } else {
         $stmt = $conn->prepare(
-            'SELECT id, judul, message, type, mulai, estimasi_selesai, version
+            'SELECT id, customer_id, judul, message, type, mulai, estimasi_selesai, version
              FROM yesnet_network_incidents
-             WHERE is_active = 1 AND mulai <= NOW() AND area_id IS NULL
+             WHERE is_active = 1 AND mulai <= NOW()
+               AND (customer_id = ? OR (customer_id IS NULL AND area_id IS NULL))
              ORDER BY mulai DESC, id DESC'
         );
+        $stmt->bind_param('i', $customerId);
     }
     $stmt->execute();
     $incidents = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
