@@ -14,6 +14,8 @@ date_default_timezone_set('Asia/Jakarta');
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
+/* Alamat dasar halaman invoice (CID pelanggan ditambahkan di belakangnya). */
+const INVOICE_BASE_URL = 'https://www.sinaralamabadi.com/invoice/unpaid/';
 
 /*
 |--------------------------------------------------------------------------
@@ -177,6 +179,35 @@ function normalizeBillStatus($status): string
     return 'unknown';
 }
 
+/**
+ * Ambil CID pelanggan dari baris customers.
+ * Kolom yang dicek berurutan; ubah daftar ini jika nama kolom CID berbeda.
+ */
+function resolveCustomerCid(array $customer): string
+{
+    foreach (['cid', 'customer_cid', 'kode_pelanggan'] as $key) {
+        $value = trim((string) ($customer[$key] ?? ''));
+
+        if ($value !== '') {
+            return $value;
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Bentuk link invoice unik per pelanggan. Null jika CID kosong/tidak valid.
+ */
+function buildInvoiceUrl(string $cid): ?string
+{
+    if (!preg_match('/^[A-Za-z0-9_-]{3,50}$/', $cid)) {
+        return null;
+    }
+
+    return INVOICE_BASE_URL . rawurlencode($cid);
+}
+
 $billStatusMeta = [
     'paid'    => ['Lunas', 'paid', 'bi-check-circle-fill'],
     'pending' => ['Menunggu Pembayaran', 'pending', 'bi-hourglass-split'],
@@ -216,6 +247,8 @@ $email = $_SESSION['email'] ?? '';
 $telephone = '';
 $alamat = '';
 $kodePelanggan = '';
+$cid = '';
+$invoiceUrl = null;
 
 $statusLangganan = 'belum_berlangganan';
 
@@ -342,6 +375,10 @@ $email = $customer['email'] ?? $_SESSION['email'] ?? '';
 $telephone = $customer['telephone'] ?? $customer['no_hp'] ?? $customer['phone'] ?? '';
 $alamat = $customer['alamat'] ?? $customer['address'] ?? '';
 $kodePelanggan = $customer['kode_pelanggan'] ?? '';
+
+/* CID pelanggan + link invoice (berbeda untuk setiap pelanggan) */
+$cid = resolveCustomerCid($customer);
+$invoiceUrl = buildInvoiceUrl($cid);
 
 $statusLangganan = normalizeSubscriptionStatus($customer['status_langganan'] ?? '');
 
@@ -635,6 +672,43 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
     <link rel="stylesheet" href="assets/css/portal-unified.css">
     <script defer src="assets/js/portal-ui.js"></script>
+
+    <!-- Tombol link invoice (berdiri sendiri, tidak perlu mengubah billing.css) -->
+    <style>
+        .bill-invoice-link {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            min-height: 42px;
+            margin-top: 12px;
+            padding: 0 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border: 1px solid #cbdcf7;
+            border-radius: 10px;
+            background: #ffffff;
+            color: #1d4ed8;
+            font-size: 13px;
+            font-weight: 700;
+            text-decoration: none;
+            transition: background .2s ease, border-color .2s ease;
+        }
+        .bill-invoice-link:hover {
+            background: #f1f6ff;
+            border-color: #9dbbea;
+            color: #1748b5;
+        }
+        .dashboard-page[data-theme="dark"] .bill-invoice-link {
+            border-color: #2b3a51;
+            background: #172437;
+            color: #9fc2ff;
+        }
+        .dashboard-page[data-theme="dark"] .bill-invoice-link:hover {
+            background: #1b2f4d;
+        }
+    </style>
 
 </head>
 
@@ -1011,6 +1085,17 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
                         <?php endif; ?>
 
+                        <?php if ($invoiceUrl): ?>
+                            <!-- Link invoice unik per pelanggan (berdasarkan CID) -->
+                            <a href="<?= e($invoiceUrl); ?>"
+                               class="bill-invoice-link"
+                               target="_blank"
+                               rel="noopener noreferrer">
+                                <i class="bi bi-box-arrow-up-right"></i>
+                                Lihat invoice di Sinar Alam Abadi
+                            </a>
+                        <?php endif; ?>
+
                     </section>
 
                 </div>
@@ -1057,7 +1142,15 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
                             <div>
                                 <dt>Kode pelanggan</dt>
-                                <dd><?= $kodePelanggan !== '' ? e($kodePelanggan) : '#' . (int) $customerId; ?></dd>
+                                <dd>
+                                    <?php if ($cid !== ''): ?>
+                                        <?= e($cid); ?>
+                                    <?php elseif ($kodePelanggan !== ''): ?>
+                                        <?= e($kodePelanggan); ?>
+                                    <?php else: ?>
+                                        #<?= (int) $customerId; ?>
+                                    <?php endif; ?>
+                                </dd>
                             </div>
 
                             <div>
