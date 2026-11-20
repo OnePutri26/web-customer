@@ -180,20 +180,16 @@ function normalizeBillStatus($status): string
 }
 
 /**
- * Ambil CID pelanggan dari baris customers.
- * Kolom yang dicek berurutan; ubah daftar ini jika nama kolom CID berbeda.
+ * Ambil CID pelanggan dari kolom customers.cid.
+ * Kolom ini harus dibuat dulu di database:
+ *   ALTER TABLE customers
+ *     ADD COLUMN cid VARCHAR(30) NULL DEFAULT NULL AFTER user_id,
+ *     ADD UNIQUE KEY uq_customers_cid (cid);
+ * Jika kolom belum ada atau CID kosong, tombol invoice tidak ditampilkan.
  */
 function resolveCustomerCid(array $customer): string
 {
-    foreach (['cid', 'customer_cid', 'kode_pelanggan'] as $key) {
-        $value = trim((string) ($customer[$key] ?? ''));
-
-        if ($value !== '') {
-            return $value;
-        }
-    }
-
-    return '';
+    return trim((string) ($customer['cid'] ?? ''));
 }
 
 /**
