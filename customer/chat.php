@@ -16,21 +16,6 @@ mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 
 /*
-|--------------------------------------------------------------------------
-| KONSTANTA
-|--------------------------------------------------------------------------
-| ANTHROPIC_API_KEY (opsional) didefinisikan di config/database.php:
-|   define('ANTHROPIC_API_KEY', 'sk-ant-...');
-| Tanpa key, chat tetap berjalan dengan FAQ + pesan fallback.
-|--------------------------------------------------------------------------
-*/
-
-const AUTO_REPLY_FALLBACK = 'Maaf, pertanyaan ini belum bisa kami jawab secara otomatis. '
-                          . 'Silakan lanjutkan melalui Customer Care agar kami dapat membantu dengan tepat.';
-
-const AI_MODEL = 'claude-haiku-5-5';
-
-/*
  * Masa tampil chat untuk customer (dalam jam). 24 = 1 hari (rolling 24 jam).
  * Isi 0 untuk mematikan (chat tampil selamanya).
  */
@@ -44,22 +29,7 @@ const CHAT_RETENTION_HOURS = 24;
  */
 const CHAT_PURGE_OLD = false;
 
-/*
- * Kontak WhatsApp per wilayah.
- * care = Customer Care (Umum, Tagihan, Instalasi)
- * tech = Technical Support (WiFi, Gangguan)
- * Format bebas (08xx / 628xx / +62).
- */
-const WA_CONTACTS = [
-    'jakarta' => [
-        'care' => '6285126625546',
-        'tech' => '6285211626679',
-    ],
-    'surabaya' => [
-        'care' => '6285604145030',
-        'tech' => '62882009050576',
-    ],
-];
+$chatContacts = require __DIR__ . '/../config/chat_contacts.php';
 
 
 /*
@@ -71,6 +41,20 @@ const WA_CONTACTS = [
 function e($value): string
 {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+}
+
+function renderChatMessage(string $message): string
+{
+    $pattern = '~(https://www\.sinaralamabadi\.com/(?:tagihan|paket\.php\?mode=direct)|https://wa\.me/[0-9]+(?:\?[A-Za-z0-9%._~=&+-]*)?|tel:\+?[0-9]+)~';
+    $html = preg_replace_callback($pattern, static function (array $matches): string {
+        $url = $matches[0];
+        $safeUrl = e($url);
+        $target = strpos($url, 'tel:') === 0 ? '' : ' target="_blank" rel="noopener noreferrer"';
+
+        return '<a href="' . $safeUrl . '"' . $target . '>' . $safeUrl . '</a>';
+    }, e($message));
+
+    return nl2br($html ?? e($message), false);
 }
 
 
@@ -187,7 +171,7 @@ function formatWaktuChat($datetime): string
 
 
 /**
- * sender_id = 0 pada sender_type 'cs' berarti balasan otomatis (FAQ / AI).
+ * sender_id = 0 pada sender_type 'cs' berarti balasan otomatis YeNa.
  */
 function senderLabel(string $senderType, int $senderId): string
 {
@@ -195,14 +179,14 @@ function senderLabel(string $senderType, int $senderId): string
         return 'Anda';
     }
 
-    return $senderId === 0 ? 'Asisten Virtual' : 'Customer Care';
+    return $senderId === 0 ? 'YeNa' : 'Customer Care';
 }
 
 
 /*
 |--------------------------------------------------------------------------
 | BALASAN OTOMATIS
-| Urutan: 1) FAQ  ->  2) AI (jika ANTHROPIC_API_KEY ada)  ->  3) fallback
+| Jawaban data akun dan alur menu diberikan YeNa; FAQ berasal dari tabel FAQ aktif.
 |--------------------------------------------------------------------------
 */
 
@@ -261,91 +245,6 @@ function findAutoReply(mysqli $conn, string $message, string $topic): ?string
         return null;
     }
 }
-
-
-/**
- * Jawaban AI (Claude API). Mengembalikan null bila AI tidak aktif atau gagal.
- *
- * @param array $history pesan terakhir di room (kolom sender_type, message)
- */
-function askAi(string $message, string $topicLabel, string $nama, array $history): ?string
-{
-    if (
-        !defined('ANTHROPIC_API_KEY') ||
-        ANTHROPIC_API_KEY === '' ||
-        !function_exists('curl_init')
-    ) {
-        return null;
-    }
-
-    // Susun giliran percakapan: harus berselang-seling, diawali 'user'.
-    $turns = [];
-
-    foreach ($history as $h) {
-        $role = (string) $h['sender_type'] === 'customer' ? 'user' : 'assistant';
-
-        if (!empty($turns) && $turns[count($turns) - 1]['role'] === $role) {
-            $turns[count($turns) - 1]['content'] .= "\n" . (string) $h['message'];
-        } else {
-            $turns[] = ['role' => $role, 'content' => (string) $h['message']];
-        }
-    }
-
-    while (!empty($turns) && $turns[0]['role'] !== 'user') {
-        array_shift($turns);
-    }
-
-    if (!empty($turns) && $turns[count($turns) - 1]['role'] === 'user') {
-        $turns[count($turns) - 1]['content'] .= "\n" . $message;
-    } else {
-        $turns[] = ['role' => 'user', 'content' => $message];
-    }
-
-    $system = "Kamu adalah asisten virtual YESNET, penyedia layanan internet. "
-            . "Nama pelanggan: {$nama}. Topik percakapan: {$topicLabel}. "
-            . "Jawab singkat, ramah, dan sopan dalam bahasa Indonesia. "
-            . "Jangan mengarang harga, nominal tagihan, jadwal instalasi, atau status gangguan "
-            . "milik pelanggan karena kamu tidak punya akses ke data akun. "
-            . "Untuk data akun, tagihan, atau instalasi arahkan ke Customer Care; "
-            . "untuk masalah WiFi atau gangguan teknis lanjutan arahkan ke Technical Support. "
-            . "Boleh memberi langkah umum seperti restart modem atau cek kabel.";
-
-    $ch = curl_init('https://api.anthropic.com/v1/messages');
-
-    curl_setopt_array($ch, [
-        CURLOPT_POST           => true,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_CONNECTTIMEOUT => 5,
-        CURLOPT_TIMEOUT        => 15,
-        CURLOPT_HTTPHEADER     => [
-            'content-type: application/json',
-            'x-api-key: ' . ANTHROPIC_API_KEY,
-            'anthropic-version: 2023-06-01',
-        ],
-        CURLOPT_POSTFIELDS     => json_encode([
-            'model'      => AI_MODEL,
-            'max_tokens' => 400,
-            'system'     => $system,
-            'messages'   => $turns,
-        ], JSON_UNESCAPED_UNICODE),
-    ]);
-
-    $raw  = curl_exec($ch);
-    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($raw === false || $code !== 200) {
-        error_log('Chat YESNET AI failed: HTTP ' . $code);
-
-        return null;
-    }
-
-    $data = json_decode((string) $raw, true);
-    $text = trim((string) ($data['content'][0]['text'] ?? ''));
-
-    return $text !== '' ? $text : null;
-}
-
 
 /*
 |--------------------------------------------------------------------------
@@ -594,9 +493,7 @@ function normalizeWaNumber(string $number): string
 
 
 /**
- * Jakarta bila data customer menyebut Jakarta / DKI.
- * Selain itu dianggap Surabaya (Jawa Timur).
- * Tambahkan nama kolom lain di daftar bila tabel customers memakai nama berbeda.
+ * Hanya memilih wilayah jika lokasi pelanggan menyebutnya dengan jelas.
  */
 function detectRegion(array $customer): string
 {
@@ -608,7 +505,363 @@ function detectRegion(array $customer): string
         }
     }
 
-    return preg_match('/jakarta|dki/i', $text) ? 'jakarta' : 'surabaya';
+    if (preg_match('/jakarta|dki/i', $text)) {
+        return 'jakarta';
+    }
+
+    return preg_match('/jawa timur|jatim|surabaya/i', $text) ? 'surabaya' : '';
+}
+
+function firstAvailableColumn(mysqli $conn, string $table, array $candidates): ?string
+{
+    foreach ($candidates as $candidate) {
+        if (columnExists($conn, $table, $candidate)) {
+            return $candidate;
+        }
+    }
+
+    return null;
+}
+
+function formatYenaDate($value): string
+{
+    $value = trim((string) $value);
+    if ($value === '') {
+        return 'Tidak tersedia';
+    }
+
+    $timestamp = strtotime($value);
+    return $timestamp ? date('d M Y', $timestamp) : $value;
+}
+
+function getCustomerBill(mysqli $conn, int $customerId): ?array
+{
+    if (
+        !tableExists($conn, 'tagihan') ||
+        !columnExists($conn, 'tagihan', 'id_customer')
+    ) {
+        return null;
+    }
+
+    $order = '';
+    if (columnExists($conn, 'tagihan', 'status')) {
+        $order = "CASE WHEN LOWER(status) IN ('unpaid', 'pending', 'overdue', 'belum bayar', 'belum dibayar', 'terlambat') THEN 0 ELSE 1 END";
+    }
+
+    $dueColumn = firstAvailableColumn($conn, 'tagihan', ['jatuh_tempo', 'tanggal_jatuh_tempo']);
+    $orders = [];
+    if ($order !== '') {
+        $orders[] = $order;
+    }
+    if ($dueColumn !== null) {
+        $orders[] = "`{$dueColumn}` ASC";
+    }
+    if (columnExists($conn, 'tagihan', 'id')) {
+        $orders[] = 'id DESC';
+    }
+
+    $sql = 'SELECT * FROM tagihan WHERE id_customer = ?';
+    if ($orders !== []) {
+        $sql .= ' ORDER BY ' . implode(', ', $orders);
+    }
+    $sql .= ' LIMIT 1';
+
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param('i', $customerId);
+    $stmt->execute();
+    $rows = statementFetchAll($stmt);
+    $stmt->close();
+
+    return $rows[0] ?? null;
+}
+
+function yenaSupportMessage(
+    string $team,
+    string $kind,
+    string $region,
+    array $contacts,
+    array $customer
+): string {
+    $teamLabel = $team === 'tech' ? 'Technical Support' : 'Customer Care';
+    $message = 'Untuk pertanyaan ini, silakan hubungi ' . $teamLabel . '.';
+    $cid = trim((string) ($customer['cid'] ?? ''));
+    $waText = 'Halo ' . $teamLabel . ' Yesnet, saya ' . (string) ($customer['nama'] ?? 'pelanggan');
+    if ($cid !== '') {
+        $waText .= ' (CID ' . $cid . ')';
+    }
+    $waText .= ', mohon bantuannya.';
+
+    $regions = $region !== '' ? [$region] : ['jakarta', 'surabaya'];
+    $regionLabels = ['jakarta' => 'Jakarta', 'surabaya' => 'Jawa Timur'];
+    $links = [];
+    foreach ($regions as $contactRegion) {
+        $number = normalizeWaNumber((string) ($contacts[$contactRegion][$kind] ?? ''));
+        if ($number === '') {
+            continue;
+        }
+        $label = $regionLabels[$contactRegion] ?? $contactRegion;
+        $links[] = 'WhatsApp ' . $label . ': https://wa.me/' . $number . '?text=' . rawurlencode($waText);
+        $links[] = 'Telepon ' . $label . ': tel:+' . $number;
+    }
+
+    return $links === []
+        ? $message . "\nNomor kontak belum dikonfigurasi. Silakan hubungi administrator website."
+        : $message . "\n" . implode("\n", $links);
+}
+
+function yenaMenu(): string
+{
+    return "Silakan pilih menu:\n"
+        . "1️⃣ Cek Tagihan & Pembayaran\n"
+        . "2️⃣ Laporan Gangguan Internet\n"
+        . "3️⃣ Daftar Berlangganan Baru";
+}
+
+function processYenaMessage(
+    mysqli $conn,
+    string $message,
+    array $customer,
+    array $contacts,
+    array $flow
+): array {
+    $answer = trim($message);
+    $choice = trim($answer);
+    $step = (string) ($flow['step'] ?? 'menu');
+    $nextFlow = $flow;
+    $customerId = (int) ($customer['id'] ?? 0);
+    $cid = trim((string) ($customer['cid'] ?? ''));
+    $region = (string) ($flow['region'] ?? detectRegion($customer));
+    $accountName = trim((string) ($customer['nama'] ?? $customer['name'] ?? ''));
+    $address = trim((string) ($customer['alamat'] ?? $customer['address'] ?? ''));
+
+    if ($choice === '0') {
+        return [yenaMenu(), ['step' => 'menu']];
+    }
+
+    if ($step === 'menu') {
+        if ($choice === '1') {
+            return [
+                'Silakan masukkan Nomor Pelanggan (CID) Anda.',
+                ['step' => 'billing_cid'],
+            ];
+        }
+        if ($choice === '2') {
+            return [
+                "Pilih lokasi Anda:\n1. Jakarta\n2. Jawa Timur\n(Ketik 0 untuk kembali ke menu utama.)",
+                ['step' => 'complaint_region'],
+            ];
+        }
+        if ($choice === '3') {
+            $careReply = yenaSupportMessage('care', 'care', detectRegion($customer), $contacts, $customer);
+            return [
+                "Terima kasih atas minat Anda berlangganan Yesnet. Silakan lihat pilihan paket dan lanjutkan pendaftaran melalui https://www.sinaralamabadi.com/paket.php?mode=direct atau hubungi Customer Care.\n"
+                    . $careReply . "\n\nKetik 1 untuk kembali ke menu utama.",
+                ['step' => 'registration_return'],
+            ];
+        }
+
+        $faqTopic = 'general';
+        if (preg_match('/tagih|bayar|pembayaran|invoice|billing/i', $answer)) {
+            $faqTopic = 'billing';
+        } elseif (preg_match('/wifi|internet|koneksi|gangguan|modem|jaringan/i', $answer)) {
+            $faqTopic = 'wifi';
+        } elseif (preg_match('/pasang|instal|daftar|berlangganan/i', $answer)) {
+            $faqTopic = 'installation';
+        }
+        $faqReply = findAutoReply($conn, $answer, $faqTopic);
+        if ($faqReply !== null) {
+            return [$faqReply . "\n\n" . yenaMenu(), ['step' => 'menu']];
+        }
+
+        $isTech = preg_match('/wifi|internet|koneksi|gangguan|modem|jaringan|lambat|lemot|putus/i', $answer) === 1;
+        $support = yenaSupportMessage(
+            $isTech ? 'tech' : 'care',
+            $isTech ? 'tech' : 'care',
+            detectRegion($customer),
+            $contacts,
+            $customer
+        );
+        return [
+            "Maaf, YeNa belum memiliki informasi yang cukup untuk menjawab pertanyaan tersebut. Petugas kami dapat membantu Anda.\n"
+                . $support . "\n\n" . yenaMenu(),
+            ['step' => 'menu'],
+        ];
+    }
+
+    if ($step === 'billing_cid') {
+        if (!preg_match('/^[A-Za-z0-9_-]{3,50}$/', $choice)) {
+            return ['Format CID tidak valid. Masukkan CID Anda (3–50 karakter) atau ketik 0 untuk kembali ke menu utama.', $nextFlow];
+        }
+        if ($cid === '') {
+            return [
+                "CID belum tersedia pada akun Anda. Customer Care dapat membantu memeriksa data pelanggan.\n"
+                    . yenaSupportMessage('care', 'care', detectRegion($customer), $contacts, $customer),
+                ['step' => 'menu'],
+            ];
+        }
+        if (strcasecmp($choice, $cid) !== 0) {
+            return [
+                "CID tidak sesuai dengan akun yang sedang Anda gunakan. Periksa kembali CID dan masukkan lagi, atau ketik 0 untuk kembali ke menu utama.\n"
+                    . yenaSupportMessage('care', 'care', detectRegion($customer), $contacts, $customer),
+                $nextFlow,
+            ];
+        }
+
+        $bill = getCustomerBill($conn, $customerId);
+        $amount = $bill['jumlah'] ?? $bill['total'] ?? $bill['nominal'] ?? $bill['amount'] ?? null;
+        $period = trim((string) ($bill['periode'] ?? ''));
+        if ($period === '' && isset($bill['periode_bulan'], $bill['periode_tahun'])) {
+            $period = trim((string) $bill['periode_bulan'] . ' ' . (string) $bill['periode_tahun']);
+        } elseif ($period === '' && isset($bill['periode_bulan'])) {
+            $period = trim((string) $bill['periode_bulan']);
+        }
+        $status = trim((string) ($bill['status'] ?? ''));
+        $statusLabels = [
+            'paid' => 'Lunas',
+            'lunas' => 'Lunas',
+            'pending' => 'Menunggu pembayaran',
+            'unpaid' => 'Belum dibayar',
+            'belum bayar' => 'Belum dibayar',
+            'belum dibayar' => 'Belum dibayar',
+            'overdue' => 'Terlambat',
+            'terlambat' => 'Terlambat',
+        ];
+        if ($status !== '') {
+            $status = $statusLabels[strtolower($status)] ?? $status;
+        }
+
+        $packageName = trim((string) ($customer['chat_paket'] ?? $customer['nama_paket'] ?? ''));
+        $billText = $bill === null
+            ? "Periode Tagihan: Tidak ada data tagihan\nTotal Tagihan: Tidak tersedia\nJatuh Tempo: Tidak tersedia\nStatus Pembayaran: Tidak tersedia"
+            : 'Periode Tagihan: ' . ($period !== '' ? $period : 'Tidak tersedia')
+                . "\nTotal Tagihan: " . (is_numeric($amount) ? 'Rp ' . number_format((float) $amount, 0, ',', '.') : 'Tidak tersedia')
+                . "\nJatuh Tempo: " . formatYenaDate($bill['jatuh_tempo'] ?? $bill['tanggal_jatuh_tempo'] ?? '')
+                . "\nStatus Pembayaran: " . ($status !== '' ? $status : 'Tidak tersedia');
+
+        return [
+            "Berikut data pelanggan Anda:\n"
+                . 'Nama Akun: ' . ($accountName !== '' ? $accountName : 'Tidak tersedia')
+                . "\nCID: " . $cid
+                . "\nPaket Layanan: " . ($packageName !== '' ? $packageName : 'Tidak tersedia')
+                . "\nAlamat: " . ($address !== '' ? $address : 'Tidak tersedia')
+                . "\n" . $billText
+                . "\n\nMetode pembayaran: Virtual Account (BCA, Mandiri, BNI), E-Wallet (OVO, DANA, GoPay), dan QRIS."
+                . "\n\nApakah Anda ingin mendapatkan link pembayaran?\n1. Ya, kirim link pembayaran.\n2. Tidak, kembali ke menu utama.",
+            ['step' => 'billing_payment_choice'],
+        ];
+    }
+
+    if ($step === 'billing_payment_choice') {
+        if ($choice === '1') {
+            return [
+                "Silakan buka link pembayaran: https://www.sinaralamabadi.com/tagihan\nCantumkan CID Anda pada halaman pembayaran agar tagihan dapat dikenali.\n\n1. Hubungkan dengan CS.\n2. Kembali ke menu utama.",
+                ['step' => 'billing_after_link'],
+            ];
+        }
+        if ($choice === '2') {
+            return [yenaMenu(), ['step' => 'menu']];
+        }
+        return ['Silakan pilih 1 untuk mendapatkan link pembayaran atau 2 untuk kembali ke menu utama.', $nextFlow];
+    }
+
+    if ($step === 'billing_after_link') {
+        if ($choice === '1') {
+            return [
+                yenaSupportMessage('care', 'care', detectRegion($customer), $contacts, $customer),
+                ['step' => 'menu'],
+            ];
+        }
+        if ($choice === '2') {
+            return [yenaMenu(), ['step' => 'menu']];
+        }
+        return ['Silakan pilih 1 untuk menghubungi Customer Care atau 2 untuk kembali ke menu utama.', $nextFlow];
+    }
+
+    if ($step === 'complaint_region') {
+        if ($choice === '1' || $choice === '2') {
+            $region = $choice === '1' ? 'jakarta' : 'surabaya';
+            return [
+                'Silakan masukkan CID atau Nomor Pelanggan Anda (ketik 0 untuk kembali ke menu utama).',
+                ['step' => 'complaint_cid', 'region' => $region],
+            ];
+        }
+        return ['Pilihan lokasi tidak valid. Pilih 1 untuk Jakarta, 2 untuk Jawa Timur, atau 0 untuk kembali ke menu utama.', $nextFlow];
+    }
+
+    if ($step === 'complaint_cid') {
+        if (!preg_match('/^[A-Za-z0-9_-]{3,50}$/', $choice)) {
+            return ['Format CID tidak valid. Masukkan CID Anda atau ketik 0 untuk kembali ke menu utama.', $nextFlow];
+        }
+        if ($cid === '') {
+            return [
+                "CID belum tersedia pada akun Anda. Technical Support dapat membantu memeriksa data pelanggan.\n"
+                    . yenaSupportMessage('tech', 'tech', $region, $contacts, $customer),
+                ['step' => 'menu'],
+            ];
+        }
+        if (strcasecmp($choice, $cid) !== 0) {
+            return [
+                "CID tidak sesuai dengan akun yang sedang Anda gunakan. Periksa kembali CID dan masukkan lagi, atau ketik 0 untuk kembali ke menu utama.\n"
+                    . yenaSupportMessage('tech', 'tech', $region, $contacts, $customer),
+                $nextFlow,
+            ];
+        }
+
+        $packageName = trim((string) ($customer['chat_paket'] ?? $customer['nama_paket'] ?? ''));
+        return [
+            "Data pelanggan:\n"
+                . 'Nama Akun: ' . ($accountName !== '' ? $accountName : 'Tidak tersedia')
+                . "\nCID: " . $cid
+                . "\nPaket Layanan: " . ($packageName !== '' ? $packageName : 'Tidak tersedia')
+                . "\nAlamat: " . ($address !== '' ? $address : 'Tidak tersedia')
+                . "\n\nSilakan jelaskan keluhan atau gangguan internet yang Anda alami.",
+            ['step' => 'complaint_description', 'region' => $region],
+        ];
+    }
+
+    if ($step === 'complaint_description') {
+        return [
+            "Terima kasih, keluhan Anda telah dicatat dalam percakapan ini. Coba panduan penanganan awal berikut:\n"
+                . "1. Restart modem untuk mengatasi masalah konektivitas.\n"
+                . "2. Periksa jumlah perangkat yang terhubung karena terlalu banyak perangkat dapat memperlambat koneksi.\n"
+                . "3. Periksa pembayaran agar layanan tidak terisolir.\n\n"
+                . "Apakah masalah sudah teratasi?\n1. Ya, masalah sudah teratasi.\n2. Cek Billing.\n3. Belum teratasi, mohon menunggu tim kami menghubungi Anda.",
+            ['step' => 'complaint_resolution', 'region' => $region],
+        ];
+    }
+
+    if ($step === 'complaint_resolution') {
+        if ($choice === '1') {
+            return ["Senang mendengar masalah Anda sudah teratasi.\n\n" . yenaMenu(), ['step' => 'menu']];
+        }
+        if ($choice === '2') {
+            return [
+                "Silakan cek tagihan melalui https://www.sinaralamabadi.com/tagihan\nCantumkan CID Anda pada halaman pembayaran.\n\n1. Hubungkan dengan CS.\n2. Kembali ke menu utama.",
+                ['step' => 'billing_after_link'],
+            ];
+        }
+        if ($choice === '3') {
+            return [
+                "Keluhan Anda tersimpan dalam percakapan ini. Mohon menunggu tim Technical Support menghubungi Anda. Untuk bantuan langsung, hubungi petugas melalui kontak berikut.\n"
+                    . yenaSupportMessage('tech', 'tech', $region, $contacts, $customer)
+                    . "\n\n" . yenaMenu(),
+                ['step' => 'menu'],
+            ];
+        }
+        return ['Pilihan tidak valid. Pilih 1 jika sudah teratasi, 2 untuk cek billing, 3 untuk Technical Support, atau 0 untuk kembali ke menu utama.', $nextFlow];
+    }
+
+    if ($step === 'registration_return' && $choice === '1') {
+        return [yenaMenu(), ['step' => 'menu']];
+    }
+
+    return [
+        "Maaf, YeNa belum dapat memahami jawaban tersebut. Silakan hubungi tim yang sesuai:\n"
+            . yenaSupportMessage('care', 'care', detectRegion($customer), $contacts, $customer)
+            . "\n" . yenaSupportMessage('tech', 'tech', detectRegion($customer), $contacts, $customer)
+            . "\n\n" . yenaMenu(),
+        ['step' => 'menu'],
+    ];
 }
 
 
@@ -670,7 +923,25 @@ if (!columnExists($conn, 'customers', 'user_id')) {
 }
 
 try {
-    $stmt = $conn->prepare("SELECT * FROM customers WHERE user_id = ? LIMIT 1");
+    $customerJoin = '';
+    $customerPackageSelect = 'NULL AS chat_paket';
+    if (
+        tableExists($conn, 'paket_wifi') &&
+        columnExists($conn, 'customers', 'paket_id') &&
+        columnExists($conn, 'paket_wifi', 'id') &&
+        columnExists($conn, 'paket_wifi', 'nama_paket')
+    ) {
+        $customerJoin = 'LEFT JOIN paket_wifi p ON p.id = c.paket_id';
+        $customerPackageSelect = 'p.nama_paket AS chat_paket';
+    }
+
+    $stmt = $conn->prepare("
+        SELECT c.*, {$customerPackageSelect}
+        FROM customers c
+        {$customerJoin}
+        WHERE c.user_id = ?
+        LIMIT 1
+    ");
     $stmt->bind_param("i", $userId);
     $stmt->execute();
 
@@ -694,6 +965,15 @@ try {
 }
 
 $customerId = (int) ($customer['id'] ?? 0);
+
+if (
+    !isset($_SESSION['yena_chat_flow']) ||
+    (int) ($_SESSION['yena_chat_flow']['customer_id'] ?? 0) !== $customerId
+) {
+    $_SESSION['yena_chat_flow'] = ['customer_id' => $customerId, 'step' => 'menu'];
+}
+
+$yenaFlow = $_SESSION['yena_chat_flow'];
 
 $nama = trim((string) (
     $customer['nama']
@@ -827,7 +1107,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['poll'])) {
 
     jsonResponse([
         'messages'      => $pollMessages,
-        'handled_by_cs' => $pollHandledByCs
+        'handled_by_cs' => $pollHandledByCs,
+        'flow_step'     => (string) ($_SESSION['yena_chat_flow']['step'] ?? 'menu')
     ]);
 }
 
@@ -908,15 +1189,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $autoReply = null;
 
                 if (!$handledByCs) {
-                    // Riwayat singkat (sebelum pesan ini disimpan) sebagai konteks AI.
-                    $history = array_slice(
-                        fetchRoomMessages($conn, $roomId, $postTopic, $hasTopic, 0, 200),
-                        -6
+                    [$autoReply, $nextYenaFlow] = processYenaMessage(
+                        $conn,
+                        $postMessage,
+                        $customer,
+                        $chatContacts,
+                        $yenaFlow
                     );
-
-                    $autoReply = findAutoReply($conn, $postMessage, $postTopic)          // 1) FAQ
-                              ?? askAi($postMessage, $topicLabel, $nama, $history)       // 2) AI
-                              ?? AUTO_REPLY_FALLBACK;                                    // 3) Fallback
                 }
 
                 $autoReplyMessageId = 0;
@@ -942,6 +1221,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     $conn->commit();
+                    if ($autoReply !== null) {
+                        $_SESSION['yena_chat_flow'] = array_merge(
+                            ['customer_id' => $customerId],
+                            $nextYenaFlow
+                        );
+                        $yenaFlow = $_SESSION['yena_chat_flow'];
+                    }
                 } catch (Throwable $inner) {
                     $conn->rollback();
                     throw $inner;
@@ -972,7 +1258,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     jsonResponse([
                         'messages'      => $responseMessages,
-                        'handled_by_cs' => $handledByCs
+                        'handled_by_cs' => $handledByCs,
+                        'flow_step'     => (string) ($_SESSION['yena_chat_flow']['step'] ?? 'menu')
                     ]);
                 }
 
@@ -1006,7 +1293,7 @@ $region  = detectRegion($customer);
 $useTech = in_array($topic, ['wifi', 'complaint'], true);
 
 $waTeam   = $useTech ? 'Technical Support' : 'Customer Care';
-$waNumber = normalizeWaNumber(WA_CONTACTS[$region][$useTech ? 'tech' : 'care']);
+$waNumber = normalizeWaNumber((string) ($chatContacts[$region][$useTech ? 'tech' : 'care'] ?? ''));
 $waText   = 'Halo ' . $waTeam . ' YESNET, saya ' . $nama
           . ' (ID pelanggan #' . $customerId . '). '
           . 'Saya ingin bertanya terkait ' . $topicLabel . '.';
@@ -1014,6 +1301,7 @@ $waText   = 'Halo ' . $waTeam . ' YESNET, saya ' . $nama
 $waLink = $waNumber !== ''
     ? 'https://wa.me/' . $waNumber . '?text=' . rawurlencode($waText)
     : '';
+$phoneLink = $waNumber !== '' ? 'tel:+' . $waNumber : '';
 
 
 /*
@@ -1051,35 +1339,26 @@ foreach ($messages as $row) {
 
 $hasMessages = !empty($messages);
 
-$quickQuestions = [
-    'wifi' => [
-        'WiFi saya tidak bisa digunakan',
-        'Bagaimana cara reset WiFi?',
-        'Internet saya lambat'
+$quickQuestionOptions = [
+    'menu' => [
+        '1️⃣ Cek Tagihan & Pembayaran' => '1',
+        '2️⃣ Laporan Gangguan Internet' => '2',
+        '3️⃣ Daftar Berlangganan Baru' => '3',
     ],
-    'billing' => [
-        'Berapa tagihan saya?',
-        'Bagaimana cara pembayaran?',
-        'Pembayaran saya belum masuk'
+    'billing_cid' => ['Kembali ke menu utama' => '0'],
+    'billing_payment_choice' => ['Ya, kirim link pembayaran' => '1', 'Kembali ke menu utama' => '2'],
+    'billing_after_link' => ['Hubungkan dengan CS' => '1', 'Kembali ke menu utama' => '2'],
+    'complaint_region' => ['Jakarta' => '1', 'Jawa Timur' => '2', 'Kembali ke menu utama' => '0'],
+    'complaint_cid' => ['Kembali ke menu utama' => '0'],
+    'complaint_description' => ['Kembali ke menu utama' => '0'],
+    'complaint_resolution' => [
+        'Ya, masalah sudah teratasi' => '1',
+        'Cek Billing' => '2',
+        'Belum teratasi, hubungi Technical Support' => '3',
     ],
-    'complaint' => [
-        'Internet saya mati',
-        'Koneksi sering putus',
-        'Saya ingin melaporkan gangguan'
-    ],
-    'installation' => [
-        'Kapan jadwal instalasi saya?',
-        'Saya ingin ubah jadwal instalasi',
-        'Bagaimana proses instalasi?'
-    ],
-    'general' => [
-        'Saya ingin bertanya tentang layanan',
-        'Bagaimana cara menghubungi Customer Care?',
-        'Saya membutuhkan bantuan'
-    ]
+    'registration_return' => ['Kembali ke menu utama' => '1'],
 ];
-
-$currentQuickQuestions = $quickQuestions[$topic] ?? $quickQuestions['general'];
+$currentQuickQuestions = $quickQuestionOptions[$yenaFlow['step'] ?? 'menu'] ?? $quickQuestionOptions['menu'];
 
 
 /*
@@ -1161,7 +1440,7 @@ function assetVersion(string $relativePath): int
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0f4cdb">
 
-    <title>Bantuan / Live Chat - YESNET</title>
+    <title>YeNa - Virtual Assistant Yesnet</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
@@ -1354,7 +1633,7 @@ function assetVersion(string $relativePath): int
                         Bantuan
                     </div>
 
-                    <h1>Bantuan / Live Chat</h1>
+                    <h1>YeNa Virtual Assistant</h1>
                 </div>
 
             </div>
@@ -1419,7 +1698,7 @@ function assetVersion(string $relativePath): int
 
                     <span class="chat-mode-badge">
                         <i class="bi bi-stars"></i>
-                        Asisten Virtual &amp; Customer Care
+                        YeNa · Virtual Assistant Yesnet
                     </span>
 
                 </div>
@@ -1461,6 +1740,15 @@ function assetVersion(string $relativePath): int
                             <i class="bi bi-whatsapp"></i>
                             Hubungi <?= e($waTeam); ?> via WhatsApp
                         </a>
+                        <?php if ($phoneLink !== ''): ?>
+                            <a
+                                href="<?= e($phoneLink); ?>"
+                                class="chat-wa-button <?= $useTech ? 'is-tech' : 'is-care'; ?>"
+                            >
+                                <i class="bi bi-telephone"></i>
+                                Telepon <?= e($waTeam); ?>
+                            </a>
+                        <?php endif; ?>
 
                     </div>
 
@@ -1502,8 +1790,10 @@ function assetVersion(string $relativePath): int
                                 <div class="message-avatar"><i class="bi bi-stars"></i></div>
 
                                 <div class="message-content">
-                                    <div class="message-name">Asisten Virtual</div>
-                                    <div class="message-bubble">Halo <?= e($nama); ?>! Ada yang bisa kami bantu terkait layanan internet kamu? Pilih topik atau tulis pesanmu, asisten virtual kami akan menjawab. Jika perlu, Customer Care siap membantu.</div>
+                                    <div class="message-name">YeNa</div>
+                                    <div class="message-bubble">Hai 👋<br>
+                                        Selamat datang di Virtual Assistant YeNa. Kami akan membantu Anda seputar layanan internet Yesnet.<br><br>
+                                        <?= nl2br(e(yenaMenu()), false); ?></div>
                                 </div>
 
                             </div>
@@ -1535,7 +1825,7 @@ function assetVersion(string $relativePath): int
                                             <?= e(senderLabel((string) $msg['sender_type'], (int) $msg['sender_id'])); ?>
                                         </div>
 
-                                        <div class="message-bubble"><?= e($msg['message']); ?></div>
+                                        <div class="message-bubble"><?= renderChatMessage((string) $msg['message']); ?></div>
 
                                         <div class="message-time"><?= e(formatWaktuChat($msg['created_at'])); ?></div>
 
@@ -1564,9 +1854,9 @@ function assetVersion(string $relativePath): int
 
                         <div class="chat-quick-list">
 
-                            <?php foreach ($currentQuickQuestions as $question): ?>
+                            <?php foreach ($currentQuickQuestions as $label => $question): ?>
                                 <button type="button" class="quick-question" data-question="<?= e($question); ?>">
-                                    <?= e($question); ?>
+                                    <?= e($label); ?>
                                 </button>
                             <?php endforeach; ?>
 
@@ -1680,7 +1970,7 @@ function assetVersion(string $relativePath): int
                             <i class="bi bi-stars"></i>
                             <span>
                                 <strong>Asisten Virtual</strong>
-                                Menjawab otomatis dari FAQ dan AI. Untuk data akun, tagihan, atau masalah lanjutan, Customer Care yang akan membantu.
+                                Menjawab dari data akun dan FAQ terdaftar. Jika pertanyaan belum dapat dijawab, YeNa mengarahkan Anda ke tim yang sesuai.
                             </span>
                         </div>
 
@@ -1796,10 +2086,37 @@ document.addEventListener('DOMContentLoaded', function () {
     const currentTopic = <?= json_encode($topic, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
     const chatReady = <?= $chatReady ? 'true' : 'false'; ?>;
     const customerAvatarText = <?= json_encode($avatar, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+    const quickQuestionOptions = <?= json_encode($quickQuestionOptions, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
     let lastMessageId = <?= (int) $lastMessageId; ?>;
 
     function setHandlerNote(isHandled) {
         if (chatHandlerNote) { chatHandlerNote.hidden = !isHandled; }
+    }
+
+    function updateQuickQuestions(step) {
+        const quickList = document.querySelector('.chat-quick-list');
+        const options = quickQuestionOptions[step] || quickQuestionOptions.menu;
+        if (!quickList) { return; }
+
+        while (quickList.firstChild) {
+            quickList.removeChild(quickList.firstChild);
+        }
+
+        Object.keys(options).forEach(function (label) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'quick-question';
+            button.dataset.question = options[label];
+            button.textContent = label;
+            button.addEventListener('click', function () {
+                if (!messageInput) { return; }
+                messageInput.value = button.dataset.question || '';
+                messageInput.focus();
+                updateCharacterCount();
+                autoResize();
+            });
+            quickList.appendChild(button);
+        });
     }
 
     function scrollToBottom() {
@@ -1957,7 +2274,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const bubble = document.createElement('div');
         bubble.className = 'message-bubble';
-        bubble.textContent = String(item.message || '');
+        appendMessageText(bubble, String(item.message || ''));
 
         const time = document.createElement('div');
         time.className = 'message-time';
@@ -1982,6 +2299,35 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         chatMessages.appendChild(row);
+    }
+
+    function appendMessageText(element, message) {
+        const urlPattern = /(https:\/\/www\.sinaralamabadi\.com\/(?:tagihan|paket\.php\?mode=direct)|https:\/\/wa\.me\/[0-9]+(?:\?[A-Za-z0-9%._~=&+-]*)?|tel:\+?[0-9]+)/g;
+        let lastIndex = 0;
+        let match;
+
+        function appendText(text) {
+            const lines = text.split('\n');
+            lines.forEach(function (line, index) {
+                if (index > 0) { element.appendChild(document.createElement('br')); }
+                element.appendChild(document.createTextNode(line));
+            });
+        }
+
+        while ((match = urlPattern.exec(message)) !== null) {
+            appendText(message.slice(lastIndex, match.index));
+            const link = document.createElement('a');
+            link.href = match[0];
+            link.textContent = match[0];
+            if (match[0].indexOf('tel:') !== 0) {
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+            }
+            element.appendChild(link);
+            lastIndex = match.index + match[0].length;
+        }
+
+        appendText(message.slice(lastIndex));
     }
 
     // Kirim melalui Fetch; tetap berfungsi tanpa JavaScript (form POST biasa).
@@ -2034,6 +2380,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
 
                 setHandlerNote(Boolean(payload.handled_by_cs));
+                if (payload.flow_step) { updateQuickQuestions(String(payload.flow_step)); }
 
                 messageInput.value = '';
                 updateCharacterCount();
@@ -2079,6 +2426,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const items = Array.isArray(payload.messages) ? payload.messages : [];
 
             setHandlerNote(Boolean(payload.handled_by_cs));
+            if (payload.flow_step) { updateQuickQuestions(String(payload.flow_step)); }
 
             if (items.length === 0) { return; }
 
