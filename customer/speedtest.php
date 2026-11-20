@@ -331,7 +331,7 @@ $engineVersion = $engineAvailable ? (int) filemtime($enginePath) : 1;
 
     <link rel="stylesheet" href="assets/css/dashboard.css">
     <link rel="stylesheet" href="assets/css/portal-unified.css">
-    <link rel="stylesheet" href="assets/css/speedtest.css?v=8">
+    <link rel="stylesheet" href="assets/css/speedtest.css?v=9">
 
     <script defer src="assets/js/portal-ui.js"></script>
 </head>
