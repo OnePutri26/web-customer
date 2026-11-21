@@ -137,15 +137,15 @@ if (array_key_exists('paket', $_GET)) {
 |--------------------------------------------------------------------------
 | KONFIGURASI SINKRONISASI TABEL ODP  <-- SESUAIKAN DI SINI
 |--------------------------------------------------------------------------
-| Semua pengecekan coverage kini hanya membaca tabel ODP di bawah ini.
-| Ubah nama tabel/kolom agar cocok dengan database Anda.
-|
 |   table          : nama tabel ODP
 |   id / nama      : kolom ID dan nama ODP (mis. "ODP-SDA-001")
-|   lat / lng      : kolom koordinat ODP (tipe DECIMAL/FLOAT/DOUBLE, derajat desimal)
-|   status_kolom   : (opsional) kolom status; isi null jika tidak ada
+|   lat / lng      : kolom koordinat ODP (DECIMAL/FLOAT/DOUBLE, derajat desimal)
+|   status_kolom   : (opsional) kolom status; null jika tidak ada
 |   status_nilai   : nilai status yang dianggap aktif
-|   sisa_port_kolom: (opsional) kolom sisa port; ODP dengan sisa 0 diabaikan; null = nonaktif
+|   sisa_port_kolom: (opsional) kolom sisa port; ODP sisa 0 diabaikan; null = nonaktif
+|
+| PENTING: isi status_kolom / sisa_port_kolom bila ada. Selama null, ODP yang
+| sudah penuh / tidak aktif tetap dianggap "tercover".
 |
 | COV_RADIUS_KM    : jarak maksimum rumah ke ODP agar dianggap tercover (km)
 */
@@ -168,6 +168,12 @@ if (!defined('COV_RADIUS_KM')) {
 const COV_MAP_LAT = -7.4478;
 const COV_MAP_LNG = 112.7183;
 
+/* Batas koordinat wajar untuk Indonesia (membuang data ODP/pin yang rusak, mis. 0,0 atau tertukar) */
+const COV_ID_LAT_MIN = -11.5;
+const COV_ID_LAT_MAX = 6.5;
+const COV_ID_LNG_MIN = 94.0;
+const COV_ID_LNG_MAX = 142.0;
+
 /** Pastikan nama tabel/kolom aman sebelum dimasukkan ke SQL. */
 function covIdent(mixed $name): string
 {
@@ -178,11 +184,14 @@ function covIdent(mixed $name): string
     return '`' . $name . '`';
 }
 
-/** Filter opsional (status aktif, sisa port) -> [sql, types, params]. */
+/** Filter ODP: koordinat wajar + (opsional) status aktif & sisa port -> [sql, types, params]. */
 function covOdpFilter(): array
 {
     $c = COV_ODP;
-    $sql = '';
+    $cLat = covIdent($c['lat']);
+    $cLng = covIdent($c['lng']);
+    $sql = " AND $cLat BETWEEN " . COV_ID_LAT_MIN . ' AND ' . COV_ID_LAT_MAX
+         . " AND $cLng BETWEEN " . COV_ID_LNG_MIN . ' AND ' . COV_ID_LNG_MAX;
     $types = '';
     $params = [];
     if (!empty($c['status_kolom'])) {
@@ -213,12 +222,16 @@ function covFetchAll(mysqli $conn, string $sql, string $types, array $params): a
 }
 
 /**
- * Cari ODP terdekat dari titik rumah langsung di tabel ODP.
- * Tersedia bila jarak <= COV_RADIUS_KM.
+ * Cari ODP terdekat dari titik rumah.
+ * 'tersedia' = true bila jarak <= COV_RADIUS_KM.
+ * 'terdekat_*' selalu terisi bila ada ODP dalam kotak 3 km (untuk info "ODP terdekat X m").
  */
 function covCekOdp(mysqli $conn, ?float $lat, ?float $lng): array
 {
-    $none = ['tersedia' => false, 'odp_id' => null, 'odp' => null, 'jarak' => null, 'odp_lat' => null, 'odp_lng' => null];
+    $none = [
+        'tersedia' => false, 'odp_id' => null, 'odp' => null, 'jarak' => null,
+        'odp_lat' => null, 'odp_lng' => null, 'terdekat_odp' => null, 'terdekat_jarak' => null,
+    ];
     if ($lat === null || $lng === null) {
         return $none;
     }
@@ -237,11 +250,12 @@ function covCekOdp(mysqli $conn, ?float $lat, ?float $lng): array
 
     [$fSql, $fTypes, $fParams] = covOdpFilter();
 
+    /* Haversine (lebih stabil untuk jarak pendek dibanding ACOS) */
     $sql = "SELECT $cId AS odp_id, $cNama AS odp_nama, $cLat AS odp_lat, $cLng AS odp_lng,
-                   (6371 * ACOS(LEAST(1,
-                        COS(RADIANS(?)) * COS(RADIANS($cLat)) * COS(RADIANS($cLng) - RADIANS(?))
-                        + SIN(RADIANS(?)) * SIN(RADIANS($cLat))
-                   ))) AS jarak
+                   (2 * 6371 * ASIN(SQRT(LEAST(1,
+                        POW(SIN(RADIANS($cLat - ?) / 2), 2)
+                        + COS(RADIANS(?)) * COS(RADIANS($cLat)) * POW(SIN(RADIANS($cLng - ?) / 2), 2)
+                   )))) AS jarak
             FROM $t
             WHERE $cLat BETWEEN ? AND ?
               AND $cLng BETWEEN ? AND ?
@@ -250,7 +264,7 @@ function covCekOdp(mysqli $conn, ?float $lat, ?float $lng): array
             LIMIT 1";
 
     $params = array_merge(
-        [$lat, $lng, $lat, $lat - $dLat, $lat + $dLat, $lng - $dLng, $lng + $dLng],
+        [$lat, $lat, $lng, $lat - $dLat, $lat + $dLat, $lng - $dLng, $lng + $dLng],
         $fParams
     );
     $rows = covFetchAll($conn, $sql, 'ddddddd' . $fTypes, $params);
@@ -261,32 +275,35 @@ function covCekOdp(mysqli $conn, ?float $lat, ?float $lng): array
 
     $row = $rows[0];
     $jarak = (float) $row['jarak'];
+    $nama = trim((string) ($row['odp_nama'] ?? ''));
+    $label = $nama !== '' ? $nama : 'ODP #' . $row['odp_id'];
+
+    $result = array_merge($none, ['terdekat_odp' => $label, 'terdekat_jarak' => $jarak]);
     if ($jarak > COV_RADIUS_KM) {
-        return $none;
+        return $result;
     }
 
-    $nama = trim((string) ($row['odp_nama'] ?? ''));
-    return [
+    return array_merge($result, [
         'tersedia' => true,
         'odp_id'   => $row['odp_id'],
-        'odp'      => $nama !== '' ? $nama : 'ODP #' . $row['odp_id'],
+        'odp'      => $label,
         'jarak'    => $jarak,
         'odp_lat'  => (float) $row['odp_lat'],
         'odp_lng'  => (float) $row['odp_lng'],
-    ];
+    ]);
 }
 
 /*
 |--------------------------------------------------------------------------
-| Endpoint JSON: daftar ODP di area peta yang sedang dilihat
+| Endpoint JSON: daftar ODP
+|   ?odp=all          -> seluruh titik ODP (dimuat sekali oleh peta)
+|   ?odp=1&s&n&w&e    -> hanya ODP di dalam kotak peta (maks. 0,2 derajat)
 |--------------------------------------------------------------------------
 */
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && isset($_GET['odp'])) {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: private, max-age=60');
 
-    // Mode peta penuh: ambil seluruh koordinat ODP agar peta dapat menyesuaikan
-    // zoom ke seluruh titik yang ada di database.
     if ((string) $_GET['odp'] === 'all') {
         try {
             $c = COV_ODP;
@@ -294,15 +311,20 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && isset($_GET['odp'])) {
             $sql = 'SELECT ' . covIdent($c['id']) . ' AS id, ' . covIdent($c['nama']) . ' AS nama, '
                  . covIdent($c['lat']) . ' AS lat, ' . covIdent($c['lng']) . ' AS lng
                     FROM ' . covIdent($c['table']) . '
-                    WHERE ' . covIdent($c['lat']) . ' BETWEEN -90 AND 90
-                      AND ' . covIdent($c['lng']) . ' BETWEEN -180 AND 180' . $fSql . '
+                    WHERE 1=1' . $fSql . '
                     LIMIT 5000';
             $rows = covFetchAll($conn, $sql, $fTypes, $fParams);
             $out = [];
             foreach ($rows as $r) {
-                if (!is_numeric($r['lat']) || !is_numeric($r['lng'])) continue;
-                $out[] = ['id' => (string) $r['id'], 'nama' => (string) ($r['nama'] ?? ''),
-                          'lat' => (float) $r['lat'], 'lng' => (float) $r['lng']];
+                if (!is_numeric($r['lat']) || !is_numeric($r['lng'])) {
+                    continue;
+                }
+                $out[] = [
+                    'id'   => (string) $r['id'],
+                    'nama' => (string) ($r['nama'] ?? ''),
+                    'lat'  => (float) $r['lat'],
+                    'lng'  => (float) $r['lng'],
+                ];
             }
             echo json_encode(['odp' => $out], JSON_UNESCAPED_UNICODE);
         } catch (Throwable $e) {
@@ -322,7 +344,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && isset($_GET['odp'])) {
         && $s !== null && $n !== null && $w !== null && $ea !== null
         && $s >= -90 && $n <= 90 && $w >= -180 && $ea <= 180
         && $n > $s && $ea > $w
-        && ($n - $s) <= 0.2 && ($ea - $w) <= 0.2; // batasi area agar tidak membuang seluruh tabel
+        && ($n - $s) <= 0.2 && ($ea - $w) <= 0.2;
 
     if (!$valid) {
         echo json_encode(['odp' => []]);
@@ -369,8 +391,7 @@ $addressLength = static function (string $value): int {
 
 /*
  * Parse koordinat: hanya angka valid dan masuk rentang yang diterima.
- * Nilai kosong / tidak valid menjadi null (bukan 0.0, yang titiknya di
- * tengah Samudra Atlantik dan akan merusak perhitungan jarak ODP).
+ * Nilai kosong / tidak valid menjadi null (bukan 0.0).
  */
 $parseCoord = static function ($raw, float $min, float $max): ?float {
     $raw = trim((string) $raw);
@@ -384,6 +405,8 @@ $parseCoord = static function ($raw, float $min, float $max): ?float {
 $auto = isset($_GET['auto']) && $addressLength($alamat) >= 10;
 $lat = null;
 $lng = null;
+$titikSumber = 'manual';   // search | manual | gps
+$titikOk = false;          // pelanggan sudah memastikan pin tepat di rumahnya
 
 
 /*
@@ -404,6 +427,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $lng = null;
     }
 
+    $sumberRaw = (string) ($_POST['titik_sumber'] ?? '');
+    $titikSumber = in_array($sumberRaw, ['search', 'manual', 'gps'], true) ? $sumberRaw : 'manual';
+    $titikOk = (string) ($_POST['titik_dikonfirmasi'] ?? '') === '1';
+
     if (function_exists('csrf_ok') && !csrf_ok()) {
 
         $error = 'Sesi kedaluwarsa. Muat ulang halaman lalu coba lagi.';
@@ -414,8 +441,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     } elseif ($lat === null || $lng === null) {
 
-        // Pengecekan dilakukan terhadap koordinat ODP, jadi titik rumah wajib ada.
         $error = 'Tandai lokasi rumah Anda di peta terlebih dahulu (cari alamat, ketuk peta, atau gunakan lokasi saya).';
+
+    } elseif (
+        $lat < COV_ID_LAT_MIN || $lat > COV_ID_LAT_MAX
+        || $lng < COV_ID_LNG_MIN || $lng > COV_ID_LNG_MAX
+    ) {
+
+        $lat = null;
+        $lng = null;
+        $error = 'Titik yang ditandai berada di luar Indonesia. Periksa kembali alamat dan posisi pin di peta.';
+
+    } elseif (!$titikOk) {
+
+        $error = 'Pastikan pin sudah tepat di rumah Anda, lalu tekan Cek ketersediaan kembali.';
 
     } else {
 
@@ -429,10 +468,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
 
             /*
-             * Struktur session 'flow' dipertahankan sama persis, karena
-             * coverage_hasil.php, paket.php, request_coverage.php dan halaman
-             * sesudahnya membacanya. odp_lat/odp_lng adalah tambahan baru
-             * (aman diabaikan) untuk menampilkan peta di halaman hasil.
+             * Struktur session 'flow' dipertahankan, karena coverage_hasil.php,
+             * paket.php, request_coverage.php dan halaman sesudahnya membacanya.
+             * Kunci tambahan (aman diabaikan): odp_lat/odp_lng, terdekat_odp,
+             * terdekat_jarak, radius_km, titik_sumber.
              */
             $_SESSION['flow'] = [
                 'mode'     => 'coverage',
@@ -445,6 +484,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'jarak'    => $h['jarak'] ?? null,
                 'odp_lat'  => $h['odp_lat'] ?? null,
                 'odp_lng'  => $h['odp_lng'] ?? null,
+                'terdekat_odp'   => $h['terdekat_odp'] ?? null,
+                'terdekat_jarak' => $h['terdekat_jarak'] ?? null,
+                'radius_km'      => COV_RADIUS_KM,
+                'titik_sumber'   => $titikSumber,
                 'promo_code' => (string) ($_SESSION['pending_coverage_promo_code'] ?? ''),
             ];
             if (!empty($h['tersedia']) && $pendingPackageId > 0) {
@@ -460,7 +503,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         } catch (Throwable $e) {
 
-            // Detail error hanya ke log server, bukan ke customer.
             error_log('Coverage error: ' . $e->getMessage());
 
             $serviceError = true;
@@ -514,7 +556,7 @@ $pageTitle = 'Cek Coverage';
         .cv-head h1 { margin: 0 0 6px; font-size: clamp(26px, 4.6vw, 34px); letter-spacing: -.9px; line-height: 1.15; font-weight: 800; color: var(--ink); }
         .cv-head p { margin: 0; color: #475467; max-width: 56ch; }
 
-        .cv-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; box-shadow: 0 1px 2px rgba(10,26,51,.04), 0 24px 48px -24px rgba(10,26,51,.28); }
+        .cv-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; box-shadow: 0 1px 2px rgba(10,26,51,.04), 0 24px 48px -24px rgba(10,26,51,.28); }
         .cv-alert { border-radius: 14px; padding: 13px 16px; font-size: 14.5px; font-weight: 600; margin-bottom: 18px; background: #fef3f2; border: 1px solid #fecdca; color: #b42318; }
 
         .cv-label { display: block; margin-bottom: 6px; font-size: 13.5px; font-weight: 700; }
@@ -550,25 +592,21 @@ $pageTitle = 'Cek Coverage';
         .cv-seg button { font: inherit; font-size: 13px; font-weight: 700; border: 0; background: transparent; color: var(--muted); padding: 7px 14px; border-radius: 9px; cursor: pointer; }
         .cv-seg button[aria-pressed="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(10,26,51,.15); }
         .cv-map { height: min(66vh, 620px); min-height: 420px; border-radius: 16px; border: 1px solid #cbd5e1; overflow: hidden; isolation: isolate; background: #e8eef7; }
-        .cv-card { padding: 20px; }
-        .cv-legend { gap: 8px 26px; font-size: 14px; color: #344054; }
-        .cv-legend i { width: 14px; height: 14px; }
-        .cv-legend .l-odp { background: #16e34b; border: 1px solid #111827; box-shadow: none; }
-        .cv-legend .l-build { background: #ef4444; border: 1px solid #111827; }
-        .cv-legend .l-route { background: #8b159b; border: 1px solid #111827; }
-        .cv-legend .l-pin { background: #ef4444; }
         .cv-map .leaflet-container { font-family: var(--font); }
         .cv-pin { filter: drop-shadow(0 4px 6px rgba(10,26,51,.4)); }
-        .cv-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--muted); }
+
+        .cv-legend { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 13.5px; color: #344054; }
         .cv-legend li { display: flex; align-items: center; gap: 7px; }
-        .cv-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
+        .cv-legend i { display: inline-block; width: 14px; height: 14px; border-radius: 50%; }
         .cv-legend .l-pin { background: var(--err); }
-        .cv-legend .l-odp { background: var(--brand); border: 2px solid #fff; box-shadow: 0 0 0 1px #c4cfe2; }
+        .cv-legend .l-odp { background: #16e34b; border: 1px solid #111827; }
         .cv-legend .l-ring { background: rgba(18,183,106,.2); border: 1.5px solid var(--ok); }
 
         .cv-status { margin-top: 14px; border-radius: 14px; padding: 12px 16px; background: var(--paper); border: 1px solid var(--line); font-size: 14.5px; }
         .cv-status.ok { background: #ecfdf3; border-color: #abefc6; color: #067647; }
         .cv-status.far { background: #fffaf0; border-color: #fedf89; color: #93370d; }
+        .cv-status .warn { margin-top: 6px; font-weight: 700; color: #93370d; }
+        .cv-status .rev { margin-top: 6px; font-size: 13px; color: var(--muted); }
         .cv-status .coords { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: 12.5px; color: var(--muted); }
         .cv-status a { color: var(--brand); font-weight: 700; text-decoration: none; }
         .cv-status a:hover { text-decoration: underline; }
@@ -629,6 +667,8 @@ $pageTitle = 'Cek Coverage';
 
                 <input type="hidden" name="latitude" id="latitude" value="<?= e($lat ?? '') ?>">
                 <input type="hidden" name="longitude" id="longitude" value="<?= e($lng ?? '') ?>">
+                <input type="hidden" name="titik_sumber" id="titik_sumber" value="<?= e($titikSumber) ?>">
+                <input type="hidden" name="titik_dikonfirmasi" id="titik_dikonfirmasi" value="<?= $titikOk ? '1' : '0' ?>">
 
                 <label class="cv-label" for="alamat">Alamat lengkap</label>
                 <textarea
@@ -664,8 +704,6 @@ $pageTitle = 'Cek Coverage';
                 <ul class="cv-legend">
                     <li><i class="l-pin"></i>Lokasi rumah (geser untuk menyesuaikan)</li>
                     <li><i class="l-odp"></i>ODP YesNet</li>
-                    <li><i class="l-build"></i>Lokasi rumah / pembangunan</li>
-                    <li><i class="l-route"></i>Rute perencanaan (jika data rute tersedia)</li>
                     <li><i class="l-ring"></i>Jangkauan <span id="covRadiusTxt"></span></li>
                 </ul>
 
@@ -673,9 +711,7 @@ $pageTitle = 'Cek Coverage';
                     Cari alamat atau ketuk peta untuk menandai rumah Anda. Pilih tampilan Satelit agar atap rumah lebih mudah dikenali.
                 </div>
 
-                <button class="cv-btn primary block" type="submit" id="covSubmit">
-                    <?= $serviceError ? 'Coba lagi' : 'Cek ketersediaan' ?>
-                </button>
+                <button class="cv-btn primary block" type="submit" id="covSubmit"><?= $serviceError ? 'Coba lagi' : 'Cek ketersediaan' ?></button>
 
             </form>
 
@@ -707,14 +743,43 @@ $pageTitle = 'Cek Coverage';
 
     var $ = function (id) { return document.getElementById(id); };
     var latEl = $('latitude'), lngEl = $('longitude'), addrEl = $('alamat');
+    var srcEl = $('titik_sumber'), okEl = $('titik_dikonfirmasi');
     var infoEl = $('covInfo'), submitBtn = $('covSubmit'), gpsBtn = $('covGps'), searchBtn = $('covSearch');
     var radiusKm = parseFloat(form.dataset.radius) || 0.25;
     var radiusM = radiusKm * 1000;
     var actionUrl = form.getAttribute('action') || 'coverage.php';
+    var NOM = 'https://nominatim.openstreetmap.org';
+    var MISMATCH_PRECISE_M = 1000;   // alamat ketemu persis, pin > 1 km dari situ = mencurigakan
+    var MISMATCH_APPROX_M = 4000;    // alamat hanya ketemu setingkat kelurahan/kota
+    var REGION_MARGIN_DEG = 0.15;    // ~17 km di luar sebaran ODP dianggap di luar area
+    var GPS_BAD_ACC_M = 150;
     $('covRadiusTxt').textContent = Math.round(radiusM) + ' m';
 
+    /* ---------- State ---------- */
+    var pinSource = srcEl.value || 'manual';      // search | manual | gps
+    var confirmed = okEl.value === '1';           // pelanggan sudah memastikan pin tepat
+    var awaitingAck = false;                      // menunggu klik kedua sebagai konfirmasi
+    var addrPoint = null;                         // hasil geocode dari alamat yang diketik
+    var checkedAddr = '';                         // teks alamat yang sudah dicocokkan dengan pin
+    var gpsAcc = null, revText = '', revToken = 0, revTimer = null;
+    var searchToken = 0, busy = false, submitting = false;
+    var marker = null, ring = null, nearLine = null, hilite = null;
+    var odpList = [], odpLoaded = false, region = null;
+
+    function addrNorm() { return addrEl.value.replace(/\s+/g, ' ').trim().toLowerCase(); }
+    function hasPoint() { return latEl.value !== '' && lngEl.value !== ''; }
+    function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function hav(lat1, lng1, lat2, lng2) {
+        var R = 6371000, r = Math.PI / 180;
+        var dLat = (lat2 - lat1) * r, dLng = (lng2 - lng1) * r;
+        var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+    }
+    function fmtDist(m) { return m >= 1000 ? (m / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(m) + ' m'; }
+
     /* ---------- Peta & lapisan ---------- */
-    var map = L.map('covMap', { zoomControl: true, maxZoom: 20 })
+    var map = L.map('covMap', { zoomControl: true, maxZoom: 20, preferCanvas: true })
         .setView([parseFloat(form.dataset.lat0), parseFloat(form.dataset.lng0)], 13);
 
     var street = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -733,51 +798,146 @@ $pageTitle = 'Cek Coverage';
     btnMap.addEventListener('click', function () { useLayer(false); });
     btnSat.addEventListener('click', function () { useLayer(true); });
 
-    /* ---------- Pin rumah ---------- */
     var pinIcon = L.divIcon({
         className: 'cv-pin',
         html: '<svg width="34" height="44" viewBox="0 0 34 44" aria-hidden="true"><path d="M17 43C17 43 31 27.5 31 16.5 31 8.5 24.7 2 17 2S3 8.5 3 16.5C3 27.5 17 43 17 43Z" fill="#d92d20" stroke="#fff" stroke-width="2.5"/><path d="M10.5 18.5L17 12l6.5 6.5V25h-4v-4.5h-5V25h-4z" fill="#fff"/></svg>',
         iconSize: [34, 44], iconAnchor: [17, 42]
     });
-    var marker = null;
-    var odpLayer = L.layerGroup().addTo(map);
-    var odpCache = {};   // id -> {lat,lng,nama}
 
-    function hav(lat1, lng1, lat2, lng2) {
-        var R = 6371000, r = Math.PI / 180;
-        var dLat = (lat2 - lat1) * r, dLng = (lng2 - lng1) * r;
-        var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+    /* ---------- ODP: dimuat SEKALI, lalu semua perhitungan jarak di browser ---------- */
+    var odpLayer = L.layerGroup().addTo(map);
+    var ODP_STYLE = { radius: 6, color: '#111827', weight: 1.2, fillColor: '#16e34b', fillOpacity: 1 };
+
+    function drawOdp(o) {
+        var m = L.circleMarker([o.lat, o.lng], ODP_STYLE);
+        m.bindPopup(function () {
+            var b = document.createElement('strong');
+            b.textContent = o.nama || ('ODP ' + o.id);
+            return b;
+        });
+        m.addTo(odpLayer);
+        o.marker = m;
     }
 
-    function hasPoint() { return latEl.value !== '' && lngEl.value !== ''; }
+    function computeRegion() {
+        var w = Infinity, e = -Infinity, s = Infinity, n = -Infinity;
+        odpList.forEach(function (o) {
+            if (o.lng < w) w = o.lng; if (o.lng > e) e = o.lng;
+            if (o.lat < s) s = o.lat; if (o.lat > n) n = o.lat;
+        });
+        region = { w: w - REGION_MARGIN_DEG, e: e + REGION_MARGIN_DEG, s: s - REGION_MARGIN_DEG, n: n + REGION_MARGIN_DEG };
+    }
+    function outsideRegion(lat, lng) {
+        return !!region && (lat < region.s || lat > region.n || lng < region.w || lng > region.e);
+    }
+    function nearest(lat, lng) {
+        var best = null, bd = Infinity;
+        for (var i = 0; i < odpList.length; i++) {
+            var d = hav(lat, lng, odpList[i].lat, odpList[i].lng);
+            if (d < bd) { bd = d; best = odpList[i]; }
+        }
+        return best ? { o: best, d: bd } : null;
+    }
+
+    var odpReady = fetch(actionUrl + '?odp=all', { credentials: 'same-origin' })
+        .then(function (r) { if (!r.ok) { throw new Error('http'); } return r.json(); })
+        .then(function (data) {
+            (data.odp || []).forEach(function (o) {
+                if (isFinite(o.lat) && isFinite(o.lng)) { odpList.push(o); drawOdp(o); }
+            });
+            odpLoaded = odpList.length > 0;
+            if (odpLoaded) {
+                computeRegion();
+                if (!hasPoint()) {
+                    var pts = odpList.map(function (o) { return [o.lat, o.lng]; });
+                    if (pts.length === 1) { map.setView(pts[0], 16); }
+                    else { map.fitBounds(pts, { padding: [28, 28], maxZoom: 15 }); }
+                }
+            }
+            renderInfo();
+        })
+        .catch(function () { odpLoaded = false; renderInfo(); });
+
+    /* ---------- Info & peringatan ---------- */
+    var submitLabel = submitBtn.textContent.trim();
+    function updateButton() {
+        submitBtn.textContent = awaitingAck ? 'Ya, pin sudah benar - cek ketersediaan' : submitLabel;
+    }
+    function syncHidden() {
+        srcEl.value = pinSource;
+        okEl.value = confirmed ? '1' : '0';
+    }
+    function say(msg, cls) { infoEl.className = 'cv-status' + (cls ? ' ' + cls : ''); infoEl.textContent = msg; }
+
+    function clearOverlays() {
+        if (ring) { map.removeLayer(ring); ring = null; }
+        if (nearLine) { map.removeLayer(nearLine); nearLine = null; }
+        if (hilite) { hilite.setStyle(ODP_STYLE); hilite = null; }
+    }
+    function drawOverlays(lat, lng, nr) {
+        clearOverlays();
+        ring = L.circle([lat, lng], { radius: radiusM, color: '#12b76a', weight: 1.5, fillColor: '#12b76a', fillOpacity: .12, interactive: false }).addTo(map);
+        if (nr && nr.d <= 3000 && nr.o.marker) {
+            nearLine = L.polyline([[lat, lng], [nr.o.lat, nr.o.lng]], { color: '#103b73', weight: 2, dashArray: '6 6', interactive: false }).addTo(map);
+            nr.o.marker.setStyle({ radius: 9, weight: 3, color: '#103b73' });
+            nr.o.marker.bringToFront();
+            hilite = nr.o.marker;
+        }
+    }
 
     function renderInfo() {
         infoEl.className = 'cv-status';
         infoEl.textContent = '';
+        function line(t, cls) {
+            var d = document.createElement('div');
+            if (cls) { d.className = cls; }
+            d.textContent = t;
+            infoEl.appendChild(d);
+        }
         if (!hasPoint()) {
-            infoEl.textContent = 'Cari alamat atau ketuk peta untuk menandai rumah Anda. Pilih tampilan Satelit agar atap rumah lebih mudah dikenali.';
+            clearOverlays();
+            line('Cari alamat atau ketuk peta untuk menandai rumah Anda. Pilih tampilan Satelit agar atap rumah lebih mudah dikenali.');
             return;
         }
         var lat = parseFloat(latEl.value), lng = parseFloat(lngEl.value);
-        var best = null, bestD = Infinity;
-        Object.keys(odpCache).forEach(function (k) {
-            var o = odpCache[k], d = hav(lat, lng, o.lat, o.lng);
-            if (d < bestD) { bestD = d; best = o; }
-        });
+        var nr = odpLoaded ? nearest(lat, lng) : null;
+        drawOverlays(lat, lng, nr);
 
-        var line = document.createElement('div');
-        if (best === null) {
-            line.textContent = 'Belum ada ODP yang terlihat di sekitar titik ini. Hasil resmi muncul setelah Anda menekan Cek ketersediaan.';
-        } else if (bestD <= radiusM) {
+        if (!odpLoaded) {
+            line('Data ODP belum dapat ditampilkan. Hasil resmi muncul setelah Anda menekan Cek ketersediaan.');
+        } else if (nr && nr.d <= radiusM) {
             infoEl.className = 'cv-status ok';
-            line.textContent = 'ODP terdekat' + (best.nama ? ' (' + best.nama + ')' : '') + ' sekitar ' + Math.round(bestD) + ' m. Kemungkinan jaringan tersedia.';
-        } else {
+            line('ODP terdekat' + (nr.o.nama ? ' (' + nr.o.nama + ')' : '') + ' sekitar ' + fmtDist(nr.d) + '. Kemungkinan jaringan tersedia.');
+        } else if (nr) {
             infoEl.className = 'cv-status far';
-            line.textContent = 'ODP terdekat sekitar ' + Math.round(bestD) + ' m, di luar jangkauan ' + Math.round(radiusM) + ' m. Pastikan pin tepat di rumah Anda.';
+            line('ODP terdekat sekitar ' + fmtDist(nr.d) + ', di luar jangkauan ' + Math.round(radiusM) + ' m. Pastikan pin tepat di rumah Anda.');
         }
-        infoEl.appendChild(line);
+
+        /* Peringatan kecocokan alamat dan pin */
+        if (pinSource === 'search' && !confirmed) {
+            line(addrPoint && addrPoint.approx
+                ? 'Titik ini hanya perkiraan kasar (setingkat kelurahan/kota), bukan alamat persisnya. Zoom lalu geser pin tepat ke rumah Anda.'
+                : 'Titik diperkirakan dari alamat. Geser pin tepat ke rumah Anda sebelum mengecek.', 'warn');
+        }
+        if (pinSource === 'search' && checkedAddr !== '' && addrNorm() !== checkedAddr) {
+            line('Alamat diubah setelah pin ditentukan. Tekan "Cari alamat di peta" agar pin diperbarui.', 'warn');
+        }
+        if (addrPoint && pinSource !== 'search' && checkedAddr === addrNorm()) {
+            var dm = hav(lat, lng, addrPoint.lat, addrPoint.lng);
+            if (dm > (addrPoint.approx ? MISMATCH_APPROX_M : MISMATCH_PRECISE_M)) {
+                line('Pin berjarak sekitar ' + fmtDist(dm) + ' dari lokasi alamat yang Anda ketik. Pastikan alamat dan pin menunjuk rumah yang sama.', 'warn');
+            }
+        }
+        if (outsideRegion(lat, lng)) {
+            line('Lokasi ini jauh di luar area jaringan YesNet yang kami kenal. Periksa kembali alamat dan posisi pin.', 'warn');
+        }
+        if (pinSource === 'gps' && gpsAcc !== null && gpsAcc > GPS_BAD_ACC_M) {
+            line('Akurasi GPS rendah (sekitar ' + Math.round(gpsAcc) + ' m). Geser pin ke rumah Anda.', 'warn');
+        }
+        if (awaitingAck) {
+            line('Pastikan pin tepat di rumah Anda, lalu tekan tombol sekali lagi untuk mengecek.', 'warn');
+        }
+        if (revText) { line('Lokasi pin: ' + revText, 'rev'); }
 
         var meta = document.createElement('div');
         meta.className = 'coords';
@@ -791,7 +951,27 @@ $pageTitle = 'Cek Coverage';
         infoEl.appendChild(meta);
     }
 
-    function setPoint(lat, lng, zoom) {
+    /* ---------- Pin ---------- */
+    function scheduleReverse(lat, lng) {
+        clearTimeout(revTimer);
+        revText = '';
+        var t = ++revToken;
+        revTimer = setTimeout(function () {
+            fetch(NOM + '/reverse?format=jsonv2&zoom=18&accept-language=id&lat=' + lat.toFixed(6) + '&lon=' + lng.toFixed(6))
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (t !== revToken || !d || !d.display_name) { return; }
+                    revText = d.display_name.split(',').slice(0, 4).join(',').trim();
+                    renderInfo();
+                }).catch(function () {});
+        }, 900);
+    }
+
+    function setPoint(lat, lng, zoom, source, isConfirmed) {
+        pinSource = source;
+        confirmed = !!isConfirmed;
+        awaitingAck = false;
+        if (source !== 'gps') { gpsAcc = null; }
         latEl.value = lat.toFixed(6);
         lngEl.value = lng.toFixed(6);
         var ll = L.latLng(lat, lng);
@@ -799,106 +979,129 @@ $pageTitle = 'Cek Coverage';
             marker = L.marker(ll, { icon: pinIcon, draggable: true, keyboard: true, title: 'Lokasi rumah' }).addTo(map);
             marker.on('dragend', function () {
                 var p = marker.getLatLng();
-                setPoint(p.lat, p.lng);
+                setPoint(p.lat, p.lng, null, 'manual', true);
             });
         } else {
             marker.setLatLng(ll);
         }
         if (zoom) { map.setView(ll, zoom); }
-        loadOdp();
+        syncHidden(); updateButton();
+        scheduleReverse(lat, lng);
         renderInfo();
     }
 
-    map.on('click', function (ev) { setPoint(ev.latlng.lat, ev.latlng.lng); });
-
-    /* ---------- ODP dari database (lewat endpoint ?odp=1) ---------- */
-    var odpTimer = null, odpCtl = null;
-   
-        function drawOdp(o) {
-            // Tampilkan titik ODP saja, tanpa lingkaran radius.
-            var dot = L.circleMarker([o.lat, o.lng], {
-                radius: 6,
-                color: '#111827',
-                weight: 1.2,
-                fillColor: '#16e34b',
-                fillOpacity: 1
-            });
-
-            var pop = document.createElement('div');
-            var b = document.createElement('strong');
-
-            b.textContent = o.nama || ('ODP ' + o.id);
-
-            pop.appendChild(b);
-            dot.bindPopup(pop);
-            dot.addTo(odpLayer);
-        }
-
-    function loadOdp() {
-        clearTimeout(odpTimer);
-        odpTimer = setTimeout(function () {
-            var b = map.getBounds();
-            var url = actionUrl + '?odp=all';
-            if (odpCtl && odpCtl.abort) { odpCtl.abort(); }
-            odpCtl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-            fetch(url, { credentials: 'same-origin', signal: odpCtl ? odpCtl.signal : undefined })
-                .then(function (r) { return r.ok ? r.json() : { odp: [] }; })
-                .then(function (data) {
-                    var changed = false;
-                    (data.odp || []).forEach(function (o) {
-                        if (!odpCache[o.id]) { odpCache[o.id] = o; drawOdp(o); changed = true; }
-                    });
-                    if (changed && !hasPoint()) {
-                        var points = Object.keys(odpCache).map(function (k) {
-                            return [odpCache[k].lat, odpCache[k].lng];
-                        });
-                        if (points.length) {
-                            if (points.length === 1) map.setView(points[0], 16);
-                            else map.fitBounds(points, { padding: [28, 28], maxZoom: 15 });
-                        }
-                    }
-                    if (changed || hasPoint()) { renderInfo(); }
-                })
-                .catch(function () {});
-        }, 300);
+    function clearPoint() {
+        latEl.value = ''; lngEl.value = '';
+        if (marker) { map.removeLayer(marker); marker = null; }
+        pinSource = 'manual'; confirmed = false; awaitingAck = false; revText = '';
+        syncHidden(); updateButton(); renderInfo();
     }
-    map.on('moveend', loadOdp);
 
-    /* ---------- Cari alamat (Nominatim / OpenStreetMap) ---------- */
-    function geocode(q) {
-        var url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=id&accept-language=id&q=' + encodeURIComponent(q);
-        return fetch(url).then(function (r) { return r.json(); }).then(function (rows) {
-            return rows && rows.length ? { lat: parseFloat(rows[0].lat), lng: parseFloat(rows[0].lon) } : null;
+    map.on('click', function (ev) { setPoint(ev.latlng.lat, ev.latlng.lng, null, 'manual', true); });
+
+    /* ---------- Geocoding bertingkat (Nominatim) ---------- */
+    function buildAttempts(raw) {
+        var s = raw.replace(/\s+/g, ' ').trim();
+        var clean = s
+            .replace(/\b(rt|rw)\b\.?\s*\d+/gi, ' ')
+            .replace(/\b(no|nomor)\b\.?\s*\d[\w\-\/]*/gi, ' ')
+            .replace(/\b(kel|kelurahan|kec|kecamatan|kab|kabupaten|desa)\b\.?\s+/gi, '')
+            .replace(/[\/]+\s*(?=,|$)/g, '')
+            .replace(/\s+/g, ' ')
+            .replace(/\s*,\s*(,\s*)+/g, ', ')
+            .replace(/^[,\s]+|[,\s]+$/g, '');
+        var parts = clean.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+        var tail = parts.length > 2 ? parts.slice(-3).join(', ') : '';
+        var list = [];
+        var seen = {};
+        function add(q, bounded, approx) {
+            if (!q) { return; }
+            var key = q.toLowerCase() + '|' + (bounded ? 1 : 0);
+            if (seen[key]) { return; }
+            seen[key] = true;
+            list.push({ q: q, bounded: bounded && !!region, approx: approx });
+        }
+        add(s, true, false);
+        add(clean, true, false);
+        add(s, false, false);
+        add(clean, false, false);
+        add(tail, true, true);
+        add(tail, false, true);
+        return list.slice(0, 4);
+    }
+
+    function nominatim(q, bounded) {
+        var url = NOM + '/search?format=jsonv2&limit=5&countrycodes=id&accept-language=id&q=' + encodeURIComponent(q);
+        if (bounded && region) {
+            url += '&viewbox=' + [region.w, region.n, region.e, region.s].join(',') + '&bounded=1';
+        }
+        return fetch(url).then(function (r) {
+            if (!r.ok) { throw new Error('http'); }
+            return r.json();
+        }).then(function (rows) {
+            if (!rows || !rows.length) { return null; }
+            var best = rows[0];
+            for (var i = 0; i < rows.length; i++) {
+                if ((rows[i].place_rank || 0) >= 26) { best = rows[i]; break; }
+            }
+            var lat = parseFloat(best.lat), lng = parseFloat(best.lon);
+            if (!isFinite(lat) || !isFinite(lng)) { return null; }
+            return { lat: lat, lng: lng, rank: best.place_rank || 0, label: best.display_name || '' };
         });
     }
-    function say(msg, cls) { infoEl.className = 'cv-status' + (cls ? ' ' + cls : ''); infoEl.textContent = msg; }
 
-    function searchAddress(done) {
+    /* Mencoba beberapa bentuk query (spasi 1,1 dtk sesuai batas Nominatim). Hasil kasar ditandai approx. */
+    function geocodeAddress(raw) {
+        return odpReady.then(function () {
+            var attempts = buildAttempts(raw), i = 0;
+            function next() {
+                if (i >= attempts.length) { return Promise.resolve(null); }
+                var a = attempts[i++];
+                var wait = i > 1 ? sleep(1100) : Promise.resolve();
+                return wait.then(function () { return nominatim(a.q, a.bounded); }).then(function (p) {
+                    if (!p) { return next(); }
+                    p.approx = a.approx || p.rank < 26;
+                    return p;
+                });
+            }
+            return next();
+        });
+    }
+
+    function searchAddress() {
         var q = addrEl.value.trim();
-        if (q.length < 4) { say('Isi alamat terlebih dahulu, lalu cari di peta.', 'far'); return; }
+        if (q.length < 4) { say('Isi alamat terlebih dahulu, lalu cari di peta.', 'far'); return Promise.resolve(false); }
+        var token = ++searchToken;
         searchBtn.disabled = true;
         say('Mencari alamat di peta...');
-        geocode(q).then(function (p) {
+        return geocodeAddress(q).then(function (p) {
+            if (token !== searchToken) { return false; }
+            searchBtn.disabled = false;
+            checkedAddr = addrNorm();
             if (!p) {
-                /* coba lagi dengan bagian akhir alamat (kelurahan/kota) */
-                var parts = q.split(',');
-                if (parts.length > 2) { return geocode(parts.slice(-3).join(',')); }
+                addrPoint = null;
+                if (pinSource === 'search') { clearPoint(); }
+                say('Alamat tidak ditemukan di peta. Periksa penulisan alamat, atau ketuk langsung lokasi rumah Anda pada peta.', 'far');
+                return false;
             }
-            return p;
-        }).then(function (p) {
-            searchBtn.disabled = false;
-            if (!p) { say('Alamat tidak ditemukan di peta. Ketuk langsung lokasi rumah Anda pada peta.', 'far'); return; }
-            setPoint(p.lat, p.lng, 18);
-            var note = document.createElement('div');
-            note.textContent = 'Titik diperkirakan dari alamat. Geser pin tepat ke rumah Anda sebelum mengecek.';
-            infoEl.appendChild(note);
-            if (done) { done(); }
+            addrPoint = p;
+            setPoint(p.lat, p.lng, p.approx ? 16 : 18, 'search', false);
+            return true;
         }).catch(function () {
-            searchBtn.disabled = false;
-            say('Pencarian alamat gagal. Ketuk langsung lokasi rumah Anda pada peta.', 'far');
+            if (token === searchToken) {
+                searchBtn.disabled = false;
+                say('Pencarian alamat gagal. Ketuk langsung lokasi rumah Anda pada peta.', 'far');
+            }
+            return false;
         });
     }
     searchBtn.addEventListener('click', function () { searchAddress(); });
+
+    var inputTimer = null;
+    addrEl.addEventListener('input', function () {
+        clearTimeout(inputTimer);
+        inputTimer = setTimeout(function () { if (hasPoint()) { renderInfo(); } }, 400);
+    });
 
     /* ---------- Lokasi saya (GPS) ---------- */
     if (navigator.geolocation) {
@@ -908,13 +1111,15 @@ $pageTitle = 'Cek Coverage';
             say('Mengambil lokasi Anda...');
             navigator.geolocation.getCurrentPosition(function (pos) {
                 gpsBtn.disabled = false;
-                setPoint(pos.coords.latitude, pos.coords.longitude, 19);
+                gpsAcc = pos.coords.accuracy || null;
+                var good = gpsAcc === null || gpsAcc <= GPS_BAD_ACC_M;
+                if (addrEl.value.trim() === '') { checkedAddr = ''; }
+                setPoint(pos.coords.latitude, pos.coords.longitude, good ? 19 : 17, 'gps', good);
                 if (addrEl.value.trim() === '') {
-                    var u = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=id&lat=' +
-                            pos.coords.latitude + '&lon=' + pos.coords.longitude;
-                    fetch(u).then(function (r) { return r.json(); }).then(function (d) {
-                        if (d && d.display_name && addrEl.value.trim() === '') { addrEl.value = d.display_name; }
-                    }).catch(function () {});
+                    fetch(NOM + '/reverse?format=jsonv2&accept-language=id&lat=' + pos.coords.latitude + '&lon=' + pos.coords.longitude)
+                        .then(function (r) { return r.json(); }).then(function (d) {
+                            if (d && d.display_name && addrEl.value.trim() === '') { addrEl.value = d.display_name; }
+                        }).catch(function () {});
                 }
             }, function () {
                 gpsBtn.disabled = false;
@@ -923,10 +1128,38 @@ $pageTitle = 'Cek Coverage';
         });
     }
 
+    /* ---------- Cocokkan alamat yang diketik dengan pin ---------- */
+    /* true = boleh lanjut; false = pelanggan perlu memeriksa pin dulu */
+    function recheck() {
+        say('Memeriksa kecocokan alamat dan pin...');
+        return geocodeAddress(addrEl.value.trim()).then(function (p) {
+            checkedAddr = addrNorm();
+            if (!p) { addrPoint = null; renderInfo(); return true; }   // tidak bisa diverifikasi: jangan memblokir
+            addrPoint = p;
+            if (pinSource === 'search') {
+                setPoint(p.lat, p.lng, p.approx ? 16 : 18, 'search', false);   // alamat berubah: pindahkan pin
+                return false;
+            }
+            var d = hav(parseFloat(latEl.value), parseFloat(lngEl.value), p.lat, p.lng);
+            if (d > (p.approx ? MISMATCH_APPROX_M : MISMATCH_PRECISE_M)) {
+                confirmed = false; awaitingAck = true;
+                syncHidden(); updateButton(); renderInfo();
+                return false;
+            }
+            renderInfo();
+            return true;
+        });
+    }
+
+    function proceed() {
+        if (typeof form.requestSubmit === 'function') { form.requestSubmit(); } else { form.submit(); }
+    }
+
     /* ---------- Submit ---------- */
-    var submitLabel = submitBtn.textContent;
     form.addEventListener('submit', function (ev) {
-        if (addrEl.value.trim().length < 10) {
+        if (submitting || busy) { ev.preventDefault(); return; }
+
+        if (Array.from(addrEl.value.trim()).length < 10) {
             ev.preventDefault();
             say('Masukkan alamat lengkap minimal 10 karakter.', 'far');
             addrEl.focus();
@@ -937,19 +1170,44 @@ $pageTitle = 'Cek Coverage';
             searchAddress();   // tempatkan pin dari alamat, lalu minta pengguna memeriksanya
             return;
         }
+        if (checkedAddr !== addrNorm()) {
+            ev.preventDefault();
+            busy = true; submitBtn.disabled = true; submitBtn.textContent = 'Memeriksa alamat...';
+            recheck().then(function (ok) {
+                busy = false; submitBtn.disabled = false; updateButton();
+                if (ok) { proceed(); }
+            }).catch(function () {
+                busy = false; submitBtn.disabled = false; updateButton();
+                checkedAddr = addrNorm();   // verifikasi gagal (jaringan): jangan memblokir
+                renderInfo();
+            });
+            return;
+        }
+        if (!confirmed) {
+            ev.preventDefault();
+            if (!awaitingAck) {
+                awaitingAck = true; updateButton(); renderInfo();
+                $('covMap').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+                confirmed = true; awaitingAck = false; syncHidden(); updateButton();
+                proceed();
+            }
+            return;
+        }
+        submitting = true;
         submitBtn.disabled = true;
         submitBtn.textContent = 'Memeriksa...';
     });
     window.addEventListener('pageshow', function (ev) {
-        if (ev.persisted) { submitBtn.disabled = false; submitBtn.textContent = submitLabel; }
+        if (ev.persisted) { submitting = false; busy = false; submitBtn.disabled = false; updateButton(); }
     });
 
     /* ---------- Inisialisasi ---------- */
+    syncHidden();
     if (hasPoint()) {
-        setPoint(parseFloat(latEl.value), parseFloat(lngEl.value), 18);
-    } else {
-        loadOdp();
-        if (form.dataset.auto === '1') { searchAddress(); }
+        setPoint(parseFloat(latEl.value), parseFloat(lngEl.value), 18, pinSource, confirmed);
+    } else if (form.dataset.auto === '1') {
+        searchAddress();
     }
     setTimeout(function () { map.invalidateSize(); }, 200);
 })();

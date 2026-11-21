@@ -30,6 +30,15 @@ function cov_csrf_ok(): bool
         && hash_equals((string) $_SESSION['cov_csrf'], (string) $_POST['csrf']);
 }
 
+/** Format jarak dalam km (float) menjadi "xxx m" atau "x,x km". */
+function cov_dist(float $km): string
+{
+    $m = $km * 1000;
+    return $m >= 1000
+        ? number_format($km, 1, ',', '.') . ' km'
+        : number_format($m, 0, ',', '.') . ' m';
+}
+
 /** Bagian atas kartu: radar sinyal + judul. $tone: ok | warn | wait */
 function cov_hero(string $tone, string $title, string $sub): void
 {
@@ -66,6 +75,11 @@ $lng = isset($flow['lng']) && is_numeric($flow['lng']) && abs((float) $flow['lng
 if ($lat === null || $lng === null) {
     $lat = $lng = null;
 }
+
+/* Info ODP terdekat (juga bila di luar radius) dari coverage.php */
+$nearOdp = trim((string) ($flow['terdekat_odp'] ?? ''));
+$nearKm = isset($flow['terdekat_jarak']) && is_numeric($flow['terdekat_jarak']) ? (float) $flow['terdekat_jarak'] : null;
+$radiusKm = isset($flow['radius_km']) && is_numeric($flow['radius_km']) ? (float) $flow['radius_km'] : null;
 
 $errors = [];
 $old = [
@@ -490,7 +504,7 @@ $requestTone = $isRejected ? 'warn' : ($stage === 3 ? 'ok' : 'wait');
         .cv-sub { margin: 10px auto 0; max-width: 52ch; color: #b9c8e2; font-size: 15px; }
 
         /* ---------- Isi ---------- */
-        .cv-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 8px; }
+        .cv-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 0 0 8px; }
         .cv-meta div { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; }
         .cv-meta dt { font-size: 12.5px; color: var(--muted); font-weight: 600; margin: 0; }
         .cv-meta dd { margin: 2px 0 0; font-size: 17px; font-weight: 800; letter-spacing: -.2px; }
@@ -514,6 +528,10 @@ $requestTone = $isRejected ? 'warn' : ($stage === 3 ? 'ok' : 'wait');
         .cv-status .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; background: var(--brand); vertical-align: 1px; }
         .cv-status.ok .dot { background: var(--ok); }
         .cv-status.warn .dot { background: var(--warn); }
+
+        /* Info ODP terdekat (belum tercover) */
+        .cv-near { margin: 14px 0 0; border-radius: 14px; padding: 12px 16px; background: #fffaf0; border: 1px solid #fedf89; color: #93370d; font-size: 14.5px; }
+        .cv-near b { font-weight: 800; }
 
         /* Lini waktu: urutan nyata, jadi bernomor */
         .cv-track { list-style: none; margin: 22px 0 6px; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); position: relative; }
@@ -700,6 +718,14 @@ $requestTone = $isRejected ? 'warn' : ($stage === 3 ? 'ok' : 'wait');
                     agar tim kami dapat mengevaluasi kebutuhan jaringan di wilayah Anda.
                 </p>
 
+                <?php if ($nearOdp !== '' && $nearKm !== null): ?>
+                    <p class="cv-near">
+                        ODP terdekat (<b><?= cov_h($nearOdp) ?></b>) berjarak sekitar
+                        <b><?= cov_h(cov_dist($nearKm)) ?></b><?= $radiusKm !== null ? ', sedangkan batas layanan ' . cov_h(cov_dist($radiusKm)) : '' ?>.
+                        Jika titik pin Anda kurang tepat, <a href="<?= cov_h(COV_FORM_URL . '?alamat=' . rawurlencode($alamat)) ?>">cek ulang alamat</a>.
+                    </p>
+                <?php endif; ?>
+
                 <div class="cv-actions">
                     <a class="cv-btn primary" href="#form-perluasan">Ajukan perluasan coverage</a>
                     <a class="cv-btn" href="<?= cov_h(COV_FORM_URL) ?>">Cek alamat lain</a>
@@ -777,7 +803,7 @@ $requestTone = $isRejected ? 'warn' : ($stage === 3 ? 'ok' : 'wait');
                     </div>
 
                     <?php if ($lat !== null && $lng !== null): ?>
-                        <p class="cv-hint">Titik lokasi dari GPS ikut tersimpan bersama alamat.</p>
+                        <p class="cv-hint">Titik lokasi yang Anda tandai di peta ikut tersimpan bersama alamat.</p>
                     <?php else: ?>
                         <p class="cv-hint">Koordinat atau tautan Google Maps membantu tim menemukan lokasi dengan lebih akurat.</p>
                     <?php endif; ?>
