@@ -14,8 +14,7 @@ date_default_timezone_set('Asia/Jakarta');
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-/* Alamat dasar halaman invoice (CID pelanggan ditambahkan di belakangnya). */
-const INVOICE_BASE_URL = 'https://www.sinaralamabadi.com/invoice/unpaid/';
+const EXTERNAL_PAYMENT_URL = 'https://www.sinaralamabadi.com/tagihan';
 
 /*
 |--------------------------------------------------------------------------
@@ -185,23 +184,78 @@ function normalizeBillStatus($status): string
  *   ALTER TABLE customers
  *     ADD COLUMN cid VARCHAR(30) NULL DEFAULT NULL AFTER user_id,
  *     ADD UNIQUE KEY uq_customers_cid (cid);
- * Jika kolom belum ada atau CID kosong, tombol invoice tidak ditampilkan.
+ * Jika kolom belum ada atau CID kosong, tombol pembayaran eksternal tidak ditampilkan.
  */
 function resolveCustomerCid(array $customer): string
 {
     return trim((string) ($customer['cid'] ?? ''));
 }
 
-/**
- * Bentuk link invoice unik per pelanggan. Null jika CID kosong/tidak valid.
- */
-function buildInvoiceUrl(string $cid): ?string
+function billingCustomerCidCategory(string $cid): string
 {
-    if (!preg_match('/^[A-Za-z0-9_-]{3,50}$/', $cid)) {
-        return null;
+    if ($cid === '') {
+        return 'Belum tersedia';
     }
 
-    return INVOICE_BASE_URL . rawurlencode($cid);
+    $categories = [
+        'TAS10' => 'Yeshome Tas 10',
+        'TAS8' => 'Yeshome Tas 8',
+        'YHJ' => 'Yeshome Jakarta',
+        'YHS' => 'Yeshome Surabaya',
+        'CMP' => 'Yeshome Cempaka',
+        'SDA' => 'Yeshome Sidoarjo',
+        'KTP' => 'Yeshome Ketapang',
+        'KL' => 'Yeshome Klender',
+        'DP' => 'Yeshome Depok',
+        'CG' => 'City Garden',
+        'MP' => 'Metropolis',
+        'S8' => 'Satu 8',
+        'TN' => 'The Nest',
+        'YC' => 'YesCorp',
+        'YH' => 'YesHome',
+        'YP' => 'Yesplus',
+    ];
+
+    foreach ($categories as $code => $name) {
+        if (str_starts_with(strtoupper($cid), $code)) {
+            return $name;
+        }
+    }
+
+    return 'Tidak dikenal';
+}
+
+function billingPeriodLabel(array $bill): string
+{
+    $period = trim((string) ($bill['periode'] ?? ''));
+    if ($period !== '') {
+        return $period;
+    }
+
+    $month = trim((string) ($bill['periode_bulan'] ?? ''));
+    $year = trim((string) ($bill['periode_tahun'] ?? ''));
+    $months = [
+        1 => 'Januari',
+        2 => 'Februari',
+        3 => 'Maret',
+        4 => 'April',
+        5 => 'Mei',
+        6 => 'Juni',
+        7 => 'Juli',
+        8 => 'Agustus',
+        9 => 'September',
+        10 => 'Oktober',
+        11 => 'November',
+        12 => 'Desember',
+    ];
+
+    if (ctype_digit($month) && isset($months[(int) $month])) {
+        $month = $months[(int) $month];
+    }
+
+    $parts = array_filter([$month, $year], static fn(string $part): bool => $part !== '');
+
+    return $parts ? implode(' ', $parts) : '-';
 }
 
 $billStatusMeta = [
@@ -244,7 +298,7 @@ $telephone = '';
 $alamat = '';
 $kodePelanggan = '';
 $cid = '';
-$invoiceUrl = null;
+$cidCategory = 'Belum tersedia';
 
 $statusLangganan = 'belum_berlangganan';
 
@@ -260,6 +314,7 @@ $tagihanTableAvailable = false;
 
 $jumlahTagihan = 0;
 $jatuhTempo = null;
+$periodeTagihan = '-';
 $nomorTagihan = '-';
 $statusTagihan = 'unpaid';
 $sisaHari = null;
@@ -372,9 +427,9 @@ $telephone = $customer['telephone'] ?? $customer['no_hp'] ?? $customer['phone'] 
 $alamat = $customer['alamat'] ?? $customer['address'] ?? '';
 $kodePelanggan = $customer['kode_pelanggan'] ?? '';
 
-/* CID pelanggan + link invoice (berbeda untuk setiap pelanggan) */
+/* CID pelanggan untuk identitas dan kategori tempat. */
 $cid = resolveCustomerCid($customer);
-$invoiceUrl = buildInvoiceUrl($cid);
+$cidCategory = billingCustomerCidCategory($cid);
 
 $statusLangganan = normalizeSubscriptionStatus($customer['status_langganan'] ?? '');
 
@@ -434,6 +489,7 @@ if (
 
         if (!empty($rows)) {
             $tagihan = $rows[0];
+            $periodeTagihan = billingPeriodLabel($tagihan);
 
             $jumlahTagihan = $tagihan['jumlah']
                 ?? $tagihan['total']
@@ -668,43 +724,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
     <link rel="stylesheet" href="assets/css/portal-unified.css">
     <script defer src="assets/js/portal-ui.js"></script>
-
-    <!-- Tombol link invoice (berdiri sendiri, tidak perlu mengubah billing.css) -->
-    <style>
-        .bill-invoice-link {
-            position: relative;
-            z-index: 2;
-            width: 100%;
-            min-height: 42px;
-            margin-top: 12px;
-            padding: 0 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            border: 1px solid #cbdcf7;
-            border-radius: 10px;
-            background: #ffffff;
-            color: #1d4ed8;
-            font-size: 13px;
-            font-weight: 700;
-            text-decoration: none;
-            transition: background .2s ease, border-color .2s ease;
-        }
-        .bill-invoice-link:hover {
-            background: #f1f6ff;
-            border-color: #9dbbea;
-            color: #1748b5;
-        }
-        .dashboard-page[data-theme="dark"] .bill-invoice-link {
-            border-color: #2b3a51;
-            background: #172437;
-            color: #9fc2ff;
-        }
-        .dashboard-page[data-theme="dark"] .bill-invoice-link:hover {
-            background: #1b2f4d;
-        }
-    </style>
 
 </head>
 
@@ -1054,17 +1073,32 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                                 </div>
 
                                 <div>
-                                    <span>Paket</span>
-                                    <strong><?= e($paketNama); ?></strong>
+                                    <span>Periode tagihan</span>
+                                    <strong><?= e($periodeTagihan); ?></strong>
                                 </div>
 
                             </div>
 
                             <?php if ($canPay): ?>
-                                <a href="../pembayaran.php?tagihan=<?= (int) $tagihan['id']; ?>" class="bill-pay-button">
-                                    <i class="bi bi-credit-card"></i>
-                                    Bayar Sekarang
-                                </a>
+                                <?php if ($cid !== ''): ?>
+                                    <p class="bill-invoice-note">
+                                        Anda akan melanjutkan ke halaman pembayaran resmi Sinar Alam Abadi.
+                                        Masukkan CID Anda di halaman tersebut. Membuka halaman ini tidak mengubah status pembayaran.
+                                    </p>
+                                    <a
+                                        href="<?= e(EXTERNAL_PAYMENT_URL); ?>"
+                                        class="bill-pay-button"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        <i class="bi bi-box-arrow-up-right"></i>
+                                        Bayar Sekarang
+                                    </a>
+                                <?php else: ?>
+                                    <p class="bill-invoice-note">
+                                        CID belum tersedia pada akun ini. Hubungi Customer Service sebelum melanjutkan pembayaran.
+                                    </p>
+                                <?php endif; ?>
                             <?php endif; ?>
 
                         <?php else: ?>
@@ -1079,17 +1113,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                                     : 'Data tagihan akan tampil setelah sistem penagihan terhubung.'; ?>
                             </p>
 
-                        <?php endif; ?>
-
-                        <?php if ($invoiceUrl): ?>
-                            <!-- Link invoice unik per pelanggan (berdasarkan CID) -->
-                            <a href="<?= e($invoiceUrl); ?>"
-                               class="bill-invoice-link"
-                               target="_blank"
-                               rel="noopener noreferrer">
-                                <i class="bi bi-box-arrow-up-right"></i>
-                                Lihat invoice di Sinar Alam Abadi
-                            </a>
                         <?php endif; ?>
 
                     </section>
@@ -1147,6 +1170,11 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                                         #<?= (int) $customerId; ?>
                                     <?php endif; ?>
                                 </dd>
+                            </div>
+
+                            <div>
+                                <dt>Kategori CID</dt>
+                                <dd><?= e($cidCategory); ?></dd>
                             </div>
 
                             <div>
