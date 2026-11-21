@@ -1,17 +1,3 @@
-/* =========================================================
-   CHAT / BANTUAN - CUSTOMER PORTAL
-   ---------------------------------------------------------
-   Memakai shell dari dashboard.css (sidebar, topbar,
-   dashboard-card, card-heading, card-kicker, dark mode).
-   File ini HANYA berisi komponen khusus chat.
-   Muat SETELAH Bootstrap dan dashboard.css.
-========================================================= */
-
-
-/* =========================================================
-   LAYOUT
-========================================================= */
-
 .chat-content {
     max-width: none;
     height: calc(100vh - 76px);
