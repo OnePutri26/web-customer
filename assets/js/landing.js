@@ -301,6 +301,17 @@
   }
   function rupiah(v) { return 'Rp ' + fmtNum(Math.round(v), 0); }
 
+  /* Format kecepatan: >= 1000 Mbps tampil sebagai Gbps (sumber data tetap data-speed dari PHP) */
+  function formatSpeed(v) {
+    var raw = String(v == null ? '' : v).trim();
+    if (!raw) return '';
+    if (/[a-z]/i.test(raw)) return raw;            // sudah berunit (mis. "1 Gbps"), jangan diubah
+    var n = parseFloat(raw);
+    if (isNaN(n)) return raw;
+    if (n >= 1000) return String(n / 1000).replace('.', ',') + ' Gbps';
+    return n + ' Mbps';
+  }
+
   /* ===================================================== HERO */
   function aurora(hero) {
     if (reduce) return;
@@ -421,6 +432,30 @@
     }
     if (HAS_IO) new IntersectionObserver(function (es) { visible = es[0].isIntersecting; visible ? start() : stop(); }).observe(hero);
     start();
+  }
+
+  /* ===================================================== URUTAN PAKET: YESFUN PERTAMA */
+  function isYesfun(el) {
+    var k = ((el.getAttribute('data-name') || '') + ' ' + (el.getAttribute('data-id') || '') + ' ' + (el.value || '')).toLowerCase();
+    return k.indexOf('yesfun') > -1;
+  }
+  function packageOrder() {
+    // Kartu paket: pindahkan YESFUN ke posisi pertama, sisanya tetap urutan semula
+    var cs = $$('.packages-grid .package-card');
+    var y = cs.filter(isYesfun)[0];
+    if (y && cs[0] !== y) cs[0].parentNode.insertBefore(y, cs[0]);
+
+    // Dropdown paket pada simulasi promo: urutan sama, pilihan aktif dipertahankan
+    var sel = $('#promo-package');
+    if (sel && sel.options.length) {
+      var opts = Array.prototype.slice.call(sel.options);
+      var yo = opts.filter(isYesfun)[0];
+      if (yo && opts[0] !== yo && yo.parentNode === opts[0].parentNode) {
+        var cur = sel.value;
+        yo.parentNode.insertBefore(yo, opts[0]);
+        sel.value = cur;
+      }
+    }
   }
 
   /* ===================================================== FILTER WILAYAH (JAKARTA / SURABAYA) */
@@ -677,7 +712,7 @@
       out.appendChild(txt('Kami sarankan paket '));
       var b = mk('strong');
       var pr = card.getAttribute('data-price-' + region);
-      b.textContent = card.getAttribute('data-name') + ' (' + card.getAttribute('data-speed') + ' Mbps' + (pr ? ', Rp ' + pr + '/bulan' : '') + ')';
+      b.textContent = card.getAttribute('data-name') + ' (' + formatSpeed(card.getAttribute('data-speed')) + (pr ? ', Rp ' + pr + '/bulan' : '') + ')';
       out.appendChild(b);
       var btn = $('.package-button', card);
       if (btn) {
@@ -751,6 +786,7 @@
     safe(navbar);
     safe(mobileBar);
     safe(buttons);
+    safe(packageOrder);   // YESFUN pertama: harus sebelum regionFilter/picker/promoSimulator/startReveal
     safe(regionFilter);
     safe(picker);
     safe(promoSimulator);
