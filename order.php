@@ -1,6 +1,20 @@
 <?php
 require_once __DIR__ . '/config/app.php';
 
+/*
+ * Paket hanya boleh dipesan jika statusnya aktif (aturan yang sama dengan paket.php).
+ */
+if (!function_exists('paketBisaDibeli')) {
+    function paketBisaDibeli(array $paket): bool
+    {
+        if (!array_key_exists('status', $paket)) {
+            return true;
+        }
+        $status = strtolower(trim((string) ($paket['status'] ?? '')));
+        return in_array($status, ['aktif', 'active', 'tersedia', 'available', '1'], true);
+    }
+}
+
 if (!isCustomer()) {
     redirect('login.php');
 }
@@ -10,6 +24,9 @@ if (!flow('verified') || !flow('paket_id') || !flow('alamat')) {
 $cust = currentCustomer($conn);
 $p = getPaket($conn, (int) flow('paket_id'));
 if (!$cust || !$p) {
+    redirect('paket.php?mode=coverage');
+}
+if (!paketBisaDibeli($p)) {
     redirect('paket.php?mode=coverage');
 }
 $pricing = packagePriceDetails($p);
@@ -36,6 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $tagihanId = ensureOrder($conn, $cust, $p, (string) flow('alamat'));
             redirect('pembayaran.php?tagihan=' . $tagihanId);
         } catch (Throwable $e) {
+            error_log('Gagal membuat order: ' . $e->getMessage());
             $error = 'Order gagal dibuat. Silakan coba lagi.';
         }
     }
@@ -67,9 +85,23 @@ require __DIR__ . '/inc/header.php';
     <div class="sum"><span>Biaya instalasi</span><b>Gratis</b></div>
     <div class="sum"><span>Alamat pemasangan</span><b><?= e(flow('alamat')) ?></b></div>
     <div class="sum"><span><?= $promoCode !== '' ? 'Total pembayaran ' . (int) $promoDetails['bayar_bulan'] . ' bulan' : 'Total pembayaran' ?></span><b style="font-size:18px;color:var(--blue)"><?= rupiah($promoDetails['total_bayar']) ?></b></div>
-    <form method="post">
+    <form method="post" id="orderForm">
         <?= csrf_field() ?>
-        <button class="btn btn-primary btn-block" type="submit" style="margin-top:18px">Buat Order &amp; Bayar</button>
+        <button class="btn btn-primary btn-block" type="submit" id="orderBtn" style="margin-top:18px">Buat Order &amp; Bayar</button>
     </form>
+    <script>
+    /* Cegah klik ganda: tombol dikunci setelah form dikirim sekali. */
+    (function () {
+        var form = document.getElementById('orderForm');
+        var btn = document.getElementById('orderBtn');
+        var sent = false;
+        form.addEventListener('submit', function (ev) {
+            if (sent) { ev.preventDefault(); return; }
+            sent = true;
+            btn.disabled = true;
+            btn.textContent = 'Memproses…';
+        });
+    })();
+    </script>
 </div>
 <?php require __DIR__ . '/inc/footer.php'; ?>

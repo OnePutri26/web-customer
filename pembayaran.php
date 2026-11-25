@@ -16,20 +16,16 @@ $error = '';
 $payment = null;
 $tagihan = null;
 
+/*
+ * Tagihan TIDAK boleh dibuat dari halaman ini. Membuka halaman lewat GET
+ * (?paket=ID) sebelumnya langsung memanggil ensureOrder(), sehingga alur
+ * detail paket -> registrasi -> verifikasi -> order bisa dilewati.
+ * Link lama dengan ?paket=ID kini dikembalikan ke awal alur (detail_paket.php).
+ * Tagihan hanya dibuat di order.php setelah data diverifikasi.
+ */
 if (!$tagihanId && isset($_GET['paket'])) {
     $packageId = filter_input(INPUT_GET, 'paket', FILTER_VALIDATE_INT);
-    $package = $packageId ? getPaket($conn, (int) $packageId) : null;
-    $address = trim((string) flow('alamat', $cust['alamat'] ?? ''));
-    if (!$package || $address === '' || isAktif((string) ($cust['status_langganan'] ?? ''))) {
-        redirect('paket.php');
-    }
-
-    try {
-        $tagihanId = ensureOrder($conn, $cust, $package, $address);
-    } catch (Throwable $e) {
-        error_log('Gagal membuat tagihan dari pembayaran: ' . $e->getMessage());
-        $error = 'Tagihan tidak dapat dibuat saat ini. Silakan coba kembali.';
-    }
+    redirect($packageId ? 'detail_paket.php?id=' . (int) $packageId : 'paket.php');
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tagihanId) {

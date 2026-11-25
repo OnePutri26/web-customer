@@ -1,6 +1,21 @@
 <?php
 require_once __DIR__ . '/config/app.php';
 
+/*
+ * Paket hanya boleh dibeli jika statusnya aktif (aturan yang sama dengan paket.php).
+ * Mencegah paket nonaktif dibuka lewat URL ?id= yang diketik manual.
+ */
+if (!function_exists('paketBisaDibeli')) {
+    function paketBisaDibeli(array $paket): bool
+    {
+        if (!array_key_exists('status', $paket)) {
+            return true;
+        }
+        $status = strtolower(trim((string) ($paket['status'] ?? '')));
+        return in_array($status, ['aktif', 'active', 'tersedia', 'available', '1'], true);
+    }
+}
+
 $selectedPackageId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 if (!$selectedPackageId) {
     $selectedPackageId = (int) flow('paket_id');
@@ -9,6 +24,9 @@ if (!$selectedPackageId) {
 $p = $selectedPackageId > 0 ? getPaket($conn, (int) $selectedPackageId) : null;
 if (!$p) {
     redirect('paket.php');
+}
+if (!paketBisaDibeli($p)) {
+    redirect('paket.php?mode=coverage');
 }
 $pricing = packagePriceDetails($p);
 $promoCode = trim((string) flow('promo_code', ''));

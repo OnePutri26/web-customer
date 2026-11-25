@@ -4,9 +4,8 @@
  * Database: paket_wifi
  * Kolom: id, nama_paket, speed_mbps, harga, wilayah, status, created_at
  *
- * Alur: paket.php -> tombol Bayar -> customer/billing.php?paket=ID
- * Hanya ID paket yang dikirim. Harga, nama, kecepatan, dan wilayah
- * WAJIB diambil ulang dari database oleh customer/billing.php.
+ * Alur: paket.php -> detail_paket.php -> register.php -> verifikasi.php
+ *        -> order.php -> pembayaran.php -> hasil_pembayaran.php
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -1097,12 +1096,12 @@ $totalPackages = count($packages);
                     $statusInfo = statusPaket($package['status'] ?? '');
 
                     /*
-                     * URL tombol Bayar -> customer/billing.php.
+                     * Tombol pilih paket -> detail_paket.php.
                      * Hanya ID paket yang dikirim. Harga, nama, kecepatan,
-                     * dan wilayah TIDAK dikirim lewat URL; billing.php wajib
-                     * mengambilnya ulang dari database (tabel paket_wifi).
+                     * dan fasilitas diambil ulang dari database oleh
+                     * detail_paket.php (parameter id divalidasi di sana).
                      */
-                    $pilihPaketUrl = 'customer/billing.php?paket=' . $packageId;
+                    $pilihPaketUrl = 'detail_paket.php?id=' . $packageId;
 
                     $bisaDipilih = (
                         $packageId > 0 &&
@@ -1159,7 +1158,7 @@ $totalPackages = count($packages);
                             href="<?= e($pilihPaketUrl) ?>"
                             class="choose-btn"
                         >
-                            Bayar Paket Ini
+                            Pilih Paket Ini
                             <i class="bi bi-arrow-right"></i>
                         </a>
 
