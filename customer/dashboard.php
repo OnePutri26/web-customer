@@ -474,7 +474,6 @@ $menuMain = [
     ['dashboard.php',                 'bi-grid-fill',            'Dashboard'],
     ['usage.php',                     'bi-router-fill',          'Internet Saya'],
     ['billing.php',                   'bi-receipt-cutoff',       'Tagihan & Pembayaran'],
-    ['billing.php#riwayat-pembayaran', 'bi-clock-history',       'Riwayat Pembayaran'],
     ['speedtest.php',                 'bi-speedometer2',         'Speed Test'],
     ['complaint.php',                 'bi-tools',                'Laporan Gangguan'],
     ['network_status.php',            'bi-globe2',               'Status Jaringan'],
