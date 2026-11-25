@@ -2,12 +2,13 @@
 require_once __DIR__ . '/config/app.php';
 
 /*
- * MODE DEBUG SEMENTARA
+ * MODE DEBUG
  * true  = pesan error asli dari ensureOrder() ditampilkan di halaman.
  * false = pelanggan hanya melihat pesan umum (WAJIB false di server produksi).
  * Isi error lengkap selalu dicatat ke log error PHP, apa pun nilainya.
+ * Set true hanya sementara saat pengujian.
  */
-$orderDebug = true;
+$orderDebug = false;
 
 /*
  * Paket hanya boleh dipesan jika statusnya aktif (aturan yang sama dengan paket.php).
@@ -37,6 +38,10 @@ if (!$cust || !$p) {
 if (!paketBisaDibeli($p)) {
     redirect('paket.php?mode=coverage');
 }
+if (isAktif($cust['status_langganan'])) {
+    redirect('customer/dashboard.php');
+}
+
 $pricing = packagePriceDetails($p);
 $promoCode = trim((string) flow('promo_code', ''));
 $monthlyRate = (float) (
@@ -48,9 +53,6 @@ $promoDetails = subscriptionPromoDetails(
     $monthlyRate,
     $promoCode
 );
-if (isAktif($cust['status_langganan'])) {
-    redirect('customer/dashboard.php');
-}
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
