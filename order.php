@@ -2,6 +2,14 @@
 require_once __DIR__ . '/config/app.php';
 
 /*
+ * MODE DEBUG SEMENTARA
+ * true  = pesan error asli dari ensureOrder() ditampilkan di halaman.
+ * false = pelanggan hanya melihat pesan umum (WAJIB false di server produksi).
+ * Isi error lengkap selalu dicatat ke log error PHP, apa pun nilainya.
+ */
+$orderDebug = true;
+
+/*
  * Paket hanya boleh dipesan jika statusnya aktif (aturan yang sama dengan paket.php).
  */
 if (!function_exists('paketBisaDibeli')) {
@@ -53,8 +61,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $tagihanId = ensureOrder($conn, $cust, $p, (string) flow('alamat'));
             redirect('pembayaran.php?tagihan=' . $tagihanId);
         } catch (Throwable $e) {
-            error_log('Gagal membuat order: ' . $e->getMessage());
+            error_log(
+                'Gagal membuat order: ' . get_class($e) . ': ' . $e->getMessage()
+                . ' @ ' . $e->getFile() . ':' . $e->getLine()
+                . "\n" . $e->getTraceAsString()
+            );
             $error = 'Order gagal dibuat. Silakan coba lagi.';
+            if ($orderDebug) {
+                $error .= ' [DEBUG] ' . get_class($e) . ': ' . $e->getMessage()
+                    . ' (' . basename($e->getFile()) . ':' . $e->getLine() . ')';
+            }
         }
     }
 }
