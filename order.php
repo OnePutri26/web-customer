@@ -6,9 +6,9 @@ require_once __DIR__ . '/config/app.php';
  * true  = pesan error asli dari ensureOrder() ditampilkan di halaman.
  * false = pelanggan hanya melihat pesan umum (WAJIB false di server produksi).
  * Isi error lengkap selalu dicatat ke log error PHP, apa pun nilainya.
- * Set true hanya sementara saat pengujian.
+ * Set false setelah order berhasil dan sebelum dipakai pelanggan sungguhan.
  */
-$orderDebug = false;
+$orderDebug = true;
 
 /*
  * Paket hanya boleh dipesan jika statusnya aktif (aturan yang sama dengan paket.php).
