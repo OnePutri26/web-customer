@@ -1,9 +1,12 @@
-
 <?php
 /**
  * YESNET - Daftar Paket Internet
  * Database: paket_wifi
  * Kolom: id, nama_paket, speed_mbps, harga, wilayah, status, created_at
+ *
+ * Alur: paket.php -> tombol Bayar -> customer/billing.php?paket=ID
+ * Hanya ID paket yang dikirim. Harga, nama, kecepatan, dan wilayah
+ * WAJIB diambil ulang dari database oleh customer/billing.php.
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -1094,20 +1097,12 @@ $totalPackages = count($packages);
                     $statusInfo = statusPaket($package['status'] ?? '');
 
                     /*
-                     * URL pemilihan paket.
-                     * Parameter wilayah tetap dikirim ke pilih_paket.php.
+                     * URL tombol Bayar -> customer/billing.php.
+                     * Hanya ID paket yang dikirim. Harga, nama, kecepatan,
+                     * dan wilayah TIDAK dikirim lewat URL; billing.php wajib
+                     * mengambilnya ulang dari database (tabel paket_wifi).
                      */
-                    $pilihPaketUrl = 'pilih_paket.php?paket=' . $packageId;
-
-                    $wilayahSlug = wilayahUntukUrl($wilayahAsli);
-
-                    if ($wilayahSlug !== '') {
-                        $pilihPaketUrl .= '&wilayah=' . rawurlencode($wilayahSlug);
-                    }
-
-                    if ($modeCoverage) {
-                        $pilihPaketUrl .= '&mode=coverage';
-                    }
+                    $pilihPaketUrl = 'customer/billing.php?paket=' . $packageId;
 
                     $bisaDipilih = (
                         $packageId > 0 &&
@@ -1164,7 +1159,7 @@ $totalPackages = count($packages);
                             href="<?= e($pilihPaketUrl) ?>"
                             class="choose-btn"
                         >
-                            Pilih Paket Ini
+                            Bayar Paket Ini
                             <i class="bi bi-arrow-right"></i>
                         </a>
 
