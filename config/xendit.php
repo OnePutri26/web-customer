@@ -1,6 +1,28 @@
 <?php
 declare(strict_types=1);
 
+/*
+ * CATATAN PENTING:
+ * - File ini TIDAK memuat config/app.php. Semua fungsi di sini berdiri sendiri.
+ * - declare(strict_types=1) harus menjadi pernyataan pertama setelah <?php.
+ *   Jangan menaruh require/include apa pun di atasnya.
+ */
+
+/**
+ * Baca nilai konfigurasi dari environment.
+ * Dicek lewat getenv(), lalu $_SERVER dan $_ENV, karena sebagian setup
+ * (Apache / PHP-FPM) tidak meneruskan variabel ke getenv().
+ */
+function xenditEnv(string $name): string
+{
+    $value = getenv($name);
+    if ($value === false || trim((string) $value) === '') {
+        $value = $_SERVER[$name] ?? $_ENV[$name] ?? '';
+    }
+
+    return trim((string) $value);
+}
+
 function xenditConfig(): array
 {
     static $config = null;
@@ -8,28 +30,39 @@ function xenditConfig(): array
         return $config;
     }
 
-    // Keep local application URL configuration separate from API credentials.
+    /*
+     * Cadangan opsional: config/xendit.local.php boleh mengembalikan array
+     * dengan kunci 'app_url', 'secret_key', 'callback_token'.
+     * Environment variable tetap diprioritaskan. Jangan commit file ini.
+     */
     $local = [];
     $file = __DIR__ . '/xendit.local.php';
     if (is_file($file)) {
         $loaded = require $file;
-        if (is_array($loaded) && isset($loaded['app_url'])) {
+        if (is_array($loaded)) {
             $local = $loaded;
         }
     }
 
-    $secretKey = getenv('XENDIT_SECRET_KEY');
-    $callbackToken = getenv('XENDIT_WEBHOOK_TOKEN');
-    $appUrl = getenv('YESNET_APP_URL');
+    $secretKey = xenditEnv('XENDIT_SECRET_KEY');
+    if ($secretKey === '') {
+        $secretKey = trim((string) ($local['secret_key'] ?? ''));
+    }
+
+    $callbackToken = xenditEnv('XENDIT_WEBHOOK_TOKEN');
+    if ($callbackToken === '') {
+        $callbackToken = trim((string) ($local['callback_token'] ?? ''));
+    }
+
+    $appUrl = xenditEnv('YESNET_APP_URL');
+    if ($appUrl === '') {
+        $appUrl = trim((string) ($local['app_url'] ?? ''));
+    }
 
     return $config = [
-        'secret_key' => trim((string) ($secretKey === false ? '' : $secretKey)),
-        'callback_token' => trim((string) ($callbackToken === false ? '' : $callbackToken)),
-        'app_url' => rtrim(trim((string) (
-            $appUrl !== false && trim($appUrl) !== ''
-                ? $appUrl
-                : ($local['app_url'] ?? '')
-        )), '/'),
+        'secret_key' => $secretKey,
+        'callback_token' => $callbackToken,
+        'app_url' => rtrim($appUrl, '/'),
     ];
 }
 
