@@ -1,4 +1,3 @@
-
 <?php
 /*
 |--------------------------------------------------------------------------
@@ -205,6 +204,55 @@ if (!function_exists('flowSet')) {
             $_SESSION['flow'],
             $data
         );
+    }
+}
+
+/*
+ * Kode promo di session flow.
+ * Kunci baru: "promo". Kunci lama "promo_code" tetap dibaca sebagai cadangan
+ * supaya halaman lain yang belum diubah tetap berfungsi.
+ */
+if (!function_exists('flowPromo')) {
+    function flowPromo(): string
+    {
+        $promo = trim((string) flow('promo', ''));
+
+        if ($promo === '') {
+            $promo = trim((string) flow('promo_code', ''));
+        }
+
+        return $promo;
+    }
+}
+
+/* ========================================================================
+   INFO SKEMA DATABASE
+   Dipakai agar kode tetap berjalan walau nama kolom promo berbeda
+   (promo_code atau promo) di tabel subscription.
+   ======================================================================== */
+
+if (!function_exists('tableColumns')) {
+    function tableColumns(mysqli $conn, string $table): array
+    {
+        static $cache = [];
+
+        if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) {
+            return [];
+        }
+
+        if (!isset($cache[$table])) {
+            $cols = [];
+            $res = $conn->query('SHOW COLUMNS FROM `' . $table . '`');
+
+            while ($r = $res->fetch_assoc()) {
+                $cols[] = (string) $r['Field'];
+            }
+
+            $res->free();
+            $cache[$table] = $cols;
+        }
+
+        return $cache[$table];
     }
 }
 
@@ -543,6 +591,11 @@ if (!function_exists('cekCoverage')) {
 /* ========================================================================
    ORDER
    Membuat subscription, pengajuan pemasangan, dan tagihan.
+
+   Nama kolom promo di tabel subscription dideteksi otomatis:
+   "promo_code" jika ada, jika tidak "promo".
+   Kolom bulan_dibayar, bulan_bonus, masa_berlangganan_bulan wajib ada
+   hanya untuk order yang memakai promo berlangganan.
    ======================================================================== */
 
 if (!function_exists('ensureOrder')) {
@@ -568,7 +621,7 @@ if (!function_exists('ensureOrder')) {
             );
         }
 
-        $promoCode = trim((string) flow('promo_code', ''));
+        $promoCode = flowPromo();
         $pricing = packagePriceDetails($paket);
         $monthlyPrice = (float) (
             $promoCode !== ''
@@ -578,25 +631,72 @@ if (!function_exists('ensureOrder')) {
         $promoDetails = subscriptionPromoDetails($monthlyPrice, $promoCode);
         $totalPrice = (float) $promoDetails['total_bayar'];
 
+        /* ---- Deteksi kolom tabel subscription ---- */
+        $subCols = tableColumns($conn, 'subscription');
+
+        $promoCol = null;
+        if (in_array('promo_code', $subCols, true)) {
+            $promoCol = 'promo_code';
+        } elseif (in_array('promo', $subCols, true)) {
+            $promoCol = 'promo';
+        }
+
+        $monthCols = [
+            'bulan_dibayar',
+            'bulan_bonus',
+            'masa_berlangganan_bulan',
+        ];
+
+        if ($promoCode !== '') {
+            $missing = [];
+
+            if ($promoCol === null) {
+                $missing[] = 'promo';
+            }
+
+            foreach ($monthCols as $mc) {
+                if (!in_array($mc, $subCols, true)) {
+                    $missing[] = $mc;
+                }
+            }
+
+            if ($missing) {
+                throw new RuntimeException(
+                    'Tabel subscription belum punya kolom: '
+                    . implode(', ', $missing)
+                    . '. Tambahkan kolom tersebut agar promo berlangganan bisa disimpan.'
+                );
+            }
+        }
+
         /*
          * Cek order yang masih menunggu pembayaran.
          * Jangan membuat tagihan ganda untuk order pending yang sama.
          */
-        $st = $conn->prepare("
+        $sql = "
             SELECT t.id
             FROM tagihan t
             JOIN subscription s
                 ON s.id = t.id_subscription
             WHERE t.id_customer = ?
               AND s.paket_id = ?
-              AND (s.promo_code = ? OR (s.promo_code IS NULL AND ? = ''))
               AND s.status = 'pending'
               AND t.status IN ('unpaid', 'pending')
-            ORDER BY t.id DESC
-            LIMIT 1
-        ");
+        ";
+        $types = 'ii';
+        $params = [$cid, $pid];
 
-        $st->bind_param('iiss', $cid, $pid, $promoCode, $promoCode);
+        if ($promoCol !== null) {
+            $sql .= " AND (s.`{$promoCol}` = ? OR (s.`{$promoCol}` IS NULL AND ? = ''))";
+            $types .= 'ss';
+            $params[] = $promoCode;
+            $params[] = $promoCode;
+        }
+
+        $sql .= ' ORDER BY t.id DESC LIMIT 1';
+
+        $st = $conn->prepare($sql);
+        $st->bind_param($types, ...$params);
         $st->execute();
 
         $ada = $st->get_result()->fetch_assoc();
@@ -610,27 +710,39 @@ if (!function_exists('ensureOrder')) {
         $conn->begin_transaction();
 
         try {
-            /* Buat subscription. */
-            $st = $conn->prepare("
-                INSERT INTO subscription
-                    (id_customer, paket_id, harga, status, promo_code,
-                     bulan_dibayar, bulan_bonus, masa_berlangganan_bulan)
-                VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)
-            ");
+            /* Buat subscription (kolom disusun sesuai skema yang ada). */
+            $insCols = ['id_customer', 'paket_id', 'harga', 'status'];
+            $insMarks = ['?', '?', '?', "'pending'"];
+            $insTypes = 'iid';
+            $insVals = [$cid, $pid, $monthlyPrice];
 
-            $paidMonths = (int) $promoDetails['bayar_bulan'];
-            $bonusMonths = (int) $promoDetails['bonus_bulan'];
-            $totalMonths = (int) $promoDetails['total_bulan'];
-            $st->bind_param(
-                'iidsiii',
-                $cid,
-                $pid,
-                $monthlyPrice,
-                $promoCode,
-                $paidMonths,
-                $bonusMonths,
-                $totalMonths
+            if ($promoCol !== null) {
+                $insCols[] = "`{$promoCol}`";
+                $insMarks[] = '?';
+                $insTypes .= 's';
+                $insVals[] = $promoCode;
+            }
+
+            $monthVals = [
+                'bulan_dibayar' => (int) $promoDetails['bayar_bulan'],
+                'bulan_bonus' => (int) $promoDetails['bonus_bulan'],
+                'masa_berlangganan_bulan' => (int) $promoDetails['total_bulan'],
+            ];
+
+            foreach ($monthVals as $col => $val) {
+                if (in_array($col, $subCols, true)) {
+                    $insCols[] = $col;
+                    $insMarks[] = '?';
+                    $insTypes .= 'i';
+                    $insVals[] = $val;
+                }
+            }
+
+            $st = $conn->prepare(
+                'INSERT INTO subscription (' . implode(', ', $insCols) . ')
+                 VALUES (' . implode(', ', $insMarks) . ')'
             );
+            $st->bind_param($insTypes, ...$insVals);
             $st->execute();
 
             $subId = (int) $conn->insert_id;
@@ -671,58 +783,65 @@ if (!function_exists('ensureOrder')) {
 
             /*
              * Simpan data coverage jika koordinat tersedia.
-             * Tabel installation_requests harus tersedia di database
-             * jika alur ini menggunakan koordinat.
+             * Jika tabel installation_requests tidak ada atau gagal,
+             * order tetap dilanjutkan dan kesalahan dicatat di log.
              */
             $latFlow = flow('lat');
             $lngFlow = flow('lng');
 
             if ($latFlow !== null && $lngFlow !== null) {
-                $lat = (float) $latFlow;
-                $lng = (float) $lngFlow;
+                try {
+                    $lat = (float) $latFlow;
+                    $lng = (float) $lngFlow;
 
-                $odpFlow = flow('odp_id');
-                $jarakFlow = flow('jarak');
+                    $odpFlow = flow('odp_id');
+                    $jarakFlow = flow('jarak');
 
-                $odpId = (
-                    $odpFlow !== null
-                    && is_numeric($odpFlow)
-                ) ? (int) $odpFlow : null;
+                    $odpId = (
+                        $odpFlow !== null
+                        && is_numeric($odpFlow)
+                    ) ? (int) $odpFlow : null;
 
-                $jarak = (
-                    $jarakFlow !== null
-                    && is_numeric($jarakFlow)
-                ) ? (float) $jarakFlow : null;
+                    $jarak = (
+                        $jarakFlow !== null
+                        && is_numeric($jarakFlow)
+                    ) ? (float) $jarakFlow : null;
 
-                $st = $conn->prepare("
-                    INSERT INTO installation_requests
-                    (
-                        customer_id,
-                        paket_id,
-                        alamat_pemasangan,
-                        latitude,
-                        longitude,
-                        odp_id,
-                        jarak_odp,
-                        coverage_status,
-                        status
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'tercover', 'pending')
-                ");
+                    $st = $conn->prepare("
+                        INSERT INTO installation_requests
+                        (
+                            customer_id,
+                            paket_id,
+                            alamat_pemasangan,
+                            latitude,
+                            longitude,
+                            odp_id,
+                            jarak_odp,
+                            coverage_status,
+                            status
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'tercover', 'pending')
+                    ");
 
-                $st->bind_param(
-                    'iisddid',
-                    $cid,
-                    $pid,
-                    $alamat,
-                    $lat,
-                    $lng,
-                    $odpId,
-                    $jarak
-                );
+                    $st->bind_param(
+                        'iisddid',
+                        $cid,
+                        $pid,
+                        $alamat,
+                        $lat,
+                        $lng,
+                        $odpId,
+                        $jarak
+                    );
 
-                $st->execute();
-                $st->close();
+                    $st->execute();
+                    $st->close();
+                } catch (Throwable $e) {
+                    error_log(
+                        'YesNet installation_requests dilewati: '
+                        . $e->getMessage()
+                    );
+                }
             }
 
             /* Buat tagihan. */

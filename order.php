@@ -44,15 +44,8 @@ if (isAktif($cust['status_langganan'])) {
 
 $pricing = packagePriceDetails($p);
 
-/*
- * Kode promo disimpan di flow dengan kunci "promo".
- * Kunci lama "promo_code" tetap dibaca sebagai cadangan agar halaman lain
- * yang belum diubah tetap berfungsi.
- */
-$promo = trim((string) flow('promo', ''));
-if ($promo === '') {
-    $promo = trim((string) flow('promo_code', ''));
-}
+/* Kode promo dari session flow (kunci "promo", cadangan "promo_code"). */
+$promo = flowPromo();
 
 $monthlyRate = (float) (
     $promo !== ''
