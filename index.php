@@ -217,6 +217,22 @@ $kebutuhan = [
     [$pickId(3), 'Bisnis & Kantor',    'briefcase'],
 ];
 
+/* YESFUN tampil pertama tanpa mengubah urutan paket lain maupun rekomendasi kebutuhan. */
+$yesfun = [];
+$paketLain = [];
+foreach ($paket as $p) {
+    if (strtoupper(trim($p['nama'])) === 'YESFUN') {
+        $yesfun[] = $p;
+    } else {
+        $paketLain[] = $p;
+    }
+}
+$paket = array_merge($yesfun, $paketLain);
+
+$formatSpeed = static function (int $mbps): string {
+    return $mbps === 1000 ? '1 Gbps' : number_format($mbps, 0, ',', '.') . ' Mbps';
+};
+
 $fitur = [
     ['bolt',    'Kecepatan Tinggi',  'Streaming, gaming, dan bekerja lebih lancar tanpa hambatan.'],
     ['shield',  'Jaringan Stabil',   'Koneksi tetap stabil di segala aktivitas Anda.'],
@@ -397,13 +413,13 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
 
         <div class="speed-card">
           <div class="sc-top"><span>Kecepatan hingga</span><em>Fiber Optic</em></div>
-          <div class="sc-num"><b data-count="<?= (int) $maxMbps ?>"><?= (int) $maxMbps ?></b><small>Mbps</small></div>
+          <div class="sc-num"><b><?= e($formatSpeed($maxMbps)) ?></b></div>
           <div class="sc-bars" aria-hidden="true">
             <?php foreach ([38,62,48,80,56,92,70,100,64,84,52,76] as $k => $h): ?><i style="--h:<?= $h ?>%;--d:<?= round($k * 0.12, 2) ?>s"></i><?php endforeach; ?>
           </div>
         </div>
       </div>
-      <div class="float-chip c1"><i><?= ic('bolt') ?></i><div><strong>Hingga <?= (int) $maxMbps ?> Mbps</strong><small>Fiber optic</small></div></div>
+      <div class="float-chip c1"><i><?= ic('bolt') ?></i><div><strong>Hingga <?= e($formatSpeed($maxMbps)) ?></strong><small>Fiber optic</small></div></div>
       <div class="float-chip c2"><i class="ok"><?= ic('check') ?></i><div><strong>Instalasi Gratis</strong><small>Semua paket</small></div></div>
       <div class="float-chip c3"><i class="vi"><?= ic('shield') ?></i><div><strong>Jaringan Stabil</strong><small>Siap 24/7</small></div></div>
     </div>
@@ -495,7 +511,7 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
           <div class="package-icon"><?= ic($p['icon']) ?></div>
           <div><h3><?= e($p['nama']) ?></h3><small><?= e($p['desc']) ?></small></div>
         </div>
-        <div class="package-speed"><?= ic('wifi') ?><span><b data-count="<?= (int)$p['mbps'] ?>"><?= (int)$p['mbps'] ?></b> Mbps</span></div>
+        <div class="package-speed"><?= ic('wifi') ?><span><?= e($formatSpeed((int) $p['mbps'])) ?></span></div>
         <div class="speed-bar" aria-hidden="true"><i style="--w:<?= min(100, round($p['mbps'] / $maxMbps * 100)) ?>%"></i></div>
         <div class="package-price">
           <?php if (!empty($p['pricing']['promo_aktif'])): ?>
@@ -557,7 +573,7 @@ if (!function_exists('ic')) { function ic($n, $c = '') { return '<svg class="ic'
             data-avail="<?= e(implode(' ', array_keys(array_filter($p['avail'])))) ?>"
             <?= empty($p['avail'][$wilayahDipilih]) ? 'disabled' : '' ?>
             <?= (int) $p['id'] === (int) $promoDefaultPackage['id'] ? 'selected' : '' ?>>
-            <?= e($p['nama']) ?> · <?= (int) $p['mbps'] ?> Mbps
+            <?= e($p['nama']) ?> · <?= e($formatSpeed((int) $p['mbps'])) ?>
           </option>
         <?php endforeach; ?>
       </select>
