@@ -212,8 +212,8 @@ if (!function_exists('flowSet')) {
  * Kunci baru: "promo". Kunci lama "promo_code" tetap dibaca sebagai cadangan
  * supaya halaman lain yang belum diubah tetap berfungsi.
  */
-if (!function_exists('flowPromo')) {
-    function flowPromo(): string
+if (!function_exists('ynFlowPromo')) {
+    function ynFlowPromo(): string
     {
         $promo = trim((string) flow('promo', ''));
 
@@ -231,8 +231,8 @@ if (!function_exists('flowPromo')) {
    (promo_code atau promo) di tabel subscription.
    ======================================================================== */
 
-if (!function_exists('tableColumns')) {
-    function tableColumns(mysqli $conn, string $table): array
+if (!function_exists('ynTableColumns')) {
+    function ynTableColumns(mysqli $conn, string $table): array
     {
         static $cache = [];
 
@@ -621,7 +621,7 @@ if (!function_exists('ensureOrder')) {
             );
         }
 
-        $promoCode = flowPromo();
+        $promoCode = ynFlowPromo();
         $pricing = packagePriceDetails($paket);
         $monthlyPrice = (float) (
             $promoCode !== ''
@@ -632,7 +632,7 @@ if (!function_exists('ensureOrder')) {
         $totalPrice = (float) $promoDetails['total_bayar'];
 
         /* ---- Deteksi kolom tabel subscription ---- */
-        $subCols = tableColumns($conn, 'subscription');
+        $subCols = ynTableColumns($conn, 'subscription');
 
         $promoCol = null;
         if (in_array('promo_code', $subCols, true)) {

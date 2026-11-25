@@ -66,7 +66,7 @@ if (isAktif($cust['status_langganan'])) {
 $pricing = packagePriceDetails($p);
 
 /* Kode promo dari session flow (kunci "promo", cadangan "promo_code"). */
-$promo = flowPromo();
+$promo = ynFlowPromo();
 
 $promoNotice = '';
 $monthlyRate = 0.0;
