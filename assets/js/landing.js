@@ -301,6 +301,40 @@
   }
   function rupiah(v) { return 'Rp ' + fmtNum(Math.round(v), 0); }
 
+  /* Format kecepatan: >= 1000 Mbps tampil sebagai Gbps (sumber data tetap data-speed dari PHP) */
+  function formatSpeed(v) {
+    var raw = String(v == null ? '' : v).trim();
+    if (!raw) return '';
+    if (/[a-z]/i.test(raw)) return raw;            // sudah berunit (mis. "1 Gbps"), jangan diubah
+    var n = parseFloat(raw);
+    if (isNaN(n)) return raw;
+    if (n >= 1000) return String(n / 1000).replace('.', ',') + ' Gbps';
+    return n + ' Mbps';
+  }
+
+  /* Hero: ganti tampilan 50 Mbps -> 1 Gbps (hanya di area hero, paket tidak disentuh) */
+  function heroSpeed() {
+    var scope = $('.hero');
+    if (!scope) return;
+
+    // Counter angka besar (data-count="50")
+    $$('[data-count="50"]', scope).forEach(function (el) {
+      var p = el.parentNode;
+      if (!/Mbps/i.test(p.textContent)) return;
+      el.setAttribute('data-count', '1');
+      el.textContent = '1';
+      Array.prototype.forEach.call(p.childNodes, function (n) {
+        if (n.nodeType === 3) n.nodeValue = n.nodeValue.replace(/Mbps/i, 'Gbps');
+        else if (n !== el && n.nodeType === 1 && /^\s*Mbps\s*$/i.test(n.textContent)) n.textContent = 'Gbps';
+      });
+    });
+
+    // Teks statis, mis. "Hingga 50 Mbps"
+    var wk = d.createTreeWalker(scope, NodeFilter.SHOW_TEXT, null, false), n, list = [];
+    while ((n = wk.nextNode())) if (/\b50\s*Mbps\b/i.test(n.nodeValue)) list.push(n);
+    list.forEach(function (t) { t.nodeValue = t.nodeValue.replace(/\b50(\s*)Mbps\b/gi, '1$1Gbps'); });
+  }
+
   /* ===================================================== HERO */
   function aurora(hero) {
     if (reduce) return;
@@ -421,6 +455,30 @@
     }
     if (HAS_IO) new IntersectionObserver(function (es) { visible = es[0].isIntersecting; visible ? start() : stop(); }).observe(hero);
     start();
+  }
+
+  /* ===================================================== URUTAN PAKET: YESFUN PERTAMA */
+  function isYesfun(el) {
+    var k = ((el.getAttribute('data-name') || '') + ' ' + (el.getAttribute('data-id') || '') + ' ' + (el.value || '')).toLowerCase();
+    return k.indexOf('yesfun') > -1;
+  }
+  function packageOrder() {
+    // Kartu paket: pindahkan YESFUN ke posisi pertama, sisanya tetap urutan semula
+    var cs = $$('.packages-grid .package-card');
+    var y = cs.filter(isYesfun)[0];
+    if (y && cs[0] !== y) cs[0].parentNode.insertBefore(y, cs[0]);
+
+    // Dropdown paket pada simulasi promo: urutan sama, pilihan aktif dipertahankan
+    var sel = $('#promo-package');
+    if (sel && sel.options.length) {
+      var opts = Array.prototype.slice.call(sel.options);
+      var yo = opts.filter(isYesfun)[0];
+      if (yo && opts[0] !== yo && yo.parentNode === opts[0].parentNode) {
+        var cur = sel.value;
+        yo.parentNode.insertBefore(yo, opts[0]);
+        sel.value = cur;
+      }
+    }
   }
 
   /* ===================================================== FILTER WILAYAH (JAKARTA / SURABAYA) */
@@ -677,7 +735,7 @@
       out.appendChild(txt('Kami sarankan paket '));
       var b = mk('strong');
       var pr = card.getAttribute('data-price-' + region);
-      b.textContent = card.getAttribute('data-name') + ' (' + card.getAttribute('data-speed') + ' Mbps' + (pr ? ', Rp ' + pr + '/bulan' : '') + ')';
+      b.textContent = card.getAttribute('data-name') + ' (' + formatSpeed(card.getAttribute('data-speed')) + (pr ? ', Rp ' + pr + '/bulan' : '') + ')';
       out.appendChild(b);
       var btn = $('.package-button', card);
       if (btn) {
@@ -751,11 +809,13 @@
     safe(navbar);
     safe(mobileBar);
     safe(buttons);
+    safe(packageOrder);   // YESFUN pertama: harus sebelum regionFilter/picker/promoSimulator/startReveal
     safe(regionFilter);
     safe(picker);
     safe(promoSimulator);
     safe(coverageForms);
     safe(prepareSplit);
+    safe(heroSpeed);      // hero 50 Mbps -> 1 Gbps: harus sebelum prepareCounters
     safe(prepareCounters);
     if (hero) {
       safe(function () { aurora(hero); });
