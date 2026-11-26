@@ -139,14 +139,6 @@ $initial = strtoupper(substr(trim($customer['username']), 0, 1));
 
                 </div>
 
-                <a href="profile_edit.php" class="edit-profile-btn">
-
-                    <i class="bi bi-pencil-square"></i>
-
-                    <span>Edit Profile</span>
-
-                </a>
-
             </div>
 
         </section>
