@@ -235,23 +235,17 @@ $paketTableReady = allColumnsExist($conn, 'paket_wifi', ['id', 'nama_paket', 'sp
 $customerHasPaketId = columnExists($conn, 'customers', 'paket_id');
 $customerStatusAvailable = columnExists($conn, 'customers', 'status_langganan');
 
-$joinPaket = ($paketTableReady && $customerHasPaketId) ? 'LEFT JOIN paket_wifi p ON p.id = c.paket_id' : '';
 $customerSelect = ['c.id'];
 foreach (['paket_id', 'status_langganan', 'nama', 'name'] as $column) {
     if (columnExists($conn, 'customers', $column)) {
         $customerSelect[] = "c.`{$column}`";
     }
 }
-if ($joinPaket !== '') {
-    $customerSelect[] = 'p.`nama_paket` AS `nama_paket`';
-    $customerSelect[] = 'p.`speed_mbps` AS `speed_mbps`';
-    $customerSelect[] = 'p.`harga` AS `harga_paket`';
-}
 
 try {
     $rows = queryRows(
         $conn,
-        'SELECT ' . implode(', ', $customerSelect) . " FROM customers c {$joinPaket} WHERE c.user_id = ? LIMIT 1",
+        'SELECT ' . implode(', ', $customerSelect) . ' FROM customers c WHERE c.user_id = ? LIMIT 1',
         'i',
         [$userId]
     );
@@ -292,17 +286,64 @@ if (!isset($statusMap[$statusLangganan])) {
 }
 [$statusLabel, $statusClass, $statusIcon] = $statusMap[$statusLangganan];
 
-$currentPaketId = (int) ($customer['paket_id'] ?? 0);
-if (!empty($customer['nama_paket'])) {
-    $paketNama = trim((string) $customer['nama_paket']);
+/* ======================== PAKET AKTIF PELANGGAN ======================== */
+/* Sumber utama: langganan aktif terakhir milik pelanggan yang login (tabel subscription).
+   Jika tabel/kolomnya tidak ada atau tidak ada langganan aktif, pakai customers.paket_id. */
+
+if ($customerHasPaketId) {
+    $currentPaketId = (int) ($customer['paket_id'] ?? 0);
 }
-if (is_numeric($customer['speed_mbps'] ?? null)) {
-    $paketSpeed = (float) $customer['speed_mbps'];
+
+if (
+    $customerId > 0
+    && allColumnsExist($conn, 'subscription', ['id', 'id_customer', 'status'])
+) {
+    $subPaketCol = firstExistingColumn($conn, 'subscription', ['paket_id', 'id_paket']);
+    if ($subPaketCol !== null) {
+        try {
+            $subRows = queryRows(
+                $conn,
+                "SELECT `{$subPaketCol}` AS paket_id
+                 FROM subscription
+                 WHERE id_customer = ?
+                   AND LOWER(TRIM(status)) IN ('active', 'aktif')
+                 ORDER BY id DESC
+                 LIMIT 1",
+                'i',
+                [$customerId]
+            );
+            if ($subRows !== [] && (int) ($subRows[0]['paket_id'] ?? 0) > 0) {
+                $currentPaketId = (int) $subRows[0]['paket_id'];
+            }
+        } catch (Throwable $e) {
+            error_log('Packages YESNET subscription lookup failed: ' . $e->getMessage());
+        }
+    }
 }
-if (is_numeric($customer['harga_paket'] ?? null)) {
-    $paketHarga = (float) $customer['harga_paket'];
+
+if ($currentPaketId > 0 && $paketTableReady) {
+    try {
+        $curRows = queryRows(
+            $conn,
+            'SELECT nama_paket, speed_mbps, harga FROM paket_wifi WHERE id = ? LIMIT 1',
+            'i',
+            [$currentPaketId]
+        );
+        if ($curRows !== []) {
+            $cur = $curRows[0];
+            $paketNama = trim((string) ($cur['nama_paket'] ?? '')) ?: null;
+            $paketSpeed = is_numeric($cur['speed_mbps'] ?? null) ? (float) $cur['speed_mbps'] : null;
+            $paketHarga = is_numeric($cur['harga'] ?? null) ? (float) $cur['harga'] : null;
+        }
+    } catch (Throwable $e) {
+        error_log('Packages YESNET current package lookup failed: ' . $e->getMessage());
+    }
 }
+
 $hasCurrent = $currentPaketId > 0 && $paketNama !== null && $paketNama !== '';
+
+/* Filter upgrade hanya berlaku jika layanan aktif, paket aktif ada, dan kecepatannya diketahui. */
+$applyUpgradeFilter = $statusLangganan === 'active' && $hasCurrent && $paketSpeed !== null;
 
 /* ======================== DAFTAR PAKET ======================== */
 /* Kolom wajib: id, nama_paket, speed_mbps, harga. Kolom lain dipakai hanya jika memang ada. */
@@ -358,32 +399,28 @@ if (!$paketTableReady) {
         $speed = is_numeric($row['speed_mbps'] ?? null) ? (float) $row['speed_mbps'] : null;
         $price = is_numeric($row['harga'] ?? null) ? (float) $row['harga'] : null;
 
-        /* Klasifikasi terhadap paket aktif pelanggan. */
         $group = 'other';
-        if ($hasCurrent && $id === $currentPaketId) {
-            $group = 'current';
-        } elseif ($statusLangganan === 'active' && $hasCurrent && $speed !== null && $paketSpeed !== null) {
-            $higher = $speed > $paketSpeed
-                || (abs($speed - $paketSpeed) < 0.001 && $price !== null && $paketHarga !== null && $price > $paketHarga);
-            if ($higher) {
-                $group = 'upgrade';
+
+        if ($applyUpgradeFilter) {
+            /* Pelanggan aktif: hanya paket dengan kecepatan LEBIH TINGGI dari paket aktif.
+               Paket yang sama, kecepatan sama, lebih rendah, atau tanpa data kecepatan disembunyikan. */
+            if ($id === $currentPaketId) {
+                continue;
             }
+            if ($speed === null || $speed <= $paketSpeed + 0.0001) {
+                continue;
+            }
+            $group = 'upgrade';
+        } elseif ($hasCurrent && $id === $currentPaketId) {
+            $group = 'current';
         }
 
         /* Tombol aksi: mengikuti mekanisme yang sudah ada, tidak ada perubahan paket di halaman ini. */
-        if ($group === 'current') {
-            $action = ['type' => 'current', 'href' => '', 'icon' => 'bi-check-circle-fill',
-                'label' => $statusLangganan === 'active' ? 'Paket kamu saat ini' : 'Paket terdaftar'];
-        } elseif ($statusLangganan === 'active') {
-            if ($group === 'upgrade') {
-                $action = ['type' => 'primary', 'href' => 'upgrade.php?paket=' . $id,
-                    'icon' => 'bi-arrow-up-circle-fill', 'label' => 'Upgrade ke paket ini'];
-            } elseif ($hasCurrent) {
-                $action = ['type' => 'disabled', 'href' => '', 'icon' => 'bi-dash-circle',
-                    'label' => 'Tidak tersedia untuk upgrade'];
-            } else {
-                $action = ['type' => 'outline', 'href' => 'chat.php', 'icon' => 'bi-headset', 'label' => 'Hubungi CS'];
-            }
+        if ($group === 'upgrade') {
+            $action = ['type' => 'primary', 'href' => 'upgrade.php?paket=' . $id,
+                'icon' => 'bi-arrow-up-circle-fill', 'label' => 'Upgrade ke paket ini'];
+        } elseif ($group === 'current') {
+            $action = ['type' => 'current', 'href' => '', 'icon' => 'bi-check-circle-fill', 'label' => 'Paket terdaftar'];
         } elseif ($statusLangganan === 'belum_berlangganan') {
             $action = ['type' => 'primary', 'href' => '../paket.php?mode=direct&paket=' . $id,
                 'icon' => 'bi-box-seam-fill', 'label' => 'Pilih paket ini'];
@@ -394,8 +431,11 @@ if (!$paketTableReady) {
         }
 
         $delta = null;
-        if ($group === 'upgrade' && $speed !== null && $paketSpeed !== null && $price !== null && $paketHarga !== null) {
-            $delta = ['speed' => $speed - $paketSpeed, 'price' => $price - $paketHarga];
+        if ($group === 'upgrade' && $speed !== null && $paketSpeed !== null) {
+            $delta = [
+                'speed' => $speed - $paketSpeed,
+                'price' => ($price !== null && $paketHarga !== null) ? $price - $paketHarga : null,
+            ];
         }
 
         $packages[] = [
@@ -415,8 +455,9 @@ if (!$paketTableReady) {
 }
 
 $totalPackages = count($packages);
-$upgradeCount = count(array_filter($packages, static fn ($p) => $p['group'] === 'upgrade'));
-$currentInList = count(array_filter($packages, static fn ($p) => $p['group'] === 'current')) > 0;
+
+/* Pelanggan aktif sudah di paket tertinggi: filter aktif, tidak ada error, dan tidak ada paket lebih tinggi. */
+$highestReached = $applyUpgradeFilter && !$packagesError && $totalPackages === 0;
 
 /* ======================== NOTIFIKASI (hanya jumlah belum dibaca) ======================== */
 
@@ -479,7 +520,9 @@ $menuService = match ($statusLangganan) {
 };
 
 $heroText = match ($statusLangganan) {
-    'active'             => 'Lihat paket yang kamu gunakan dan bandingkan dengan pilihan paket YESNET lainnya.',
+    'active'             => $applyUpgradeFilter
+        ? 'Pilihan paket di bawah ini memiliki kecepatan lebih tinggi dari paket yang kamu gunakan saat ini.'
+        : 'Lihat paket yang kamu gunakan dan pilihan paket YESNET lainnya.',
     'pending'            => 'Pengajuan pemasangan kamu sedang diproses. Kamu tetap bisa melihat daftar paket YESNET.',
     'suspended'          => 'Layanan kamu sedang ditangguhkan. Hubungi Customer Service untuk mengaktifkan kembali.',
     'terminated'         => 'Layanan kamu sudah berakhir. Hubungi Customer Service untuk informasi lebih lanjut.',
@@ -488,11 +531,14 @@ $heroText = match ($statusLangganan) {
 };
 
 [$heroLink, $heroIcon, $heroButton] = match ($statusLangganan) {
-    'active'             => $upgradeCount > 0 ? ['upgrade.php', 'bi-arrow-up-circle', 'Lihat Upgrade Paket'] : ['billing.php', 'bi-receipt', 'Lihat Tagihan'],
+    'active'             => $totalPackages > 0 ? ['upgrade.php', 'bi-arrow-up-circle', 'Lihat Upgrade Paket'] : ['billing.php', 'bi-receipt', 'Lihat Tagihan'],
     'pending'            => ['installation.php', 'bi-geo-alt', 'Lihat Pemasangan'],
     'belum_berlangganan' => ['../paket.php?mode=direct', 'bi-box-seam', 'Pilih Paket Internet'],
     default              => ['chat.php', 'bi-headset', 'Hubungi CS'],
 };
+
+$listKicker = $applyUpgradeFilter ? 'Pilihan upgrade' : 'Pilihan paket';
+$listTitle  = $applyUpgradeFilter ? 'Paket upgrade untuk kamu' : 'Semua paket YESNET';
 
 $csrfToken = e($_SESSION['csrf_notification'] ??= bin2hex(random_bytes(32)));
 ?>
@@ -508,7 +554,7 @@ $csrfToken = e($_SESSION['csrf_notification'] ??= bin2hex(random_bytes(32)));
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/dashboard.css">
     <link rel="stylesheet" href="assets/css/portal-unified.css">
-    <link rel="stylesheet" href="assets/css/packages.css">
+    <link rel="stylesheet" href="assets/css/packages.css?v=<?= (int) @filemtime(__DIR__ . '/assets/css/packages.css'); ?>">
     <meta name="notification-csrf" content="<?= $csrfToken; ?>">
     <script defer src="assets/js/portal-ui.js"></script>
     <script defer src="assets/js/packages.js"></script>
@@ -706,13 +752,16 @@ $csrfToken = e($_SESSION['csrf_notification'] ??= bin2hex(random_bytes(32)));
                 <section class="dashboard-card plan-summary-card" aria-label="Ringkasan paket">
                     <div class="plan-summary-item">
                         <div class="stat-icon blue"><i class="bi bi-grid-fill"></i></div>
-                        <div><strong><?= $totalPackages; ?></strong><span>Paket tersedia</span></div>
+                        <div>
+                            <strong><?= $packagesError ? '—' : $totalPackages; ?></strong>
+                            <span><?= $applyUpgradeFilter ? 'Paket upgrade tersedia' : 'Paket tersedia'; ?></span>
+                        </div>
                     </div>
                     <div class="plan-summary-item">
-                        <div class="stat-icon green"><i class="bi bi-arrow-up-circle-fill"></i></div>
+                        <div class="stat-icon green"><i class="bi bi-speedometer2"></i></div>
                         <div>
-                            <strong><?= $statusLangganan === 'active' && $hasCurrent ? $upgradeCount : '—'; ?></strong>
-                            <span>Pilihan upgrade</span>
+                            <strong><?= $paketSpeed !== null ? e(formatSpeed($paketSpeed)) : '—'; ?></strong>
+                            <span>Kecepatan saat ini</span>
                         </div>
                     </div>
                     <a href="<?= $statusLangganan === 'active' ? 'upgrade.php' : 'chat.php'; ?>" class="full-outline-button">
@@ -726,26 +775,9 @@ $csrfToken = e($_SESSION['csrf_notification'] ??= bin2hex(random_bytes(32)));
             <!-- ---------- DAFTAR PAKET ---------- -->
             <div class="section-title-row">
                 <div>
-                    <span class="section-kicker">Pilihan paket</span>
-                    <h2>Semua paket YESNET</h2>
+                    <span class="section-kicker"><?= e($listKicker); ?></span>
+                    <h2><?= e($listTitle); ?></h2>
                 </div>
-                <?php if ($totalPackages > 0): ?>
-                    <div class="plan-filter" role="group" aria-label="Filter paket">
-                        <button type="button" class="plan-chip is-active" data-filter="all" aria-pressed="true">
-                            Semua <span><?= $totalPackages; ?></span>
-                        </button>
-                        <?php if ($currentInList): ?>
-                            <button type="button" class="plan-chip" data-filter="current" aria-pressed="false">
-                                Paket saya <span>1</span>
-                            </button>
-                        <?php endif; ?>
-                        <?php if ($upgradeCount > 0): ?>
-                            <button type="button" class="plan-chip" data-filter="upgrade" aria-pressed="false">
-                                Bisa upgrade <span><?= $upgradeCount; ?></span>
-                            </button>
-                        <?php endif; ?>
-                    </div>
-                <?php endif; ?>
             </div>
 
             <?php if ($packagesError): ?>
@@ -756,6 +788,18 @@ $csrfToken = e($_SESSION['csrf_notification'] ??= bin2hex(random_bytes(32)));
                     <p>Terjadi kendala saat memuat data paket. Silakan coba lagi nanti atau hubungi Customer Service.</p>
                     <a href="chat.php" class="state-button"><i class="bi bi-headset"></i> Hubungi Customer Service</a>
                 </section>
+            <?php elseif ($highestReached): ?>
+                <section class="state-card plan-state max-state">
+                    <div class="state-icon"><i class="bi bi-trophy-fill"></i></div>
+                    <span class="state-label">Paket tertinggi</span>
+                    <h2>Belum tersedia paket upgrade yang lebih tinggi</h2>
+                    <p>
+                        Kamu sudah menggunakan paket tertinggi kami, yaitu <strong><?= e($paketNama); ?></strong>
+                        (<?= e(formatSpeed($paketSpeed)); ?>). Kami akan menampilkan pilihan baru di sini
+                        saat paket dengan kecepatan lebih tinggi tersedia.
+                    </p>
+                    <a href="chat.php" class="state-button"><i class="bi bi-headset"></i> Hubungi Customer Service</a>
+                </section>
             <?php elseif ($packages === []): ?>
                 <section class="state-card plan-state unknown-state">
                     <div class="state-icon"><i class="bi bi-box-seam"></i></div>
@@ -764,6 +808,16 @@ $csrfToken = e($_SESSION['csrf_notification'] ??= bin2hex(random_bytes(32)));
                     <p>Saat ini belum ada paket internet yang dapat dipilih. Silakan cek kembali nanti.</p>
                 </section>
             <?php else: ?>
+                <?php if ($applyUpgradeFilter): ?>
+                    <div class="plan-scope-note" role="status">
+                        <i class="bi bi-funnel-fill"></i>
+                        <span>
+                            Menampilkan <strong><?= $totalPackages; ?> paket</strong> dengan kecepatan di atas
+                            <strong><?= e($paketNama); ?> (<?= e(formatSpeed($paketSpeed)); ?>)</strong>.
+                        </span>
+                    </div>
+                <?php endif; ?>
+
                 <div class="plan-grid" id="planGrid">
                     <?php foreach ($packages as $p): ?>
                         <?php
@@ -775,10 +829,7 @@ $csrfToken = e($_SESSION['csrf_notification'] ??= bin2hex(random_bytes(32)));
                         <article class="<?= e($classes); ?>" data-group="<?= e($p['group']); ?>">
                             <div class="plan-badges">
                                 <?php if ($p['group'] === 'current'): ?>
-                                    <span class="plan-badge badge-current">
-                                        <i class="bi bi-check-circle-fill"></i>
-                                        <?= $statusLangganan === 'active' ? 'Paket aktif' : 'Terdaftar'; ?>
-                                    </span>
+                                    <span class="plan-badge badge-current"><i class="bi bi-check-circle-fill"></i> Terdaftar</span>
                                 <?php endif; ?>
                                 <?php if ($p['recommended']): ?>
                                     <span class="plan-badge badge-recommended"><i class="bi bi-stars"></i> Direkomendasikan</span>
@@ -827,8 +878,8 @@ $csrfToken = e($_SESSION['csrf_notification'] ??= bin2hex(random_bytes(32)));
                                 <div class="plan-delta">
                                     <i class="bi bi-graph-up-arrow"></i>
                                     <span>
-                                        <?= e(formatSpeed(max(0, $p['delta']['speed']))); ?> lebih cepat
-                                        <?php if ($p['delta']['price'] > 0): ?>
+                                        <?= e(formatSpeed(max(0.0, $p['delta']['speed']))); ?> lebih cepat dari paketmu
+                                        <?php if ($p['delta']['price'] !== null && $p['delta']['price'] > 0): ?>
                                             · +<?= e(rupiah($p['delta']['price'])); ?>/bln
                                         <?php endif; ?>
                                     </span>
@@ -838,10 +889,6 @@ $csrfToken = e($_SESSION['csrf_notification'] ??= bin2hex(random_bytes(32)));
                             <div class="plan-action">
                                 <?php if ($action['type'] === 'current'): ?>
                                     <span class="plan-button is-current-state">
-                                        <i class="bi <?= e($action['icon']); ?>"></i> <?= e($action['label']); ?>
-                                    </span>
-                                <?php elseif ($action['type'] === 'disabled'): ?>
-                                    <span class="plan-button is-disabled" aria-disabled="true">
                                         <i class="bi <?= e($action['icon']); ?>"></i> <?= e($action['label']); ?>
                                     </span>
                                 <?php else: ?>

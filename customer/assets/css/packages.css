@@ -62,11 +62,30 @@
 
 .plan-summary-card { display: flex; flex-direction: column; gap: 12px; justify-content: center; }
 .plan-summary-item { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid #edf1f6; border-radius: 12px; background: #fafbfe; }
-.plan-summary-item strong { display: block; color: #172033; font-size: 22px; line-height: 1.1; font-weight: 800; }
+.plan-summary-item > div:last-child { min-width: 0; }
+.plan-summary-item strong { display: block; color: #172033; font-size: 20px; line-height: 1.15; font-weight: 800; overflow-wrap: anywhere; }
 .plan-summary-item span { display: block; margin-top: 2px; color: #66758b; font-size: var(--fs-xs); font-weight: 600; }
 .plan-summary-card .full-outline-button { margin-top: 2px; }
 
-/* ---------------- FILTER ---------------- */
+/* ---------------- CATATAN CAKUPAN FILTER ---------------- */
+
+.plan-scope-note {
+    margin-bottom: 14px;
+    padding: 12px 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid #d3e1fa;
+    border-radius: 12px;
+    background: #f3f7ff;
+    color: #2f64c4;
+    font-size: var(--fs-sm);
+    line-height: 1.55;
+}
+.plan-scope-note > i { flex-shrink: 0; font-size: 14px; }
+.plan-scope-note strong { font-weight: 800; }
+
+/* ---------------- FILTER (cadangan, dipakai packages.js bila ada) ---------------- */
 
 .plan-filter { display: flex; flex-wrap: wrap; gap: 8px; }
 
@@ -205,7 +224,13 @@
 .plan-note i { margin-top: 2px; color: #2563eb; }
 .plan-note a { color: var(--primary); font-weight: 700; }
 
+/* ---------------- STATE KOSONG / PAKET TERTINGGI ---------------- */
+
 .plan-state { min-height: 320px; margin-top: 0; }
+.plan-state strong { color: #1d293b; font-weight: 800; }
+
+.max-state .state-icon { color: #16a34a; background: #ecfdf3; }
+.max-state::before { background: rgba(34, 197, 94, .06); }
 
 /* =========================================================
    MODE GELAP
@@ -215,7 +240,8 @@
 .dashboard-page[data-theme="dark"] .plan-name,
 .dashboard-page[data-theme="dark"] .plan-price strong,
 .dashboard-page[data-theme="dark"] .plan-summary-item strong,
-.dashboard-page[data-theme="dark"] .current-plan-facts strong { color: #e7eef9; }
+.dashboard-page[data-theme="dark"] .current-plan-facts strong,
+.dashboard-page[data-theme="dark"] .plan-state strong { color: #e7eef9; }
 
 .dashboard-page[data-theme="dark"] .current-plan-facts span,
 .dashboard-page[data-theme="dark"] .current-plan-facts small,
@@ -247,6 +273,8 @@
 .dashboard-page[data-theme="dark"] .current-plan-facts,
 .dashboard-page[data-theme="dark"] .plan-summary-item { border-color: #2b3a51; background: #172437; }
 
+.dashboard-page[data-theme="dark"] .plan-scope-note { border-color: #2b3f60; background: #14243b; color: #9fc2ff; }
+
 .dashboard-page[data-theme="dark"] .plan-benefits { border-color: #26354a; }
 .dashboard-page[data-theme="dark"] .plan-benefits i { color: #83d6a5; }
 .dashboard-page[data-theme="dark"] .plan-speed strong { color: #9fc2ff; }
@@ -260,6 +288,8 @@
 .dashboard-page[data-theme="dark"] .plan-button.is-outline { border-color: #2b3a51; background: #172437; color: #9fc2ff; }
 .dashboard-page[data-theme="dark"] .plan-button.is-current-state { color: #83d6a5; background: #20352d; }
 .dashboard-page[data-theme="dark"] .plan-button.is-disabled { color: #6b7c93; background: #1b2a40; }
+
+.dashboard-page[data-theme="dark"] .max-state .state-icon { color: #83d6a5; background: #20352d; }
 
 .dashboard-page[data-theme="dark"] .plan-chip { border-color: #2b3a51; background: #172437; color: #cbd7e8; }
 .dashboard-page[data-theme="dark"] .plan-chip span { background: #26354a; color: #9cadc2; }
@@ -290,4 +320,5 @@
     .plan-card { padding: 18px; }
     .plan-speed strong { font-size: 30px; }
     .plan-chip { flex: 1 1 auto; justify-content: center; }
+    .plan-scope-note { align-items: flex-start; }
 }
