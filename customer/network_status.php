@@ -513,14 +513,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 </a>
 
                 <a
-                    href="billing.php#riwayat-pembayaran"
-                    class="menu-item"
-                >
-                    <span class="menu-icon"><i class="bi bi-clock-history"></i></span>
-                    <span class="menu-text">Riwayat Pembayaran</span>
-                </a>
-
-                <a
                     href="speedtest.php"
                     class="menu-item <?= $currentPage === 'speedtest.php' ? 'active' : ''; ?>"
                 >
