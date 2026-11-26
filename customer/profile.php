@@ -15,16 +15,16 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = $_SESSION['user_id'];
 
-// Ambil data user
+// Ambil pesan notifikasi (flash message) sekali tampil
+$notice = '';
+if (!empty($_SESSION['profile_notice'])) {
+    $notice = $_SESSION['profile_notice'];
+    unset($_SESSION['profile_notice']);
+}
+
+// Ambil data user (SELECT * agar kolom alamat & created_at ikut terambil jika ada)
 $stmt = $conn->prepare("
-    SELECT id, 
-        nama,
-        username,
-        email,
-        telephone,
-        password,
-        role,
-        status
+    SELECT *
     FROM users
     WHERE id = ?
     LIMIT 1
@@ -41,6 +41,9 @@ if (!$customer) {
     header("Location: ../login.php");
     exit;
 }
+
+// Password tidak dibutuhkan di halaman ini, buang dari memori
+unset($customer['password']);
 
 // Inisial nama
 $initial = strtoupper(substr(trim($customer['username']), 0, 1));
@@ -88,7 +91,7 @@ $initial = strtoupper(substr(trim($customer['username']), 0, 1));
 
             <div>
                 <h5>Profile Saya</h5>
-                <span>Kelola informasi akun kamu</span>
+                <span>Informasi akun kamu</span>
             </div>
 
         </div>
@@ -103,6 +106,15 @@ $initial = strtoupper(substr(trim($customer['username']), 0, 1));
 
     <!-- MAIN CONTENT -->
     <main class="profile-container">
+
+        <!-- NOTIFIKASI -->
+        <?php if ($notice !== ''): ?>
+            <div class="alert alert-warning d-flex align-items-center gap-2 mb-3" role="alert">
+                <i class="bi bi-info-circle-fill"></i>
+                <div><?= htmlspecialchars($notice) ?></div>
+            </div>
+        <?php endif; ?>
+
 
         <!-- PROFILE HERO -->
         <section class="profile-hero">
@@ -169,6 +181,25 @@ $initial = strtoupper(substr(trim($customer['username']), 0, 1));
 
 
                 <div class="card-body-custom">
+
+                    <!-- Nama -->
+                    <?php if (!empty($customer['nama'])): ?>
+                    <div class="info-row">
+
+                        <div class="info-icon">
+                            <i class="bi bi-person-lines-fill"></i>
+                        </div>
+
+                        <div class="info-content">
+                            <span>Nama Lengkap</span>
+                            <strong>
+                                <?= htmlspecialchars($customer['nama']) ?>
+                            </strong>
+                        </div>
+
+                    </div>
+                    <?php endif; ?>
+
 
                     <!-- Username -->
                     <div class="info-row">
@@ -385,21 +416,7 @@ $initial = strtoupper(substr(trim($customer['username']), 0, 1));
 
                     </a>
 
-
-                    <a href="profile_edit.php" class="quick-action">
-
-                        <div class="quick-icon purple">
-                            <i class="bi bi-pencil-square"></i>
-                        </div>
-
-                        <div>
-                            <strong>Edit Profile</strong>
-                            <span>Perbarui informasi akun</span>
-                        </div>
-
-                        <i class="bi bi-chevron-right arrow"></i>
-
-                    </a>
+                    <!-- Tombol Edit Profile dihapus (fitur dinonaktifkan) -->
 
                 </div>
 
