@@ -5,13 +5,16 @@ session_start();
 require_once "../config/database.php";
 require_once "../config/auth.php";
 
-requireActiveCustomer($conn);
+date_default_timezone_set('Asia/Jakarta');
 
-// Cek login
-if (!isset($_SESSION['user_id'])) {
-    header("Location: ../login.php");
-    exit;
-}
+/*
+ * PENTING:
+ * Jangan pakai requireActiveCustomer() di halaman ini.
+ * Fungsi itu mengarahkan customer ke pembayaran.php selama masih ada
+ * tagihan belum dibayar. requireRole('customer') sudah cukup: ia mengecek
+ * login, status akun aktif, dan role customer, tanpa redirect ke pembayaran.
+ */
+requireRole('customer');
 
 $user_id = (int) $_SESSION['user_id'];
 
@@ -51,6 +54,27 @@ function profile_date_id($date): string
     return date('d', $time) . ' ' . $months[(int) date('n', $time)] . ' ' . date('Y', $time);
 }
 
+function profile_column_exists(mysqli $conn, string $table, string $column): bool
+{
+    static $cache = [];
+    $key = $table . '.' . $column;
+    if (!isset($cache[$key])) {
+        $cache[$key] = false;
+        $stmt = $conn->prepare(
+            'SELECT 1 FROM information_schema.columns
+             WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1'
+        );
+        if ($stmt) {
+            $stmt->bind_param('ss', $table, $column);
+            $stmt->execute();
+            $stmt->store_result();
+            $cache[$key] = $stmt->num_rows > 0;
+            $stmt->close();
+        }
+    }
+    return $cache[$key];
+}
+
 /* ======================== PESAN NOTIFIKASI (FLASH) ======================== */
 
 $notice = '';
@@ -67,12 +91,10 @@ $stmt = $conn->prepare("
     WHERE id = ?
     LIMIT 1
 ");
-
 $stmt->bind_param("i", $user_id);
 $stmt->execute();
-
-$result   = $stmt->get_result();
-$customer = $result->fetch_assoc();
+$customer = $stmt->get_result()->fetch_assoc();
+$stmt->close();
 
 if (!$customer) {
     session_destroy();
@@ -83,33 +105,84 @@ if (!$customer) {
 // Password tidak dibutuhkan di halaman ini
 unset($customer['password']);
 
-/* ======================== ID PELANGGAN (opsional) ======================== */
+/* ======================== DATA CUSTOMER (opsional) ======================== */
 
-$customerId = 0;
+$customerId  = 0;
+$cust        = [];
+$paketNama   = '';
+$paketSpeed  = '';
+
 try {
-    $stmtCustomer = $conn->prepare("SELECT id FROM customers WHERE user_id = ? LIMIT 1");
+    $cols = ['c.id'];
+    foreach (['alamat', 'telephone', 'status_langganan', 'created_at'] as $col) {
+        if (profile_column_exists($conn, 'customers', $col)) {
+            $cols[] = "c.`{$col}` AS `c_{$col}`";
+        }
+    }
+
+    $join = '';
+    if (
+        profile_column_exists($conn, 'customers', 'paket_id')
+        && profile_column_exists($conn, 'paket_wifi', 'id')
+    ) {
+        $join = 'LEFT JOIN paket_wifi p ON p.id = c.paket_id';
+        $cols[] = profile_column_exists($conn, 'paket_wifi', 'nama_paket')
+            ? 'p.`nama_paket` AS `p_nama`' : 'NULL AS `p_nama`';
+        $cols[] = profile_column_exists($conn, 'paket_wifi', 'speed_mbps')
+            ? 'p.`speed_mbps` AS `p_speed`' : 'NULL AS `p_speed`';
+    }
+
+    $stmtCustomer = $conn->prepare(
+        'SELECT ' . implode(', ', $cols) . " FROM customers c {$join} WHERE c.user_id = ? LIMIT 1"
+    );
     if ($stmtCustomer) {
         $stmtCustomer->bind_param("i", $user_id);
         $stmtCustomer->execute();
-        $rowCustomer = $stmtCustomer->get_result()->fetch_assoc();
-        $customerId  = (int) ($rowCustomer['id'] ?? 0);
+        $cust = $stmtCustomer->get_result()->fetch_assoc() ?: [];
         $stmtCustomer->close();
     }
 } catch (Throwable $ex) {
-    error_log('Profile YESNET customer id lookup failed: ' . $ex->getMessage());
+    error_log('Profile YESNET customer lookup failed: ' . $ex->getMessage());
+    $cust = [];
 }
+
+$customerId = (int) ($cust['id'] ?? 0);
+$paketNama  = trim((string) ($cust['p_nama'] ?? ''));
+$paketSpeed = is_numeric($cust['p_speed'] ?? null) ? $cust['p_speed'] . ' Mbps' : '';
+
+/* ======================== STATUS LANGGANAN ======================== */
+
+$subStatus = normalizeCustomerStatus($cust['c_status_langganan'] ?? '');
+$subLabels = [
+    'aktif'              => 'Layanan Aktif',
+    'pending'            => 'Menunggu Aktivasi',
+    'suspended'          => 'Ditangguhkan',
+    'terminated'         => 'Berakhir',
+    'belum_berlangganan' => 'Belum Berlangganan',
+];
+$subLabel = $subLabels[$subStatus] ?? 'Belum Tersedia';
 
 /* ======================== DATA TAMPILAN ======================== */
 
 $username    = trim((string) ($customer['username'] ?? ''));
 $namaLengkap = trim((string) ($customer['nama'] ?? ''));
 $email       = trim((string) ($customer['email'] ?? ''));
-$telephone   = trim((string) ($customer['telephone'] ?? ''));
-$alamat      = trim((string) ($customer['alamat'] ?? ''));
+
+$telephone = trim((string) ($customer['telephone'] ?? ''));
+if ($telephone === '') {
+    $telephone = trim((string) ($cust['c_telephone'] ?? ''));
+}
+
+$alamat = trim((string) ($customer['alamat'] ?? ''));
+if ($alamat === '') {
+    $alamat = trim((string) ($cust['c_alamat'] ?? ''));
+}
+
+$joinedRaw = $customer['created_at'] ?? ($cust['c_created_at'] ?? null);
 
 $displayName = $namaLengkap !== '' ? $namaLengkap : $username;
 $initial     = profile_initial($displayName);
-$joinedAt    = profile_date_id($customer['created_at'] ?? null);
+$joinedAt    = profile_date_id($joinedRaw);
 $currentPage = basename($_SERVER['PHP_SELF']);
 
 $menuMain = [
@@ -374,6 +447,17 @@ $quickServices = [
                                     </div>
                                 </div>
                             <?php endif; ?>
+                            <div class="pf-status-row">
+                                <div class="pf-icon purple"><i class="bi bi-router-fill"></i></div>
+                                <div>
+                                    <span>Langganan</span>
+                                    <strong>
+                                        <?= e($subLabel); ?><?php if ($paketNama !== ''): ?>
+                                            · <?= e($paketNama); ?><?= $paketSpeed !== '' ? ' (' . e($paketSpeed) . ')' : ''; ?>
+                                        <?php endif; ?>
+                                    </strong>
+                                </div>
+                            </div>
                         </div>
                     </section>
 
