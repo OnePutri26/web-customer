@@ -1,10 +1,21 @@
 /* =========================================================
-   YESNET CUSTOMER PROFILE
-   Melengkapi dashboard.css (harus dimuat SEBELUM file ini).
+   YESNET CUSTOMER PROFILE  -  versi lengkap
+   Letakkan di: customer/assets/css/profile.css
+   Dimuat SETELAH dashboard.css (sidebar, topbar, kartu, tema).
    Semua kelas khusus halaman ini memakai prefix "pf-".
 ========================================================= */
 
-/* ---------------- ALERT / FLASH MESSAGE ---------------- */
+.pf-hero,
+.pf-card,
+.pf-alert {
+    --pf-primary: var(--primary, #2563eb);
+    --pf-radius: var(--radius-xl, 25px);
+    --pf-fs-xs: var(--fs-xs, 12px);
+    --pf-fs-sm: var(--fs-sm, 13px);
+    --pf-fs-md: var(--fs-md, 14px);
+}
+
+/* ---------------- ALERT / FLASH ---------------- */
 
 .pf-alert {
     margin-bottom: 14px;
@@ -16,13 +27,12 @@
     border-radius: 14px;
     background: #fff8e6;
     color: #8a5700;
-    font-size: var(--fs-sm);
+    font-size: var(--pf-fs-sm);
     font-weight: 600;
     line-height: 1.55;
     animation: pf-fade-in .3s ease-out;
 }
-
-.pf-alert > i { flex-shrink: 0; font-size: 17px; color: #d97706; }
+.pf-alert > i { flex-shrink: 0; color: #d97706; font-size: 17px; }
 
 @keyframes pf-fade-in {
     from { opacity: 0; transform: translateY(-6px); }
@@ -33,76 +43,99 @@
 
 .pf-hero {
     position: relative;
-    min-height: 190px;
+    min-height: 200px;
     overflow: hidden;
-    padding: 32px 38px;
+    padding: 34px 40px;
     display: flex;
     align-items: center;
-    gap: 24px;
-    border-radius: var(--radius-xl);
+    gap: 28px;
+    border-radius: var(--pf-radius);
     color: #fff;
-    background: linear-gradient(120deg, #123f9e 0%, #1d58c8 48%, #3477df 100%);
-    box-shadow: 0 20px 45px rgba(37, 99, 235, .18);
+    background:
+        radial-gradient(circle at 12% 120%, rgba(147, 197, 253, .28), transparent 42%),
+        linear-gradient(120deg, #0f3a96 0%, #1d58c8 50%, #3b82f0 100%);
+    box-shadow: 0 20px 45px rgba(37, 99, 235, .2);
 }
 
-.pf-avatar-wrap {
-    position: relative;
-    z-index: 2;
-    flex-shrink: 0;
+/* Dekorasi lingkaran (pakai .hero-decoration dari dashboard.css, ini cadangan) */
+.pf-hero::before,
+.pf-hero::after {
+    content: "";
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+}
+.pf-hero::before {
+    width: 340px; height: 340px;
+    right: -90px; top: -210px;
+    background: rgba(255, 255, 255, .07);
+}
+.pf-hero::after {
+    width: 200px; height: 200px;
+    right: 170px; bottom: -150px;
+    border: 1px solid rgba(255, 255, 255, .12);
+}
+
+.pf-avatar-wrap { position: relative; z-index: 2; flex-shrink: 0; }
+
+.pf-avatar-wrap::before {
+    content: "";
+    position: absolute;
+    inset: -9px;
+    border: 1px dashed rgba(255, 255, 255, .35);
+    border-radius: 50%;
 }
 
 .pf-avatar {
-    width: 104px;
-    height: 104px;
+    width: 108px;
+    height: 108px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 4px solid rgba(255, 255, 255, .3);
+    border: 4px solid rgba(255, 255, 255, .35);
     border-radius: 50%;
-    background: #fff;
+    background: linear-gradient(145deg, #ffffff, #e8f0ff);
     color: #1d4ed8;
-    font-size: 42px;
+    font-size: 44px;
     font-weight: 800;
     line-height: 1;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, .16);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, .2);
 }
 
 .pf-avatar-dot {
     position: absolute;
-    right: 6px;
-    bottom: 7px;
-    width: 20px;
-    height: 20px;
+    right: 7px;
+    bottom: 8px;
+    width: 21px;
+    height: 21px;
     border: 3px solid #fff;
     border-radius: 50%;
     background: #22c55e;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, .25);
 }
 
-.pf-hero-info {
-    position: relative;
-    z-index: 2;
-    min-width: 0;
-    flex: 1;
-}
+.pf-hero-info { position: relative; z-index: 2; min-width: 0; flex: 1; }
 
 .pf-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .pf-chip {
-    padding: 5px 11px;
+    padding: 5px 12px;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    border: 1px solid rgba(255, 255, 255, .16);
+    border: 1px solid rgba(255, 255, 255, .18);
     border-radius: 30px;
-    background: rgba(255, 255, 255, .1);
-    color: rgba(255, 255, 255, .92);
+    background: rgba(255, 255, 255, .12);
+    color: rgba(255, 255, 255, .95);
     font-size: 11px;
     font-weight: 700;
+    line-height: 1.4;
 }
 
 .pf-hero-info h2 {
-    margin: 12px 0 7px;
-    font-size: 30px;
+    margin: 13px 0 8px;
+    color: #fff;
+    font-size: 31px;
     font-weight: 800;
     line-height: 1.2;
     letter-spacing: -.8px;
@@ -113,31 +146,29 @@
     margin: 0;
     display: flex;
     flex-wrap: wrap;
-    gap: 6px 20px;
-    color: rgba(255, 255, 255, .82);
-    font-size: var(--fs-sm);
+    gap: 6px 22px;
+    color: rgba(255, 255, 255, .85);
+    font-size: var(--pf-fs-sm);
 }
-
-.pf-hero-info p span { overflow-wrap: anywhere; }
-.pf-hero-info p i { margin-right: 4px; }
+.pf-hero-info p span { display: inline-flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
 
 .pf-readonly-pill {
     position: relative;
     z-index: 2;
     flex-shrink: 0;
     align-self: flex-start;
-    padding: 8px 13px;
+    padding: 8px 14px;
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    border: 1px solid rgba(255, 255, 255, .18);
+    border: 1px solid rgba(255, 255, 255, .2);
     border-radius: 30px;
-    background: rgba(255, 255, 255, .12);
+    background: rgba(255, 255, 255, .13);
     color: #fff;
     font-size: 11px;
     font-weight: 700;
-    backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
 }
 
 /* ---------------- GRID ---------------- */
@@ -145,17 +176,12 @@
 .pf-grid {
     margin-top: 14px;
     display: grid;
-    grid-template-columns: minmax(0, 1.6fr) minmax(280px, .9fr);
+    grid-template-columns: minmax(0, 1.6fr) minmax(290px, .9fr);
     gap: 14px;
     align-items: start;
 }
 
-.pf-side {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-}
+.pf-side { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 
 .pf-card { padding: 22px; }
 
@@ -164,16 +190,15 @@
 /* ---------------- ICON BOX ---------------- */
 
 .pf-icon {
-    width: 40px;
-    height: 40px;
+    width: 42px;
+    height: 42px;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 11px;
-    font-size: 16px;
+    border-radius: 12px;
+    font-size: 17px;
 }
-
 .pf-icon.blue   { color: #2563eb; background: #eaf2ff; }
 .pf-icon.green  { color: #16a34a; background: #ecfdf3; }
 .pf-icon.purple { color: #8b5cf6; background: #f3efff; }
@@ -183,7 +208,7 @@
 
 .pf-lock-tag {
     flex-shrink: 0;
-    padding: 5px 10px;
+    padding: 5px 11px;
     display: inline-flex;
     align-items: center;
     gap: 5px;
@@ -203,22 +228,25 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
 }
-
 .pf-span-2 { grid-column: 1 / -1; }
 
 .pf-info-item {
     min-width: 0;
-    padding: 14px;
+    padding: 15px;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 13px;
     border: 1px solid #edf1f6;
-    border-radius: 13px;
+    border-radius: 14px;
     background: #fafbfe;
-    transition: border-color .2s ease, background .2s ease;
+    transition: border-color .2s ease, background .2s ease, transform .2s ease, box-shadow .2s ease;
 }
-
-.pf-info-item:hover { border-color: #d9e5fb; background: #f6f9ff; }
+.pf-info-item:hover {
+    border-color: #d3e1fa;
+    background: #f5f9ff;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(37, 99, 235, .07);
+}
 
 .pf-info-text { min-width: 0; flex: 1; }
 
@@ -227,18 +255,18 @@
     color: #7c8aa0;
     font-size: 11px;
     font-weight: 700;
+    letter-spacing: .02em;
 }
 
 .pf-info-text strong {
     display: block;
     margin-top: 3px;
     color: #26364f;
-    font-size: var(--fs-md);
+    font-size: var(--pf-fs-md);
     font-weight: 700;
     line-height: 1.5;
     overflow-wrap: anywhere;
 }
-
 .pf-info-text strong.is-empty { color: #94a3b8; font-weight: 600; }
 
 /* ---------------- TOMBOL SALIN ---------------- */
@@ -250,16 +278,17 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    padding: 0;
     border: 1px solid #e3e9f2;
-    border-radius: 9px;
+    border-radius: 10px;
     background: #fff;
     color: #64748b;
     font-size: 13px;
+    line-height: 1;
     cursor: pointer;
     transition: .2s;
 }
-
-.pf-copy:hover { color: var(--primary); border-color: #cfe0ff; background: #f5f8ff; }
+.pf-copy:hover { color: var(--pf-primary); border-color: #cfe0ff; background: #f5f8ff; }
 .pf-copy.is-copied { color: #16a34a; border-color: #bfe9cf; background: #ecfdf3; }
 
 /* ---------------- STATUS AKUN ---------------- */
@@ -267,14 +296,15 @@
 .pf-status-list { margin-top: 14px; }
 
 .pf-status-row {
-    padding: 12px 0;
+    padding: 13px 0;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 13px;
     border-bottom: 1px solid #f0f3f7;
 }
-
-.pf-status-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.pf-status-row:first-child { padding-top: 4px; }
+.pf-status-row:last-child { padding-bottom: 0; border-bottom: 0; }
+.pf-status-row > div:last-child { min-width: 0; }
 
 .pf-status-row span {
     display: block;
@@ -282,13 +312,14 @@
     font-size: 11px;
     font-weight: 600;
 }
-
 .pf-status-row strong {
     display: block;
     margin-top: 2px;
     color: #26364f;
-    font-size: var(--fs-md);
+    font-size: var(--pf-fs-md);
     font-weight: 800;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
 }
 
 /* ---------------- FOOTER ---------------- */
@@ -300,7 +331,6 @@
     color: #dc2626;
     font-weight: 700;
 }
-
 .pf-footer a:hover { color: #b91c1c; }
 .pf-footer > span i { margin-right: 4px; color: #22c55e; }
 
@@ -308,12 +338,7 @@
    MODE GELAP
 ========================================================= */
 
-.dashboard-page[data-theme="dark"] .pf-alert {
-    border-color: #4a3b1f;
-    background: #3a3020;
-    color: #f2c46d;
-}
-
+.dashboard-page[data-theme="dark"] .pf-alert { border-color: #4a3b1f; background: #3a3020; color: #f2c46d; }
 .dashboard-page[data-theme="dark"] .pf-alert > i { color: #f2c46d; }
 
 .dashboard-page[data-theme="dark"] .pf-icon.blue   { color: #9fc2ff; background: #1b2f4d; }
@@ -323,32 +348,21 @@
 
 .dashboard-page[data-theme="dark"] .pf-lock-tag { background: #1b2a40; color: #9cadc2; }
 
-.dashboard-page[data-theme="dark"] .pf-info-item {
-    border-color: #2b3a51;
-    background: #172437;
-}
-
+.dashboard-page[data-theme="dark"] .pf-info-item { border-color: #2b3a51; background: #172437; }
 .dashboard-page[data-theme="dark"] .pf-info-item:hover {
     border-color: #37517a;
     background: #1b2f4d;
+    box-shadow: none;
 }
 
 .dashboard-page[data-theme="dark"] .pf-info-text span,
 .dashboard-page[data-theme="dark"] .pf-status-row span { color: #9cadc2; }
-
 .dashboard-page[data-theme="dark"] .pf-info-text strong,
 .dashboard-page[data-theme="dark"] .pf-status-row strong { color: #e7eef9; }
-
 .dashboard-page[data-theme="dark"] .pf-info-text strong.is-empty { color: #7c8aa0; }
-
 .dashboard-page[data-theme="dark"] .pf-status-row { border-color: #26354a; }
 
-.dashboard-page[data-theme="dark"] .pf-copy {
-    border-color: #2b3a51;
-    background: #121c2c;
-    color: #9cadc2;
-}
-
+.dashboard-page[data-theme="dark"] .pf-copy { border-color: #2b3a51; background: #121c2c; color: #9cadc2; }
 .dashboard-page[data-theme="dark"] .pf-copy:hover { color: #7fb0ff; border-color: #37517a; }
 .dashboard-page[data-theme="dark"] .pf-copy.is-copied { color: #83d6a5; border-color: #2d5a43; background: #20352d; }
 .dashboard-page[data-theme="dark"] .pf-footer a { color: #ffaaa4; }
@@ -358,29 +372,31 @@
 ========================================================= */
 
 @media (max-width: 1100px) {
-    .pf-grid { grid-template-columns: 1fr; }
-    .pf-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+    .pf-grid { grid-template-columns: minmax(0, 1fr); }
+    .pf-side {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+    }
 }
 
 @media (max-width: 700px) {
     .pf-hero {
-        padding: 26px 22px;
+        padding: 28px 22px;
         flex-direction: column;
         align-items: center;
         text-align: center;
-        gap: 16px;
+        gap: 18px;
     }
-
     .pf-hero-info { width: 100%; }
     .pf-chips { justify-content: center; }
     .pf-hero-info h2 { font-size: 24px; }
-    .pf-hero-info p { justify-content: center; flex-direction: column; gap: 4px; }
+    .pf-hero-info p { flex-direction: column; align-items: center; gap: 5px; }
     .pf-readonly-pill { align-self: center; }
+    .pf-avatar { width: 90px; height: 90px; font-size: 36px; }
 
-    .pf-avatar { width: 88px; height: 88px; font-size: 35px; }
-
-    .pf-side { grid-template-columns: 1fr; }
-    .pf-info-grid { grid-template-columns: 1fr; }
+    .pf-side { grid-template-columns: minmax(0, 1fr); }
+    .pf-info-grid { grid-template-columns: minmax(0, 1fr); }
     .pf-span-2 { grid-column: auto; }
 }
 
@@ -388,5 +404,11 @@
     .pf-hero { border-radius: 17px; }
     .pf-card { padding: 16px; }
     .pf-card .card-heading { flex-wrap: wrap; }
+    .pf-info-item { padding: 13px; }
     .pf-footer { align-items: flex-start; flex-direction: column; gap: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pf-info-item, .pf-copy, .pf-alert { transition: none; animation: none; }
+    .pf-info-item:hover { transform: none; }
 }
