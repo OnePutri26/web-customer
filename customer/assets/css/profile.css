@@ -1,992 +1,392 @@
-@import url('theme.css');
+/* =========================================================
+   YESNET CUSTOMER PROFILE
+   Melengkapi dashboard.css (harus dimuat SEBELUM file ini).
+   Semua kelas khusus halaman ini memakai prefix "pf-".
+========================================================= */
 
-/* =========================================
-   PROFILE PAGE
-========================================= */
+/* ---------------- ALERT / FLASH MESSAGE ---------------- */
 
-* {
-    box-sizing: border-box;
-}
-
-html {
-    font-size: 16px;
-}
-
-body {
-    margin: 0;
-    padding: 0;
-
-    font-family: "Segoe UI", Arial, Helvetica, sans-serif;
-
-    font-size: 15px;
-    line-height: 1.5;
-
-    color: #1f2937;
-
-    background: #f5f7fb;
-
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-}
-
-a {
-    text-decoration: none;
-}
-
-button,
-input,
-textarea,
-select {
-    font-family: inherit;
-}
-
-
-/* =========================================
-   NAVBAR
-========================================= */
-
-.profile-navbar {
-    width: 100%;
-    height: 78px;
-
-    padding: 0 7%;
-
+.pf-alert {
+    margin-bottom: 14px;
+    padding: 14px 16px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-
-    background: #ffffff;
-
-    border-bottom: 1px solid #e9edf3;
-
-    position: sticky;
-    top: 0;
-
-    z-index: 100;
-}
-
-.nav-left {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-}
-
-.back-dashboard {
-    width: 42px;
-    height: 42px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    background: #eff6ff;
-
-    color: #2563eb;
-
-    border-radius: 11px;
-
-    font-size: 17px;
-
-    transition: all 0.2s ease;
-}
-
-.back-dashboard:hover {
-    background: #2563eb;
-    color: #ffffff;
-}
-
-.nav-left h5 {
-    margin: 0;
-
-    font-size: 17px;
-    font-weight: 700;
-
-    line-height: 1.3;
-
-    color: #111827;
-}
-
-.nav-left span {
-    display: block;
-
-    margin-top: 3px;
-
-    font-size: 12px;
-    font-weight: 400;
-
-    line-height: 1.4;
-
-    color: #9ca3af;
-}
-
-.dashboard-link {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-
-    padding: 10px 16px;
-
-    border-radius: 10px;
-
-    background: #f8fafc;
-
-    color: #475569;
-
-    font-size: 13px;
+    gap: 11px;
+    border: 1px solid #f3dca6;
+    border-radius: 14px;
+    background: #fff8e6;
+    color: #8a5700;
+    font-size: var(--fs-sm);
     font-weight: 600;
-
-    transition: all 0.2s ease;
+    line-height: 1.55;
+    animation: pf-fade-in .3s ease-out;
 }
 
-.dashboard-link:hover {
-    background: #2563eb;
-    color: #ffffff;
+.pf-alert > i { flex-shrink: 0; font-size: 17px; color: #d97706; }
+
+@keyframes pf-fade-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
+/* ---------------- HERO ---------------- */
 
-/* =========================================
-   CONTAINER
-========================================= */
-
-.profile-container {
-    width: 86%;
-    max-width: 1200px;
-
-    margin: 32px auto 50px;
-}
-
-
-/* =========================================
-   PROFILE HERO
-========================================= */
-
-.profile-hero {
+.pf-hero {
     position: relative;
-
-    width: 100%;
-
-    min-height: 215px;
-
+    min-height: 190px;
     overflow: hidden;
-
-    margin-bottom: 25px;
-
-    border-radius: 20px;
-
-    background: linear-gradient(
-        135deg,
-        #2563eb 0%,
-        #1d4ed8 55%,
-        #4338ca 100%
-    );
-
-    box-shadow: 0 12px 35px rgba(37, 99, 235, 0.16);
-}
-
-.hero-background {
-    position: absolute;
-
-    width: 420px;
-    height: 420px;
-
-    top: -260px;
-    right: -80px;
-
-    border-radius: 50%;
-
-    background: rgba(255, 255, 255, 0.07);
-}
-
-.hero-background::after {
-    content: "";
-
-    position: absolute;
-
-    width: 280px;
-    height: 280px;
-
-    left: -230px;
-    top: 260px;
-
-    border-radius: 50%;
-
-    background: rgba(255, 255, 255, 0.05);
-}
-
-.hero-content {
-    position: relative;
-
-    min-height: 215px;
-
-    padding: 30px 38px;
-
+    padding: 32px 38px;
     display: flex;
     align-items: center;
-
-    gap: 22px;
-
-    z-index: 2;
+    gap: 24px;
+    border-radius: var(--radius-xl);
+    color: #fff;
+    background: linear-gradient(120deg, #123f9e 0%, #1d58c8 48%, #3477df 100%);
+    box-shadow: 0 20px 45px rgba(37, 99, 235, .18);
 }
 
-
-/* =========================================
-   AVATAR
-========================================= */
-
-.avatar-wrapper {
+.pf-avatar-wrap {
     position: relative;
-
+    z-index: 2;
     flex-shrink: 0;
 }
 
-.profile-avatar {
-    width: 105px;
-    height: 105px;
-
+.pf-avatar {
+    width: 104px;
+    height: 104px;
     display: flex;
     align-items: center;
     justify-content: center;
-
+    border: 4px solid rgba(255, 255, 255, .3);
     border-radius: 50%;
-
-    background: #ffffff;
-
-    color: #2563eb;
-
-    border: 4px solid rgba(255, 255, 255, 0.3);
-
-    font-family: "Segoe UI", Arial, sans-serif;
-
+    background: #fff;
+    color: #1d4ed8;
     font-size: 42px;
-    font-weight: 700;
-
+    font-weight: 800;
     line-height: 1;
-
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .16);
 }
 
-.online-status {
+.pf-avatar-dot {
     position: absolute;
-
+    right: 6px;
+    bottom: 7px;
     width: 20px;
     height: 20px;
-
-    right: 4px;
-    bottom: 5px;
-
-    border: 3px solid #ffffff;
-
+    border: 3px solid #fff;
     border-radius: 50%;
-
     background: #22c55e;
 }
 
-
-/* =========================================
-   PROFILE MAIN INFO
-========================================= */
-
-.profile-main-info {
+.pf-hero-info {
+    position: relative;
+    z-index: 2;
+    min-width: 0;
     flex: 1;
-
-    min-width: 0;
-
-    color: #ffffff;
 }
 
-.customer-badge {
+.pf-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.pf-chip {
+    padding: 5px 11px;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-
-    margin-bottom: 8px;
-    padding: 5px 10px;
-
-    border-radius: 20px;
-
-    background: rgba(255, 255, 255, 0.14);
-
-    border: 1px solid rgba(255, 255, 255, 0.2);
-
-    color: #ffffff;
-
+    gap: 6px;
+    border: 1px solid rgba(255, 255, 255, .16);
+    border-radius: 30px;
+    background: rgba(255, 255, 255, .1);
+    color: rgba(255, 255, 255, .92);
     font-size: 11px;
-    font-weight: 600;
-
-    line-height: 1.3;
-}
-
-.customer-badge i {
-    font-size: 11px;
-}
-
-.profile-main-info h1 {
-    margin: 0 0 6px;
-
-    color: #ffffff;
-
-    font-family: "Segoe UI", Arial, sans-serif;
-
-    font-size: 29px;
     font-weight: 700;
-
-    line-height: 1.25;
-
-    word-break: break-word;
 }
 
-.profile-main-info p {
+.pf-hero-info h2 {
+    margin: 12px 0 7px;
+    font-size: 30px;
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: -.8px;
+    overflow-wrap: anywhere;
+}
+
+.pf-hero-info p {
     margin: 0;
-
-    color: rgba(255, 255, 255, 0.78);
-
-    font-size: 13px;
-    font-weight: 400;
-
-    line-height: 1.5;
-
-    word-break: break-word;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+    color: rgba(255, 255, 255, .82);
+    font-size: var(--fs-sm);
 }
 
-.profile-main-info p i {
-    margin-right: 5px;
-}
+.pf-hero-info p span { overflow-wrap: anywhere; }
+.pf-hero-info p i { margin-right: 4px; }
 
-
-/* =========================================
-   EDIT BUTTON
-========================================= */
-
-.edit-profile-btn {
+.pf-readonly-pill {
+    position: relative;
+    z-index: 2;
     flex-shrink: 0;
-
+    align-self: flex-start;
+    padding: 8px 13px;
     display: inline-flex;
     align-items: center;
-    justify-content: center;
     gap: 7px;
-
-    padding: 11px 17px;
-
-    border-radius: 10px;
-
-    background: #ffffff;
-
-    color: #2563eb;
-
-    font-size: 13px;
-    font-weight: 600;
-
-    line-height: 1.3;
-
-    transition: all 0.2s ease;
-}
-
-.edit-profile-btn:hover {
-    background: #f8fafc;
-
-    color: #1d4ed8;
-
-    transform: translateY(-1px);
-}
-
-
-/* =========================================
-   GRID
-========================================= */
-
-.profile-grid {
-    display: grid;
-
-    grid-template-columns: 1.35fr 1fr;
-
-    gap: 22px;
-}
-
-
-/* =========================================
-   CARD
-========================================= */
-
-.profile-card {
-    overflow: hidden;
-
-    background: #ffffff;
-
-    border: 1px solid #edf0f5;
-
-    border-radius: 16px;
-
-    box-shadow: 0 5px 20px rgba(15, 23, 42, 0.035);
-}
-
-.card-header-custom {
-    padding: 20px 22px;
-
-    border-bottom: 1px solid #f0f2f5;
-}
-
-.card-title {
-    display: flex;
-    align-items: center;
-
-    gap: 12px;
-}
-
-.title-icon {
-    width: 42px;
-    height: 42px;
-
-    flex-shrink: 0;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    border-radius: 10px;
-
-    font-size: 17px;
-}
-
-.title-icon.blue {
-    background: #eff6ff;
-    color: #2563eb;
-}
-
-.title-icon.green {
-    background: #ecfdf5;
-    color: #16a34a;
-}
-
-.title-icon.purple {
-    background: #f5f3ff;
-    color: #7c3aed;
-}
-
-.card-title h3 {
-    margin: 0;
-
-    color: #111827;
-
-    font-family: "Segoe UI", Arial, sans-serif;
-
-    font-size: 16px;
+    border: 1px solid rgba(255, 255, 255, .18);
+    border-radius: 30px;
+    background: rgba(255, 255, 255, .12);
+    color: #fff;
+    font-size: 11px;
     font-weight: 700;
-
-    line-height: 1.3;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
 }
 
-.card-title p {
-    margin: 3px 0 0;
+/* ---------------- GRID ---------------- */
 
-    color: #9ca3af;
-
-    font-size: 11px;
-    font-weight: 400;
-
-    line-height: 1.4;
-}
-
-
-/* =========================================
-   INFORMATION
-========================================= */
-
-.card-body-custom {
-    padding: 5px 22px 12px;
-}
-
-.info-row {
-    min-height: 70px;
-
-    display: flex;
-    align-items: center;
-
-    gap: 13px;
-
-    padding: 13px 0;
-
-    border-bottom: 1px solid #f1f3f6;
-}
-
-.info-row:last-child {
-    border-bottom: none;
-}
-
-.info-icon {
-    width: 40px;
-    height: 40px;
-
-    flex-shrink: 0;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    border-radius: 10px;
-
-    background: #f8fafc;
-
-    color: #64748b;
-
-    font-size: 15px;
-}
-
-.info-content {
-    min-width: 0;
-}
-
-.info-content span {
-    display: block;
-
-    margin: 0 0 3px;
-
-    color: #9ca3af;
-
-    font-size: 11px;
-    font-weight: 400;
-
-    line-height: 1.4;
-}
-
-.info-content strong {
-    display: block;
-
-    margin: 0;
-
-    color: #374151;
-
-    font-family: "Segoe UI", Arial, sans-serif;
-
-    font-size: 13px;
-    font-weight: 600;
-
-    line-height: 1.5;
-
-    word-break: break-word;
-}
-
-
-/* =========================================
-   ACCOUNT STATUS
-========================================= */
-
-.status-body {
-    padding-top: 8px;
-}
-
-.account-status {
-    display: flex;
-    align-items: center;
-
-    gap: 12px;
-
-    padding: 13px 0;
-
-    border-bottom: 1px solid #f1f3f6;
-}
-
-.account-status:last-child {
-    border-bottom: none;
-}
-
-.status-check,
-.status-icon {
-    width: 40px;
-    height: 40px;
-
-    flex-shrink: 0;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    border-radius: 10px;
-
-    background: #f8fafc;
-
-    color: #64748b;
-
-    font-size: 15px;
-}
-
-.status-check {
-    background: #dcfce7;
-    color: #16a34a;
-}
-
-.account-status span {
-    display: block;
-
-    margin: 0 0 3px;
-
-    color: #9ca3af;
-
-    font-size: 11px;
-    font-weight: 400;
-
-    line-height: 1.4;
-}
-
-.account-status strong {
-    display: block;
-
-    margin: 0;
-
-    color: #374151;
-
-    font-size: 13px;
-    font-weight: 600;
-
-    line-height: 1.4;
-}
-
-
-/* =========================================
-   QUICK ACTION CARD
-========================================= */
-
-.quick-card {
-    grid-column: 1 / -1;
-}
-
-.quick-actions {
+.pf-grid {
+    margin-top: 14px;
     display: grid;
-
-    grid-template-columns: repeat(3, 1fr);
-
-    gap: 12px;
-
-    padding: 18px 22px;
+    grid-template-columns: minmax(0, 1.6fr) minmax(280px, .9fr);
+    gap: 14px;
+    align-items: start;
 }
 
-.quick-action {
+.pf-side {
     min-width: 0;
-
     display: flex;
-    align-items: center;
-
-    gap: 12px;
-
-    padding: 14px;
-
-    border: 1px solid #edf0f5;
-
-    border-radius: 12px;
-
-    background: #ffffff;
-
-    color: #374151;
-
-    transition: all 0.2s ease;
+    flex-direction: column;
+    gap: 14px;
 }
 
-.quick-action:hover {
-    background: #fafcff;
+.pf-card { padding: 22px; }
 
-    border-color: #dbe4f5;
+.pf-card-title { min-width: 0; display: flex; align-items: center; gap: 12px; }
 
-    transform: translateY(-2px);
+/* ---------------- ICON BOX ---------------- */
 
-    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
-}
-
-.quick-icon {
+.pf-icon {
     width: 40px;
     height: 40px;
-
     flex-shrink: 0;
-
     display: flex;
     align-items: center;
     justify-content: center;
-
-    border-radius: 10px;
-
+    border-radius: 11px;
     font-size: 16px;
 }
 
-.quick-icon.blue {
-    background: #eff6ff;
-    color: #2563eb;
-}
+.pf-icon.blue   { color: #2563eb; background: #eaf2ff; }
+.pf-icon.green  { color: #16a34a; background: #ecfdf3; }
+.pf-icon.purple { color: #8b5cf6; background: #f3efff; }
+.pf-icon.orange { color: #d97706; background: #fff5df; }
 
-.quick-icon.orange {
-    background: #fff7ed;
-    color: #ea580c;
-}
+/* ---------------- TAG HANYA LIHAT ---------------- */
 
-.quick-icon.purple {
-    background: #f5f3ff;
-    color: #7c3aed;
-}
-
-.quick-action strong {
-    display: block;
-
-    margin: 0 0 2px;
-
-    color: #374151;
-
-    font-size: 13px;
-    font-weight: 600;
-
-    line-height: 1.4;
-}
-
-.quick-action span {
-    display: block;
-
-    margin: 0;
-
-    color: #9ca3af;
-
-    font-size: 10px;
-    font-weight: 400;
-
-    line-height: 1.4;
-}
-
-.quick-action .arrow {
-    margin-left: auto;
-
+.pf-lock-tag {
     flex-shrink: 0;
-
-    color: #cbd5e1;
-
-    font-size: 13px;
-}
-
-.quick-action:hover .arrow {
-    color: #2563eb;
-
-    transform: translateX(2px);
-}
-
-
-/* =========================================
-   FOOTER
-========================================= */
-
-.profile-footer {
-    display: flex;
+    padding: 5px 10px;
+    display: inline-flex;
     align-items: center;
-    justify-content: space-between;
-
-    margin-top: 22px;
-    padding: 0 3px;
-
-    color: #9ca3af;
-
+    gap: 5px;
+    border-radius: 20px;
+    background: #f1f5f9;
+    color: #64748b;
     font-size: 11px;
-    font-weight: 400;
-
-    line-height: 1.4;
+    font-weight: 700;
+    white-space: nowrap;
 }
 
-.profile-footer span {
+/* ---------------- INFORMASI PRIBADI ---------------- */
+
+.pf-info-grid {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.pf-span-2 { grid-column: 1 / -1; }
+
+.pf-info-item {
+    min-width: 0;
+    padding: 14px;
     display: flex;
     align-items: center;
-
-    gap: 5px;
+    gap: 12px;
+    border: 1px solid #edf1f6;
+    border-radius: 13px;
+    background: #fafbfe;
+    transition: border-color .2s ease, background .2s ease;
 }
 
-.profile-footer span i {
-    color: #22c55e;
+.pf-info-item:hover { border-color: #d9e5fb; background: #f6f9ff; }
+
+.pf-info-text { min-width: 0; flex: 1; }
+
+.pf-info-text span {
+    display: block;
+    color: #7c8aa0;
+    font-size: 11px;
+    font-weight: 700;
 }
 
-.profile-footer a {
+.pf-info-text strong {
+    display: block;
+    margin-top: 3px;
+    color: #26364f;
+    font-size: var(--fs-md);
+    font-weight: 700;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.pf-info-text strong.is-empty { color: #94a3b8; font-weight: 600; }
+
+/* ---------------- TOMBOL SALIN ---------------- */
+
+.pf-copy {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e3e9f2;
+    border-radius: 9px;
+    background: #fff;
+    color: #64748b;
+    font-size: 13px;
+    cursor: pointer;
+    transition: .2s;
+}
+
+.pf-copy:hover { color: var(--primary); border-color: #cfe0ff; background: #f5f8ff; }
+.pf-copy.is-copied { color: #16a34a; border-color: #bfe9cf; background: #ecfdf3; }
+
+/* ---------------- STATUS AKUN ---------------- */
+
+.pf-status-list { margin-top: 14px; }
+
+.pf-status-row {
+    padding: 12px 0;
     display: flex;
     align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid #f0f3f7;
+}
 
-    gap: 5px;
+.pf-status-row:last-child { border-bottom: 0; padding-bottom: 0; }
 
-    color: #ef4444;
-
+.pf-status-row span {
+    display: block;
+    color: #7c8aa0;
     font-size: 11px;
     font-weight: 600;
 }
 
-.profile-footer a:hover {
+.pf-status-row strong {
+    display: block;
+    margin-top: 2px;
+    color: #26364f;
+    font-size: var(--fs-md);
+    font-weight: 800;
+}
+
+/* ---------------- FOOTER ---------------- */
+
+.pf-footer a {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     color: #dc2626;
+    font-weight: 700;
 }
 
+.pf-footer a:hover { color: #b91c1c; }
+.pf-footer > span i { margin-right: 4px; color: #22c55e; }
 
-/* =========================================
-   TABLET
-========================================= */
+/* =========================================================
+   MODE GELAP
+========================================================= */
 
-@media (max-width: 992px) {
-
-    .profile-navbar {
-        padding: 0 5%;
-    }
-
-    .profile-container {
-        width: 90%;
-    }
-
-    .profile-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .quick-card {
-        grid-column: auto;
-    }
-
-    .quick-actions {
-        grid-template-columns: 1fr;
-    }
+.dashboard-page[data-theme="dark"] .pf-alert {
+    border-color: #4a3b1f;
+    background: #3a3020;
+    color: #f2c46d;
 }
 
+.dashboard-page[data-theme="dark"] .pf-alert > i { color: #f2c46d; }
 
-/* =========================================
-   MOBILE
-========================================= */
+.dashboard-page[data-theme="dark"] .pf-icon.blue   { color: #9fc2ff; background: #1b2f4d; }
+.dashboard-page[data-theme="dark"] .pf-icon.green  { color: #83d6a5; background: #20352d; }
+.dashboard-page[data-theme="dark"] .pf-icon.purple { color: #c0a8ff; background: #302748; }
+.dashboard-page[data-theme="dark"] .pf-icon.orange { color: #f2c46d; background: #3a3020; }
 
-@media (max-width: 768px) {
+.dashboard-page[data-theme="dark"] .pf-lock-tag { background: #1b2a40; color: #9cadc2; }
 
-    .profile-navbar {
-        height: 70px;
-
-        padding: 0 4%;
-    }
-
-    .nav-left h5 {
-        font-size: 15px;
-    }
-
-    .nav-left span {
-        display: none;
-    }
-
-    .dashboard-link {
-        padding: 9px 11px;
-
-        font-size: 0;
-    }
-
-    .dashboard-link i {
-        margin: 0;
-
-        font-size: 16px;
-    }
-
-    .profile-container {
-        width: 92%;
-
-        margin-top: 20px;
-    }
-
-    .profile-hero {
-        border-radius: 17px;
-    }
-
-    .hero-content {
-        min-height: auto;
-
-        padding: 28px 22px;
-
-        flex-wrap: wrap;
-    }
-
-    .profile-avatar {
-        width: 85px;
-        height: 85px;
-
-        font-size: 34px;
-    }
-
-    .profile-main-info {
-        min-width: 150px;
-    }
-
-    .profile-main-info h1 {
-        font-size: 22px;
-    }
-
-    .profile-main-info p {
-        font-size: 12px;
-    }
-
-    .edit-profile-btn {
-        width: 100%;
-    }
+.dashboard-page[data-theme="dark"] .pf-info-item {
+    border-color: #2b3a51;
+    background: #172437;
 }
 
+.dashboard-page[data-theme="dark"] .pf-info-item:hover {
+    border-color: #37517a;
+    background: #1b2f4d;
+}
 
-/* =========================================
-   SMALL MOBILE
-========================================= */
+.dashboard-page[data-theme="dark"] .pf-info-text span,
+.dashboard-page[data-theme="dark"] .pf-status-row span { color: #9cadc2; }
 
-@media (max-width: 480px) {
+.dashboard-page[data-theme="dark"] .pf-info-text strong,
+.dashboard-page[data-theme="dark"] .pf-status-row strong { color: #e7eef9; }
 
-    .profile-container {
-        width: 94%;
-    }
+.dashboard-page[data-theme="dark"] .pf-info-text strong.is-empty { color: #7c8aa0; }
 
-    .hero-content {
-        display: flex;
+.dashboard-page[data-theme="dark"] .pf-status-row { border-color: #26354a; }
+
+.dashboard-page[data-theme="dark"] .pf-copy {
+    border-color: #2b3a51;
+    background: #121c2c;
+    color: #9cadc2;
+}
+
+.dashboard-page[data-theme="dark"] .pf-copy:hover { color: #7fb0ff; border-color: #37517a; }
+.dashboard-page[data-theme="dark"] .pf-copy.is-copied { color: #83d6a5; border-color: #2d5a43; background: #20352d; }
+.dashboard-page[data-theme="dark"] .pf-footer a { color: #ffaaa4; }
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 1100px) {
+    .pf-grid { grid-template-columns: 1fr; }
+    .pf-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+}
+
+@media (max-width: 700px) {
+    .pf-hero {
+        padding: 26px 22px;
         flex-direction: column;
-
+        align-items: center;
         text-align: center;
+        gap: 16px;
     }
 
-    .avatar-wrapper {
-        margin-bottom: 4px;
-    }
+    .pf-hero-info { width: 100%; }
+    .pf-chips { justify-content: center; }
+    .pf-hero-info h2 { font-size: 24px; }
+    .pf-hero-info p { justify-content: center; flex-direction: column; gap: 4px; }
+    .pf-readonly-pill { align-self: center; }
 
-    .profile-main-info {
-        width: 100%;
-    }
+    .pf-avatar { width: 88px; height: 88px; font-size: 35px; }
 
-    .profile-main-info h1 {
-        font-size: 21px;
-    }
+    .pf-side { grid-template-columns: 1fr; }
+    .pf-info-grid { grid-template-columns: 1fr; }
+    .pf-span-2 { grid-column: auto; }
+}
 
-    .profile-main-info p {
-        font-size: 11px;
-    }
-
-    .customer-badge {
-        font-size: 10px;
-    }
-
-    .edit-profile-btn {
-        width: 100%;
-    }
-
-    .card-header-custom {
-        padding: 17px;
-    }
-
-    .card-body-custom {
-        padding: 5px 17px 10px;
-    }
-
-    .info-row {
-        min-height: 65px;
-
-        padding: 12px 0;
-    }
-
-    .info-icon {
-        width: 37px;
-        height: 37px;
-    }
-
-    .info-content strong {
-        font-size: 12px;
-    }
-
-    .quick-actions {
-        padding: 15px;
-    }
-
-    .profile-footer {
-        flex-direction: column;
-
-        gap: 10px;
-
-        text-align: center;
-    }
+@media (max-width: 500px) {
+    .pf-hero { border-radius: 17px; }
+    .pf-card { padding: 16px; }
+    .pf-card .card-heading { flex-wrap: wrap; }
+    .pf-footer { align-items: flex-start; flex-direction: column; gap: 8px; }
 }

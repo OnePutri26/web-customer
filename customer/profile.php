@@ -8,21 +8,59 @@ require_once "../config/auth.php";
 requireActiveCustomer($conn);
 
 // Cek login
-if (!isset($_SESSION['user_id'])) { 
+if (!isset($_SESSION['user_id'])) {
     header("Location: ../login.php");
     exit;
 }
 
-$user_id = $_SESSION['user_id'];
+$user_id = (int) $_SESSION['user_id'];
 
-// Ambil pesan notifikasi (flash message) sekali tampil
+/* ======================== HELPER ======================== */
+
+if (!function_exists('e')) {
+    function e($value): string
+    {
+        return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+    }
+}
+
+function profile_initial(string $text): string
+{
+    $text = trim($text);
+    if ($text === '') {
+        return 'C';
+    }
+    return function_exists('mb_substr')
+        ? mb_strtoupper(mb_substr($text, 0, 1, 'UTF-8'), 'UTF-8')
+        : strtoupper(substr($text, 0, 1));
+}
+
+function profile_date_id($date): string
+{
+    if (empty($date)) {
+        return '-';
+    }
+    $time = strtotime((string) $date);
+    if (!$time) {
+        return '-';
+    }
+    $months = [
+        1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+    ];
+    return date('d', $time) . ' ' . $months[(int) date('n', $time)] . ' ' . date('Y', $time);
+}
+
+/* ======================== PESAN NOTIFIKASI (FLASH) ======================== */
+
 $notice = '';
 if (!empty($_SESSION['profile_notice'])) {
-    $notice = $_SESSION['profile_notice'];
+    $notice = (string) $_SESSION['profile_notice'];
     unset($_SESSION['profile_notice']);
 }
 
-// Ambil data user (SELECT * agar kolom alamat & created_at ikut terambil jika ada)
+/* ======================== DATA USER ======================== */
+
 $stmt = $conn->prepare("
     SELECT *
     FROM users
@@ -33,7 +71,7 @@ $stmt = $conn->prepare("
 $stmt->bind_param("i", $user_id);
 $stmt->execute();
 
-$result = $stmt->get_result();
+$result   = $stmt->get_result();
 $customer = $result->fetch_assoc();
 
 if (!$customer) {
@@ -42,407 +80,468 @@ if (!$customer) {
     exit;
 }
 
-// Password tidak dibutuhkan di halaman ini, buang dari memori
+// Password tidak dibutuhkan di halaman ini
 unset($customer['password']);
 
-// Inisial nama
-$initial = strtoupper(substr(trim($customer['username']), 0, 1));
-?>
+/* ======================== ID PELANGGAN (opsional) ======================== */
 
+$customerId = 0;
+try {
+    $stmtCustomer = $conn->prepare("SELECT id FROM customers WHERE user_id = ? LIMIT 1");
+    if ($stmtCustomer) {
+        $stmtCustomer->bind_param("i", $user_id);
+        $stmtCustomer->execute();
+        $rowCustomer = $stmtCustomer->get_result()->fetch_assoc();
+        $customerId  = (int) ($rowCustomer['id'] ?? 0);
+        $stmtCustomer->close();
+    }
+} catch (Throwable $ex) {
+    error_log('Profile YESNET customer id lookup failed: ' . $ex->getMessage());
+}
+
+/* ======================== DATA TAMPILAN ======================== */
+
+$username    = trim((string) ($customer['username'] ?? ''));
+$namaLengkap = trim((string) ($customer['nama'] ?? ''));
+$email       = trim((string) ($customer['email'] ?? ''));
+$telephone   = trim((string) ($customer['telephone'] ?? ''));
+$alamat      = trim((string) ($customer['alamat'] ?? ''));
+
+$displayName = $namaLengkap !== '' ? $namaLengkap : $username;
+$initial     = profile_initial($displayName);
+$joinedAt    = profile_date_id($customer['created_at'] ?? null);
+$currentPage = basename($_SERVER['PHP_SELF']);
+
+$menuMain = [
+    ['dashboard.php',      'bi-grid-fill',            'Dashboard'],
+    ['usage.php',          'bi-router-fill',          'Internet Saya'],
+    ['billing.php',        'bi-receipt-cutoff',       'Tagihan & Pembayaran'],
+    ['speedtest.php',      'bi-speedometer2',         'Speed Test'],
+    ['complaint.php',      'bi-tools',                'Laporan Gangguan'],
+    ['network_status.php', 'bi-globe2',               'Status Jaringan'],
+    ['upgrade.php',        'bi-arrow-up-circle-fill', 'Upgrade Paket'],
+    ['chat.php',           'bi-chat-dots-fill',       'Bantuan / Live Chat'],
+];
+
+// [label, ikon, warna, nilai, teks kosong, bisa disalin, lebar penuh]
+$infoItems = [
+    ['Nama Lengkap',  'bi-person-lines-fill', 'blue',   $namaLengkap, 'Belum diisi',        false, false],
+    ['Nama Pengguna', 'bi-person-fill',       'purple', $username,    'Belum diisi',        true,  false],
+    ['Email',         'bi-envelope-fill',     'green',  $email,       'Belum diisi',        true,  false],
+    ['Nomor Telepon', 'bi-telephone-fill',    'orange', $telephone,   '-',                  true,  false],
+    ['Alamat',        'bi-geo-alt-fill',      'blue',   $alamat,      'Alamat belum diisi', false, true],
+];
+
+$quickServices = [
+    ['installation.php', 'blue',   'bi-router-fill',          'Instalasi', 'Lihat instalasi WiFi'],
+    ['complaint.php',    'orange', 'bi-ticket-detailed-fill', 'Complaint', 'Lihat laporan gangguan'],
+    ['chat.php',         'green',  'bi-chat-dots-fill',       'Chat CS',   'Hubungi customer service'],
+];
+?>
 <!DOCTYPE html>
 <html lang="id">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>Profile Saya - WiFi Management</title>
+    <meta name="theme-color" content="#0f4cdb">
+    <title>Profil Saya - YESNET</title>
 
     <!-- Bootstrap -->
-    <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-        rel="stylesheet"
-    >
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
     <!-- Bootstrap Icons -->
-    <link
-        rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
-    >
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
 
-    <!-- CSS Profile -->
+    <!-- CSS: dashboard (layout bersama) + profile (khusus halaman ini) -->
+    <link rel="stylesheet" href="assets/css/dashboard.css">
     <link rel="stylesheet" href="assets/css/profile.css">
     <link rel="stylesheet" href="assets/css/portal-unified.css">
     <script defer src="assets/js/portal-ui.js"></script>
 </head>
 
-<body>
+<body class="dashboard-page">
+<div class="customer-layout">
 
-<div class="profile-page">
+    <div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
 
-    <!-- TOP NAVIGATION -->
-    <nav class="profile-navbar">
-
-        <div class="nav-left">
-
-            <a href="dashboard.php" class="back-dashboard">
-                <i class="bi bi-arrow-left"></i>
-            </a>
-
-            <div>
-                <h5>Profile Saya</h5>
-                <span>Informasi akun kamu</span>
+    <!-- ===================== SIDEBAR ===================== -->
+    <aside class="sidebar" id="sidebar" aria-label="Navigasi pelanggan">
+        <div class="sidebar-brand">
+            <div class="brand-logo"><i class="bi bi-wifi"></i></div>
+            <div class="brand-text">
+                <strong>YESNET</strong>
+                <span>Customer Portal</span>
             </div>
-
+            <button type="button" class="sidebar-close" id="sidebarClose" aria-label="Tutup menu">
+                <i class="bi bi-x-lg"></i>
+            </button>
         </div>
 
-        <a href="dashboard.php" class="dashboard-link">
-            <i class="bi bi-grid-fill"></i>
-            Dashboard ku
-        </a>
-
-    </nav>
-
-
-    <!-- MAIN CONTENT -->
-    <main class="profile-container">
-
-        <!-- NOTIFIKASI -->
-        <?php if ($notice !== ''): ?>
-            <div class="alert alert-warning d-flex align-items-center gap-2 mb-3" role="alert">
-                <i class="bi bi-info-circle-fill"></i>
-                <div><?= htmlspecialchars($notice) ?></div>
+        <nav class="sidebar-scroll">
+            <div class="menu-section">
+                <div class="menu-label">Utama</div>
+                <?php foreach ($menuMain as [$href, $icon, $label]): ?>
+                    <a href="<?= e($href); ?>" class="menu-item">
+                        <span class="menu-icon"><i class="bi <?= e($icon); ?>"></i></span>
+                        <span class="menu-text"><?= e($label); ?></span>
+                    </a>
+                <?php endforeach; ?>
             </div>
-        <?php endif; ?>
 
+            <div class="menu-section">
+                <div class="menu-label">Akun</div>
+                <a href="profile.php"
+                   class="menu-item <?= $currentPage === 'profile.php' ? 'active' : ''; ?>"
+                   <?= $currentPage === 'profile.php' ? 'aria-current="page"' : ''; ?>>
+                    <span class="menu-icon"><i class="bi bi-person-circle"></i></span>
+                    <span class="menu-text">Pengaturan Akun</span>
+                </a>
+                <a href="notifikasi.php" class="menu-item">
+                    <span class="menu-icon"><i class="bi bi-bell-fill"></i></span>
+                    <span class="menu-text">Notifikasi</span>
+                </a>
+                <a href="../logout.php" class="menu-item logout-item">
+                    <span class="menu-icon"><i class="bi bi-box-arrow-right"></i></span>
+                    <span class="menu-text">Keluar</span>
+                </a>
+            </div>
+        </nav>
 
-        <!-- PROFILE HERO -->
-        <section class="profile-hero">
+        <div class="sidebar-user">
+            <div class="sidebar-user-avatar"><?= e($initial); ?></div>
+            <div class="sidebar-user-info">
+                <strong><?= e($displayName); ?></strong>
+                <span><?= $customerId > 0 ? 'ID pelanggan #' . $customerId : 'Customer'; ?></span>
+            </div>
+        </div>
+    </aside>
 
-            <div class="hero-background"></div>
+    <!-- ===================== MAIN ===================== -->
+    <main class="main-content">
 
-            <div class="hero-content">
+        <header class="topbar">
+            <div class="topbar-left">
+                <button type="button" class="mobile-menu-button" id="mobileMenuButton"
+                        aria-label="Buka menu" aria-controls="sidebar" aria-expanded="false">
+                    <i class="bi bi-list"></i>
+                </button>
+                <div>
+                    <div class="breadcrumb-text">Customer Portal <span>/</span> Profil</div>
+                    <h1>Profil Saya</h1>
+                </div>
+            </div>
 
-                <div class="avatar-wrapper">
+            <div class="topbar-right">
+                <button type="button" class="theme-toggle" id="themeToggle"
+                        aria-label="Aktifkan tema gelap" aria-pressed="false" title="Ganti tema">
+                    <i class="bi bi-moon-stars" id="themeToggleIcon"></i>
+                </button>
 
-                    <div class="profile-avatar">
-                        <?= htmlspecialchars($initial) ?>
+                <a href="notifikasi.php" class="notification-button" aria-label="Buka notifikasi" title="Notifikasi">
+                    <i class="bi bi-bell"></i>
+                </a>
+
+                <a href="profile.php" class="top-profile" aria-label="Profil saya">
+                    <div class="top-profile-avatar"><?= e($initial); ?></div>
+                    <div class="top-profile-info">
+                        <strong><?= e($displayName); ?></strong>
+                        <span><?= $customerId > 0 ? 'ID pelanggan #' . $customerId : 'Customer'; ?></span>
                     </div>
+                </a>
+            </div>
+        </header>
 
-                    <span class="online-status"></span>
+        <div class="dashboard-content">
 
+            <!-- ---------- NOTIFIKASI ---------- -->
+            <?php if ($notice !== ''): ?>
+                <div class="pf-alert" role="alert">
+                    <i class="bi bi-info-circle-fill"></i>
+                    <div><?= e($notice); ?></div>
+                </div>
+            <?php endif; ?>
+
+            <!-- ---------- HERO ---------- -->
+            <section class="pf-hero">
+                <div class="hero-decoration hero-decoration-one"></div>
+                <div class="hero-decoration hero-decoration-two"></div>
+
+                <div class="pf-avatar-wrap">
+                    <div class="pf-avatar"><?= e($initial); ?></div>
+                    <span class="pf-avatar-dot" title="Akun aktif"></span>
                 </div>
 
-                <div class="profile-main-info">
-
-                    <span class="customer-badge">
-                        <i class="bi bi-patch-check-fill"></i>
-                        Customer
-                    </span>
-
-                    <h1>
-                        <?= htmlspecialchars($customer['username']) ?>
-                    </h1>
-
+                <div class="pf-hero-info">
+                    <div class="pf-chips">
+                        <span class="pf-chip"><i class="bi bi-patch-check-fill"></i> Customer</span>
+                        <span class="pf-chip"><i class="bi bi-shield-check"></i> Akun Aktif</span>
+                    </div>
+                    <h2><?= e($displayName); ?></h2>
                     <p>
-                        <i class="bi bi-envelope"></i>
-                        <?= htmlspecialchars($customer['email']) ?>
+                        <span><i class="bi bi-envelope"></i> <?= e($email !== '' ? $email : '-'); ?></span>
+                        <span><i class="bi bi-calendar-check"></i> Bergabung sejak <?= e($joinedAt); ?></span>
                     </p>
-
                 </div>
 
+                <div class="pf-readonly-pill" title="Data profil tidak dapat diubah sendiri">
+                    <i class="bi bi-lock-fill"></i>
+                    <span>Mode hanya lihat</span>
+                </div>
+            </section>
+
+            <!-- ---------- GRID ---------- -->
+            <div class="pf-grid">
+
+                <!-- Informasi pribadi -->
+                <section class="dashboard-card pf-card">
+                    <div class="card-heading compact">
+                        <div class="pf-card-title">
+                            <div class="pf-icon blue"><i class="bi bi-person-vcard-fill"></i></div>
+                            <div>
+                                <span class="card-kicker">Data akun</span>
+                                <h3>Informasi pribadi</h3>
+                            </div>
+                        </div>
+                        <span class="pf-lock-tag"><i class="bi bi-lock-fill"></i> Hanya lihat</span>
+                    </div>
+
+                    <div class="pf-info-grid">
+                        <?php foreach ($infoItems as [$label, $icon, $color, $value, $emptyText, $copyable, $full]): ?>
+                            <?php $hasValue = $value !== ''; ?>
+                            <div class="pf-info-item <?= $full ? 'pf-span-2' : ''; ?>">
+                                <div class="pf-icon <?= e($color); ?>"><i class="bi <?= e($icon); ?>"></i></div>
+                                <div class="pf-info-text">
+                                    <span><?= e($label); ?></span>
+                                    <strong class="<?= $hasValue ? '' : 'is-empty'; ?>">
+                                        <?= e($hasValue ? $value : $emptyText); ?>
+                                    </strong>
+                                </div>
+                                <?php if ($copyable && $hasValue): ?>
+                                    <button type="button" class="pf-copy"
+                                            data-copy="<?= e($value); ?>"
+                                            aria-label="Salin <?= e($label); ?>" title="Salin">
+                                        <i class="bi bi-copy"></i>
+                                    </button>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </section>
+
+                <!-- Kolom samping -->
+                <div class="pf-side">
+
+                    <!-- Status akun -->
+                    <section class="dashboard-card pf-card">
+                        <div class="card-heading compact">
+                            <div class="pf-card-title">
+                                <div class="pf-icon green"><i class="bi bi-shield-check"></i></div>
+                                <div>
+                                    <span class="card-kicker">Keamanan</span>
+                                    <h3>Status akun</h3>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="pf-status-list">
+                            <div class="pf-status-row">
+                                <div class="pf-icon green"><i class="bi bi-check-lg"></i></div>
+                                <div>
+                                    <span>Status</span>
+                                    <strong>Akun Aktif</strong>
+                                </div>
+                            </div>
+                            <div class="pf-status-row">
+                                <div class="pf-icon purple"><i class="bi bi-person-badge-fill"></i></div>
+                                <div>
+                                    <span>Tipe akun</span>
+                                    <strong>Customer</strong>
+                                </div>
+                            </div>
+                            <div class="pf-status-row">
+                                <div class="pf-icon blue"><i class="bi bi-calendar-check-fill"></i></div>
+                                <div>
+                                    <span>Bergabung sejak</span>
+                                    <strong><?= e($joinedAt); ?></strong>
+                                </div>
+                            </div>
+                            <?php if ($customerId > 0): ?>
+                                <div class="pf-status-row">
+                                    <div class="pf-icon orange"><i class="bi bi-hash"></i></div>
+                                    <div>
+                                        <span>ID pelanggan</span>
+                                        <strong>#<?= $customerId; ?></strong>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </section>
+
+                    <!-- Bantuan ubah data -->
+                    <section class="dashboard-card help-card">
+                        <div class="help-background"></div>
+                        <div class="help-content">
+                            <div class="help-icon"><i class="bi bi-headset"></i></div>
+                            <span class="card-kicker">Perlu perubahan data?</span>
+                            <h3>Hubungi Customer Service</h3>
+                            <p>Data profil dikelola oleh tim kami. Hubungi CS jika ada informasi yang perlu diperbarui.</p>
+                            <a href="chat.php" class="help-button">
+                                <i class="bi bi-chat-dots-fill"></i> Buka live chat
+                            </a>
+                        </div>
+                    </section>
+                </div>
             </div>
 
-        </section>
-
-
-        <!-- CONTENT GRID -->
-        <div class="profile-grid">
-
-            <!-- INFORMASI PRIBADI -->
-            <section class="profile-card">
-
-                <div class="card-header-custom">
-
-                    <div class="card-title">
-
-                        <div class="title-icon blue">
-                            <i class="bi bi-person-vcard-fill"></i>
-                        </div>
-
-                        <div>
-                            <h3>Informasi Pribadi</h3>
-                            <p>Informasi dasar akun kamu</p>
-                        </div>
-
-                    </div>
-
+            <!-- ---------- AKSI CEPAT ---------- -->
+            <div class="section-title-row quick-title">
+                <div>
+                    <span class="section-kicker">Pintasan</span>
+                    <h2>Aksi cepat</h2>
                 </div>
-
-
-                <div class="card-body-custom">
-
-                    <!-- Nama -->
-                    <?php if (!empty($customer['nama'])): ?>
-                    <div class="info-row">
-
-                        <div class="info-icon">
-                            <i class="bi bi-person-lines-fill"></i>
-                        </div>
-
-                        <div class="info-content">
-                            <span>Nama Lengkap</span>
-                            <strong>
-                                <?= htmlspecialchars($customer['nama']) ?>
-                            </strong>
-                        </div>
-
-                    </div>
-                    <?php endif; ?>
-
-
-                    <!-- Username -->
-                    <div class="info-row">
-
-                        <div class="info-icon">
-                            <i class="bi bi-person-fill"></i>
-                        </div>
-
-                        <div class="info-content">
-                            <span>Nama Pengguna</span>
-                            <strong>
-                                <?= htmlspecialchars($customer['username']) ?>
-                            </strong>
-                        </div>
-
-                    </div>
-
-
-                    <!-- Email -->
-                    <div class="info-row">
-
-                        <div class="info-icon">
-                            <i class="bi bi-envelope-fill"></i>
-                        </div>
-
-                        <div class="info-content">
-                            <span>Email</span>
-                            <strong>
-                                <?= htmlspecialchars($customer['email']) ?>
-                            </strong>
-                        </div>
-
-                    </div>
-
-
-                    <!-- Telephone -->
-                    <div class="info-row">
-
-                        <div class="info-icon">
-                            <i class="bi bi-telephone-fill"></i>
-                        </div>
-
-                        <div class="info-content">
-                            <span>Nomor Telepon</span>
-
-                            <strong>
-                                <?= !empty($customer['telephone'])
-                                    ? htmlspecialchars($customer['telephone'])
-                                    : '-'
-                                ?>
-                            </strong>
-
-                        </div>
-
-                    </div>
-
-
-                    <!-- Alamat -->
-                    <div class="info-row">
-
-                        <div class="info-icon">
-                            <i class="bi bi-geo-alt-fill"></i>
-                        </div>
-
-                        <div class="info-content">
-
-                            <span>Alamat</span>
-
-                            <strong>
-                                <?= !empty($customer['alamat'])
-                                    ? htmlspecialchars($customer['alamat'])
-                                    : 'Alamat belum diisi'
-                                ?>
-                            </strong>
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-            </section>
-
-
-            <!-- STATUS AKUN -->
-            <section class="profile-card">
-
-                <div class="card-header-custom">
-
-                    <div class="card-title">
-
-                        <div class="title-icon green">
-                            <i class="bi bi-shield-check"></i>
-                        </div>
-
-                        <div>
-                            <h3>Status Akun</h3>
-                            <p>Status akun customer</p>
-                        </div>
-
-                    </div>
-
-                </div>
-
-
-                <div class="card-body-custom status-body">
-
-                    <div class="account-status">
-
-                        <div class="status-check">
-                            <i class="bi bi-check-lg"></i>
-                        </div>
-
-                        <div>
-                            <span>Status</span>
-                            <strong>Akun Aktif</strong>
-                        </div>
-
-                    </div>
-
-
-                    <div class="account-status">
-
-                        <div class="status-icon">
-                            <i class="bi bi-person-badge-fill"></i>
-                        </div>
-
-                        <div>
-                            <span>Tipe Akun</span>
-                            <strong>Customer</strong>
-                        </div>
-
-                    </div>
-
-
-                    <div class="account-status">
-
-                        <div class="status-icon">
-                            <i class="bi bi-calendar-check-fill"></i>
-                        </div>
-
-                        <div>
-
-                            <span>Bergabung Sejak</span>
-
-                            <strong>
-                                <?=
-                                    !empty($customer['created_at'])
-                                    ? date('d F Y', strtotime($customer['created_at']))
-                                    : '-'
-                                ?>
-                            </strong>
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-            </section>
-
-
-            <!-- AKSI CEPAT -->
-            <section class="profile-card quick-card">
-
-                <div class="card-header-custom">
-
-                    <div class="card-title">
-
-                        <div class="title-icon purple">
-                            <i class="bi bi-lightning-charge-fill"></i>
-                        </div>
-
-                        <div>
-                            <h3>Aksi Cepat</h3>
-                            <p>Akses layanan customer</p>
-                        </div>
-
-                    </div>
-
-                </div>
-
-
-                <div class="quick-actions">
-
-                    <a href="installation.php" class="quick-action">
-
-                        <div class="quick-icon blue">
-                            <i class="bi bi-router-fill"></i>
-                        </div>
-
-                        <div>
-                            <strong>Instalasi</strong>
-                            <span>Lihat instalasi WiFi</span>
-                        </div>
-
-                        <i class="bi bi-chevron-right arrow"></i>
-
+            </div>
+
+            <div class="quick-services">
+                <?php foreach ($quickServices as [$href, $color, $icon, $title, $desc]): ?>
+                    <a href="<?= e($href); ?>" class="quick-service">
+                        <div class="quick-icon <?= e($color); ?>"><i class="bi <?= e($icon); ?>"></i></div>
+                        <div><strong><?= e($title); ?></strong><span><?= e($desc); ?></span></div>
+                        <i class="bi bi-arrow-up-right"></i>
                     </a>
+                <?php endforeach; ?>
+            </div>
 
-
-                    <a href="complaint.php" class="quick-action">
-
-                        <div class="quick-icon orange">
-                            <i class="bi bi-ticket-detailed-fill"></i>
-                        </div>
-
-                        <div>
-                            <strong>Complaint</strong>
-                            <span>Lihat laporan gangguan</span>
-                        </div>
-
-                        <i class="bi bi-chevron-right arrow"></i>
-
-                    </a>
-
-                    <!-- Tombol Edit Profile dihapus (fitur dinonaktifkan) -->
-
-                </div>
-
-            </section>
-
+            <!-- ---------- FOOTER ---------- -->
+            <footer class="dashboard-footer pf-footer">
+                <span><i class="bi bi-shield-lock-fill"></i> Data akun kamu tersimpan dengan aman</span>
+                <a href="../logout.php">Logout <i class="bi bi-box-arrow-right"></i></a>
+            </footer>
         </div>
-
-
-        <!-- FOOTER -->
-        <div class="profile-footer">
-
-            <span>
-                <i class="bi bi-shield-lock-fill"></i>
-                Data akun kamu tersimpan dengan aman
-            </span>
-
-            <a href="../logout.php">
-                Logout
-                <i class="bi bi-box-arrow-right"></i>
-            </a>
-
-        </div>
-
     </main>
-
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+    /* ---------------- SIDEBAR MOBILE ---------------- */
+
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    const mobileButton = document.getElementById('mobileMenuButton');
+    const closeButton = document.getElementById('sidebarClose');
+
+    function isMobile() {
+        return window.matchMedia
+            ? window.matchMedia('(max-width: 900px)').matches
+            : window.innerWidth <= 900;
+    }
+
+    function toggleSidebar(open) {
+        if (!sidebar) { return; }
+        sidebar.classList.toggle('show', open);
+        if (overlay) {
+            overlay.classList.toggle('show', open);
+            overlay.setAttribute('aria-hidden', open ? 'false' : 'true');
+        }
+        document.body.classList.toggle('sidebar-open', open);
+        if (mobileButton) { mobileButton.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+
+        if (isMobile()) {
+            sidebar.setAttribute('aria-hidden', open ? 'false' : 'true');
+            if (open) { sidebar.removeAttribute('inert'); } else { sidebar.setAttribute('inert', ''); }
+        } else {
+            sidebar.removeAttribute('aria-hidden');
+            sidebar.removeAttribute('inert');
+        }
+
+        if (!open && document.activeElement === closeButton && mobileButton) {
+            mobileButton.focus();
+        }
+    }
+
+    if (mobileButton) { mobileButton.addEventListener('click', function () { toggleSidebar(true); }); }
+    if (closeButton) { closeButton.addEventListener('click', function () { toggleSidebar(false); }); }
+    if (overlay) { overlay.addEventListener('click', function () { toggleSidebar(false); }); }
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') { toggleSidebar(false); }
+    });
+    window.addEventListener('resize', function () {
+        if (!isMobile()) { toggleSidebar(false); }
+    });
+    toggleSidebar(false);
+
+    /* ---------------- TEMA (sama dengan dashboard) ---------------- */
+
+    const themeToggle = document.getElementById('themeToggle');
+    const themeToggleIcon = document.getElementById('themeToggleIcon');
+
+    function applyTheme(theme) {
+        const isDark = theme === 'dark';
+        document.body.dataset.theme = isDark ? 'dark' : 'light';
+        if (themeToggle) {
+            themeToggle.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+            themeToggle.setAttribute('aria-label', isDark ? 'Aktifkan tema terang' : 'Aktifkan tema gelap');
+        }
+        if (themeToggleIcon) {
+            themeToggleIcon.className = isDark ? 'bi bi-sun' : 'bi bi-moon-stars';
+        }
+    }
+
+    try {
+        applyTheme(localStorage.getItem('yesnet-customer-theme') || 'light');
+    } catch (error) {
+        applyTheme('light');
+    }
+
+    if (themeToggle) {
+        themeToggle.addEventListener('click', function () {
+            const next = document.body.dataset.theme === 'dark' ? 'light' : 'dark';
+            applyTheme(next);
+            try { localStorage.setItem('yesnet-customer-theme', next); } catch (error) {}
+        });
+    }
+
+    /* ---------------- SALIN DATA ---------------- */
+
+    function fallbackCopy(text) {
+        const area = document.createElement('textarea');
+        area.value = text;
+        area.setAttribute('readonly', '');
+        area.style.position = 'fixed';
+        area.style.opacity = '0';
+        document.body.appendChild(area);
+        area.select();
+        try { document.execCommand('copy'); } catch (error) {}
+        document.body.removeChild(area);
+    }
+
+    document.querySelectorAll('.pf-copy').forEach(function (button) {
+        button.addEventListener('click', function () {
+            const text = button.dataset.copy || '';
+            const done = function () {
+                const icon = button.querySelector('i');
+                if (!icon) { return; }
+                icon.className = 'bi bi-check-lg';
+                button.classList.add('is-copied');
+                window.setTimeout(function () {
+                    icon.className = 'bi bi-copy';
+                    button.classList.remove('is-copied');
+                }, 1500);
+            };
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(done).catch(function () {
+                    fallbackCopy(text);
+                    done();
+                });
+            } else {
+                fallbackCopy(text);
+                done();
+            }
+        });
+    });
+});
+</script>
 
 </body>
 </html>
