@@ -14,7 +14,6 @@ date_default_timezone_set('Asia/Jakarta');
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-
 /*
 |--------------------------------------------------------------------------
 | HELPER
@@ -136,7 +135,6 @@ function normalizeSubscriptionStatus($status): string
     return 'belum_berlangganan';
 }
 
-
 /*
 |--------------------------------------------------------------------------
 | CEK LOGIN
@@ -149,7 +147,6 @@ if ($userId <= 0) {
     header("Location: ../login.php");
     exit;
 }
-
 
 /*
 |--------------------------------------------------------------------------
@@ -171,7 +168,6 @@ $paketHarga = 0;
 $totalGangguan = 0;
 $unreadNotifications = 0;
 
-
 /*
 |--------------------------------------------------------------------------
 | CEK TABEL CUSTOMER
@@ -187,7 +183,6 @@ if (!columnExists($conn, 'customers', 'user_id')) {
     http_response_code(500);
     die("Struktur tabel customers belum sesuai. Kolom user_id tidak ditemukan.");
 }
-
 
 /*
 |--------------------------------------------------------------------------
@@ -287,7 +282,6 @@ $paketSpeedLabel = $paketSpeedMbps !== null && $paketSpeedMbps > 0
     ? formatAngka($paketSpeedMbps, 0) . ' Mbps'
     : '-';
 
-
 /*
 |--------------------------------------------------------------------------
 | RENTANG WAKTU
@@ -304,7 +298,6 @@ if (!in_array($range, $allowedRanges, true)) {
 $startDate = date('Y-m-d', strtotime('-' . ($range - 1) . ' days'));
 $startDateTime = $startDate . ' 00:00:00';
 $endDateTime = date('Y-m-d', strtotime('+1 day')) . ' 00:00:00';
-
 
 /*
 |--------------------------------------------------------------------------
@@ -430,7 +423,6 @@ $isLive = $lastReadingTs !== false
 $telemetryState = $isLive ? 'is-live' : ($lastReadingTs !== false ? 'is-historical' : 'is-unavailable');
 $telemetryLabel = $isLive ? 'LIVE' : ($lastReadingTs !== false ? 'HISTORIS' : 'BELUM TERSEDIA');
 
-
 /*
 |--------------------------------------------------------------------------
 | DATA GRAFIK (hari tanpa data = null, bukan nilai karangan)
@@ -466,7 +458,6 @@ $downloadVsPackage = $hasUsageData
     ? ($avgDownload / $paketSpeedMbps) * 100
     : null;
 
-
 /*
 |--------------------------------------------------------------------------
 | TOTAL GANGGUAN (badge menu)
@@ -496,7 +487,6 @@ if (
     }
 }
 
-
 /*
 |--------------------------------------------------------------------------
 | NOTIFIKASI BELUM DIBACA
@@ -525,7 +515,6 @@ if (
     }
 }
 
-
 /*
 |--------------------------------------------------------------------------
 | STATUS DISPLAY
@@ -541,7 +530,6 @@ $statusLabels = [
 ];
 
 $statusLabel = $statusLabels[$statusLangganan] ?? 'Belum Berlangganan';
-
 
 /*
 |--------------------------------------------------------------------------
@@ -590,32 +578,21 @@ $chartPayload = [
     <!-- Dashboard CSS (dasar) -->
     <link rel="stylesheet" href="assets/css/dashboard.css">
 
-<<<<<<< HEAD
 <link rel="stylesheet" href="assets/css/portal-unified.css">
 <script defer src="assets/js/portal-ui.js"></script>
 
-<link
-    rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
->
-=======
     <!-- Usage CSS (khusus halaman ini) -->
     <link rel="stylesheet" href="assets/css/usage.css?v=6">
->>>>>>> 087063f454993fe1c671edb6d2cef597f3d93c20
 
 </head>
-
 
 <body class="dashboard-page">
 
 <div class="customer-layout">
 
-
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-
-    <!-- =====================================================
-         SIDEBAR
+    <!-- ==============================================         SIDEBAR
     ====================================================== -->
 
     <aside class="sidebar" id="sidebar">
@@ -636,7 +613,6 @@ $chartPayload = [
             </button>
 
         </div>
-
 
         <div class="sidebar-scroll">
 
@@ -689,7 +665,6 @@ $chartPayload = [
 
             </div>
 
-
             <div class="menu-section">
 
                 <div class="menu-label">LAYANAN</div>
@@ -724,7 +699,6 @@ $chartPayload = [
 
             </div>
 
-
             <div class="menu-section">
 
                 <div class="menu-label">AKUN</div>
@@ -748,7 +722,6 @@ $chartPayload = [
 
         </div>
 
-
         <div class="sidebar-user">
 
             <div class="sidebar-user-avatar"><?= e($avatar); ?></div>
@@ -764,9 +737,7 @@ $chartPayload = [
 
     </aside>
 
-
-    <!-- =====================================================
-         MAIN CONTENT
+    <!-- ==============================================         MAIN CONTENT
     ====================================================== -->
 
     <main class="main-content">
@@ -829,12 +800,9 @@ $chartPayload = [
 
         </header>
 
-
         <div class="dashboard-content">
 
-
-            <!-- =================================================
-                 HEADER HALAMAN + FILTER RENTANG
+            <!-- ==========================================                 HEADER HALAMAN + FILTER RENTANG
             ================================================== -->
 
             <div class="section-title-row usage-head">
@@ -856,9 +824,7 @@ $chartPayload = [
 
             </div>
 
-
-            <!-- =================================================
-                 STATISTIK
+            <!-- ==========================================                 STATISTIK
             ================================================== -->
 
             <div class="stats-grid">
@@ -934,9 +900,7 @@ $chartPayload = [
 
             </div>
 
-
-            <!-- =================================================
-                 GRID UTAMA
+            <!-- ==========================================                 GRID UTAMA
             ================================================== -->
 
             <div class="main-grid">
@@ -960,7 +924,6 @@ $chartPayload = [
                             </div>
 
                         </div>
-
 
                         <div class="chart-summary">
 
@@ -998,7 +961,6 @@ $chartPayload = [
 
                         </div>
 
-
                         <div class="chart-container" <?= $hasUsageData ? '' : 'hidden'; ?>>
                             <canvas id="usageChart"></canvas>
                         </div>
@@ -1030,7 +992,6 @@ $chartPayload = [
                     </div>
 
                 </div>
-
 
                 <!-- KANAN -->
                 <div class="side-column">
@@ -1110,7 +1071,6 @@ $chartPayload = [
 
                     </div>
 
-
                     <div class="dashboard-card usage-status-card">
 
                         <div class="card-heading compact">
@@ -1148,9 +1108,7 @@ $chartPayload = [
 
             </div>
 
-
-            <!-- =================================================
-                 RIWAYAT PENGUKURAN
+            <!-- ==========================================                 RIWAYAT PENGUKURAN
             ================================================== -->
 
             <div class="dashboard-card usage-history">
@@ -1246,7 +1204,6 @@ $chartPayload = [
 
             </div>
 
-
             <div class="usage-note">
                 <i class="bi bi-info-circle"></i>
                 <span>
@@ -1255,7 +1212,6 @@ $chartPayload = [
                     hanya menampilkan kecepatan dan latensi.
                 </span>
             </div>
-
 
             <footer class="dashboard-footer">
                 <span>© <?= date('Y'); ?> YESNET</span>
@@ -1267,7 +1223,6 @@ $chartPayload = [
     </main>
 
 </div>
-
 
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -1408,7 +1363,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-
     /*
     |----------------------------------------------------------------------
     | MOBILE SIDEBAR
@@ -1451,7 +1405,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (overlay) {
         overlay.addEventListener('click', closeSidebar);
     }
-
 
     /*
     |----------------------------------------------------------------------

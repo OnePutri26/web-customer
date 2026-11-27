@@ -14,7 +14,6 @@ date_default_timezone_set('Asia/Jakarta');
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-
 /*
 |--------------------------------------------------------------------------
 | HELPER
@@ -30,7 +29,6 @@ function e($value): string
     );
 }
 
-
 function rupiah($value): string
 {
     return 'Rp ' . number_format(
@@ -40,7 +38,6 @@ function rupiah($value): string
         '.'
     );
 }
-
 
 function formatSpeed($mbps): string
 {
@@ -54,7 +51,6 @@ function formatSpeed($mbps): string
 
     return number_format($mbps, 0, ',', '.') . ' Mbps';
 }
-
 
 function tableExists(
     mysqli $conn,
@@ -70,7 +66,6 @@ function tableExists(
     return $result &&
            $result->num_rows > 0;
 }
-
 
 function columnExists(
     mysqli $conn,
@@ -88,7 +83,6 @@ function columnExists(
     return $result &&
            $result->num_rows > 0;
 }
-
 
 /**
  * Mengambil seluruh hasil prepared statement.
@@ -138,7 +132,6 @@ function statementFetchAll(mysqli_stmt $stmt): array
     return $rows;
 }
 
-
 function normalizeSubscriptionStatus($status): string
 {
     $status = strtolower(trim((string) $status));
@@ -162,7 +155,6 @@ function normalizeSubscriptionStatus($status): string
     return 'belum_berlangganan';
 }
 
-
 function jsonResponse(array $payload, int $status = 200): void
 {
     http_response_code($status);
@@ -174,7 +166,6 @@ function jsonResponse(array $payload, int $status = 200): void
 
     exit;
 }
-
 
 /*
 |--------------------------------------------------------------------------
@@ -191,7 +182,6 @@ if ($userId <= 0) {
     exit;
 }
 
-
 /*
 |--------------------------------------------------------------------------
 | CSRF
@@ -203,7 +193,6 @@ if (empty($_SESSION['csrf_upgrade'])) {
 }
 
 $csrfToken = $_SESSION['csrf_upgrade'];
-
 
 /*
 |--------------------------------------------------------------------------
@@ -232,7 +221,6 @@ $statusColumnExists = false;
 $packages = [];
 $pendingRequest = null;
 $requestTableReady = false;
-
 
 /*
 |--------------------------------------------------------------------------
@@ -314,7 +302,6 @@ $avatar = strtoupper(
     )
 );
 
-
 /*
 |--------------------------------------------------------------------------
 | PAKET SAAT INI (tabel paket_wifi)
@@ -373,7 +360,6 @@ if ($paketTableReady) {
         }
     }
 
-
     /*
     |--------------------------------------------------------------------------
     | DAFTAR PAKET YANG BISA DI-UPGRADE
@@ -417,7 +403,6 @@ if ($paketTableReady) {
     }
 }
 
-
 /*
 |--------------------------------------------------------------------------
 | TABEL PENGAJUAN UPGRADE
@@ -454,7 +439,6 @@ if ($requestTableReady && $customerId > 0) {
         error_log('Upgrade YESNET pending request query failed: ' . $e->getMessage());
     }
 }
-
 
 /*
 |--------------------------------------------------------------------------
@@ -551,7 +535,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-
 /*
 |--------------------------------------------------------------------------
 | BADGE SIDEBAR: LAPORAN GANGGUAN AKTIF
@@ -587,7 +570,6 @@ if (
     }
 }
 
-
 /*
 |--------------------------------------------------------------------------
 | NOTIFIKASI BELUM DIBACA
@@ -615,7 +597,6 @@ if (
         error_log('Upgrade YESNET notification count failed: ' . $e->getMessage());
     }
 }
-
 
 /*
 |--------------------------------------------------------------------------
@@ -670,14 +651,12 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         Upgrade Paket - YESNET
     </title>
 
-
     <!-- Bootstrap -->
 
     <link
         href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
         rel="stylesheet"
     >
-
 
     <!-- Bootstrap Icons -->
 
@@ -686,36 +665,17 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         rel="stylesheet"
     >
 
-
-<<<<<<< HEAD
-    <!-- CSS Upgrade -->
-    <link rel="stylesheet" href="assets/css/upgrade.css">
+    <!-- Stylesheet halaman dan layout customer -->
+    <link rel="stylesheet" href="assets/css/dashboard.css">
     <link rel="stylesheet" href="assets/css/portal-unified.css">
+    <link rel="stylesheet" href="assets/css/upgrade.css">
     <script defer src="assets/js/portal-ui.js"></script>
-=======
-    <!-- Dashboard CSS (shell bersama) -->
 
-    <link
-        rel="stylesheet"
-        href="assets/css/dashboard.css"
-    >
-
-
-    <!-- Halaman Upgrade -->
-
-    <link
-        rel="stylesheet"
-        href="assets/css/upgrade.css"
-    >
-
->>>>>>> 087063f454993fe1c671edb6d2cef597f3d93c20
 </head>
-
 
 <body class="dashboard-page">
 
 <div class="customer-layout">
-
 
     <!-- =====================================================
          MOBILE OVERLAY
@@ -725,7 +685,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         class="sidebar-overlay"
         id="sidebarOverlay"
     ></div>
-
 
     <!-- =====================================================
          SIDEBAR
@@ -756,7 +715,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             </button>
 
         </div>
-
 
         <div class="sidebar-scroll">
 
@@ -833,7 +791,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
             </div>
 
-
             <div class="menu-section">
 
                 <div class="menu-label">LAYANAN</div>
@@ -868,7 +825,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
             </div>
 
-
             <div class="menu-section">
 
                 <div class="menu-label">AKUN</div>
@@ -892,7 +848,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
         </div>
 
-
         <!-- SIDEBAR USER -->
 
         <div class="sidebar-user">
@@ -912,13 +867,11 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
     </aside>
 
-
     <!-- =====================================================
          MAIN CONTENT
     ====================================================== -->
 
     <main class="main-content">
-
 
         <!-- TOPBAR -->
 
@@ -947,7 +900,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 </div>
 
             </div>
-
 
             <div class="topbar-right">
 
@@ -994,11 +946,9 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
         </header>
 
-
         <!-- CONTENT -->
 
         <div class="dashboard-content">
-
 
             <?php if ($statusLangganan !== 'active'): ?>
 
@@ -1059,7 +1009,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
             <?php else: ?>
 
-
                 <!-- =============================================
                      HERO
                 ============================================== -->
@@ -1103,7 +1052,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                     </div>
 
                 </section>
-
 
                 <!-- =============================================
                      PAKET SAAT INI
@@ -1162,7 +1110,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
                 </section>
 
-
                 <!-- =============================================
                      PENGAJUAN SEDANG DIPROSES
                 ============================================== -->
@@ -1214,7 +1161,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
                 <?php endif; ?>
 
-
                 <!-- =============================================
                      DAFTAR PAKET
                 ============================================== -->
@@ -1237,7 +1183,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                     <?php endif; ?>
 
                 </div>
-
 
                 <?php if (!$paketTableReady): ?>
 
@@ -1374,7 +1319,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
                 <?php endif; ?>
 
-
                 <!-- =============================================
                      INFORMASI
                 ============================================== -->
@@ -1403,7 +1347,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
             <?php endif; ?>
 
-
             <!-- FOOTER -->
 
             <footer class="dashboard-footer">
@@ -1422,7 +1365,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     </main>
 
 </div>
-
 
 <!-- =====================================================
      MODAL KONFIRMASI
@@ -1504,7 +1446,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
 </dialog>
 
-
 <script>
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -1560,7 +1501,6 @@ document.addEventListener('DOMContentLoaded', function () {
         overlay.addEventListener('click', closeSidebar);
     }
 
-
     /*
     |--------------------------------------------------------------------------
     | THEME
@@ -1610,7 +1550,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
-
 
     /*
     |--------------------------------------------------------------------------
