@@ -84,6 +84,43 @@ function columnExists(
            $result->num_rows > 0;
 }
 
+/** Kolom pertama yang benar-benar ada di tabel (daftar kandidat tetap, aman untuk SQL). */
+function firstExistingColumn(
+    mysqli $conn,
+    string $table,
+    array $candidates
+): ?string {
+
+    foreach ($candidates as $column) {
+        if (columnExists($conn, $table, $column)) {
+            return $column;
+        }
+    }
+
+    return null;
+}
+
+/** Normalisasi wilayah agar "JATIM", " jatim " dan "Jatim" dianggap sama. */
+function normalizeRegion($value): string
+{
+    $value = preg_replace('/\s+/u', ' ', trim((string) $value)) ?? '';
+
+    return mb_strtolower($value, 'UTF-8');
+}
+
+/** Label tampilan wilayah (hanya untuk teks, bukan untuk filter). */
+function regionLabel($value): string
+{
+    $map = [
+        'jatim'   => 'Surabaya (Jawa Timur)',
+        'jakarta' => 'Jakarta',
+    ];
+
+    $key = normalizeRegion($value);
+
+    return $map[$key] ?? trim((string) $value);
+}
+
 /**
  * Mengambil seluruh hasil prepared statement.
  * Mendukung hosting dengan maupun tanpa mysqlnd.
@@ -216,6 +253,7 @@ $unreadNotifications = 0;
 
 $currentPaket = null;
 $regionColumn = null;
+$regionUnknown = false;
 $statusColumnExists = false;
 
 $packages = [];
@@ -306,6 +344,9 @@ $avatar = strtoupper(
 |--------------------------------------------------------------------------
 | PAKET SAAT INI (tabel paket_wifi)
 |--------------------------------------------------------------------------
+| Sumber utama: langganan aktif terbaru milik pelanggan (tabel subscription).
+| Cadangan: customers.paket_id.
+| Kecepatan dan wilayah SELALU dibaca dari baris paket_wifi paket aktif tersebut.
 */
 
 $paketTableReady =
@@ -319,13 +360,12 @@ if ($paketTableReady) {
 
     $statusColumnExists = columnExists($conn, 'paket_wifi', 'status');
 
-    // Kolom wilayah/area paket (JATIM, JAKARTA, dst.). Nama kolom dideteksi otomatis.
-    foreach (['wilayah', 'area', 'region', 'lokasi', 'kota'] as $candidate) {
-        if (columnExists($conn, 'paket_wifi', $candidate)) {
-            $regionColumn = $candidate;
-            break;
-        }
-    }
+    // Kolom wilayah paket (JATIM, JAKARTA, dst.). Nama kolom dideteksi otomatis.
+    $regionColumn = firstExistingColumn(
+        $conn,
+        'paket_wifi',
+        ['wilayah', 'nama_wilayah', 'lokasi', 'kota', 'area', 'region', 'cabang', 'wilayah_id', 'id_wilayah']
+    );
 
     $hasDescription = columnExists($conn, 'paket_wifi', 'deskripsi');
 
@@ -339,9 +379,48 @@ if ($paketTableReady) {
         $selectColumns .= ", deskripsi";
     }
 
+    // Cadangan: paket_id pada customers
     $paketId = (int) ($customer['paket_id'] ?? 0);
 
-    if ($paketId > 0 && columnExists($conn, 'customers', 'paket_id')) {
+    // Utama: langganan aktif terbaru
+    if (
+        $customerId > 0 &&
+        tableExists($conn, 'subscription') &&
+        columnExists($conn, 'subscription', 'id') &&
+        columnExists($conn, 'subscription', 'id_customer') &&
+        columnExists($conn, 'subscription', 'status')
+    ) {
+        $subPaketCol = firstExistingColumn(
+            $conn,
+            'subscription',
+            ['paket_id', 'id_paket']
+        );
+
+        if ($subPaketCol !== null) {
+            try {
+                $stmt = $conn->prepare("
+                    SELECT `{$subPaketCol}` AS paket_id
+                    FROM subscription
+                    WHERE id_customer = ?
+                      AND LOWER(TRIM(status)) IN ('active', 'aktif')
+                    ORDER BY id DESC
+                    LIMIT 1
+                ");
+                $stmt->bind_param("i", $customerId);
+                $stmt->execute();
+                $subRows = statementFetchAll($stmt);
+                $stmt->close();
+
+                if (!empty($subRows) && (int) ($subRows[0]['paket_id'] ?? 0) > 0) {
+                    $paketId = (int) $subRows[0]['paket_id'];
+                }
+            } catch (Throwable $e) {
+                error_log('Upgrade YESNET subscription lookup failed: ' . $e->getMessage());
+            }
+        }
+    }
+
+    if ($paketId > 0) {
         try {
             $stmt = $conn->prepare("
                 SELECT {$selectColumns}
@@ -364,41 +443,59 @@ if ($paketTableReady) {
     |--------------------------------------------------------------------------
     | DAFTAR PAKET YANG BISA DI-UPGRADE
     |--------------------------------------------------------------------------
-    | Hanya paket aktif, di wilayah yang sama dengan paket saat ini,
-    | dan dengan kecepatan lebih tinggi.
+    | Hanya paket aktif, di wilayah yang SAMA dengan paket saat ini,
+    | dan dengan kecepatan LEBIH TINGGI.
+    | Jika kolom wilayah ada tetapi wilayah paket saat ini kosong,
+    | tidak ada paket yang ditampilkan (agar paket wilayah lain tidak bocor).
     */
 
     if ($currentPaket !== null) {
-        try {
-            $sql = "
-                SELECT {$selectColumns}
-                FROM paket_wifi
-                WHERE speed_mbps > ?
-            ";
 
-            $types = "d";
-            $params = [(float) $currentPaket['speed_mbps']];
+        $currentRegionKey = normalizeRegion($currentPaket['wilayah'] ?? '');
 
-            if ($statusColumnExists) {
-                $sql .= " AND LOWER(status) IN ('aktif', 'active')";
-            }
+        if ($regionColumn !== null && $currentRegionKey === '') {
 
-            if ($regionColumn !== null && !empty($currentPaket['wilayah'])) {
-                $sql .= " AND `{$regionColumn}` = ?";
-                $types .= "s";
-                $params[] = (string) $currentPaket['wilayah'];
-            }
-
-            $sql .= " ORDER BY speed_mbps ASC, harga ASC, id ASC";
-
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param($types, ...$params);
-            $stmt->execute();
-            $packages = statementFetchAll($stmt);
-            $stmt->close();
-        } catch (Throwable $e) {
-            error_log('Upgrade YESNET package list query failed: ' . $e->getMessage());
+            $regionUnknown = true;
             $packages = [];
+            error_log('Upgrade YESNET: wilayah paket aktif kosong, daftar upgrade dikosongkan.');
+
+        } else {
+
+            try {
+                $sql = "
+                    SELECT {$selectColumns}
+                    FROM paket_wifi
+                    WHERE speed_mbps > ?
+                      AND id <> ?
+                ";
+
+                $types = "di";
+                $params = [
+                    (float) $currentPaket['speed_mbps'],
+                    (int) $currentPaket['id'],
+                ];
+
+                if ($statusColumnExists) {
+                    $sql .= " AND LOWER(TRIM(status)) IN ('aktif', 'active')";
+                }
+
+                if ($regionColumn !== null) {
+                    $sql .= " AND LOWER(TRIM(CAST(`{$regionColumn}` AS CHAR))) = ?";
+                    $types .= "s";
+                    $params[] = $currentRegionKey;
+                }
+
+                $sql .= " ORDER BY speed_mbps ASC, harga ASC, id ASC";
+
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param($types, ...$params);
+                $stmt->execute();
+                $packages = statementFetchAll($stmt);
+                $stmt->close();
+            } catch (Throwable $e) {
+                error_log('Upgrade YESNET package list query failed: ' . $e->getMessage());
+                $packages = [];
+            }
         }
     }
 }
@@ -616,14 +713,16 @@ $currentPrice = $currentPaket
     ? (float) $currentPaket['harga']
     : 0.0;
 
+// Label hanya untuk tampilan. Filter di atas memakai nilai asli dari database.
 $currentRegion = ($currentPaket && !empty($currentPaket['wilayah']))
-    ? (string) $currentPaket['wilayah']
+    ? regionLabel($currentPaket['wilayah'])
     : '';
 
 $canUpgrade = $statusLangganan === 'active'
     && $currentPaket !== null
     && $requestTableReady
-    && $pendingRequest === null;
+    && $pendingRequest === null
+    && !$regionUnknown;
 
 $currentPage = basename($_SERVER['PHP_SELF']);
 
@@ -1200,6 +1299,17 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                         <span>Kami belum bisa menentukan paket upgrade untuk akun kamu.</span>
                     </div>
 
+                <?php elseif ($regionUnknown): ?>
+
+                    <div class="up-empty">
+                        <i class="bi bi-geo-alt"></i>
+                        <strong>Wilayah paket aktif belum tersedia</strong>
+                        <span>
+                            Kami belum dapat menentukan wilayah paket kamu, sehingga pilihan
+                            upgrade belum dapat ditampilkan. Hubungi Customer Service.
+                        </span>
+                    </div>
+
                 <?php elseif (empty($packages)): ?>
 
                     <div class="up-empty">
@@ -1290,7 +1400,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                                     <?php if (!empty($package['wilayah'])): ?>
                                         <li>
                                             <i class="bi bi-check-circle-fill"></i>
-                                            <span>Wilayah <?= e($package['wilayah']); ?></span>
+                                            <span>Wilayah <?= e(regionLabel($package['wilayah'])); ?></span>
                                         </li>
                                     <?php endif; ?>
 

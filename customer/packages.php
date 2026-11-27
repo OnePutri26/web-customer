@@ -192,11 +192,22 @@ function isTruthyFlag($value): bool
     return in_array(strtolower(trim((string) $value)), ['1', 'ya', 'yes', 'true', 'aktif', 'rekomendasi', 'recommended'], true);
 }
 
-/** Normalisasi wilayah agar "Surabaya", " surabaya " dan "SURABAYA" dianggap sama. */
+/** Normalisasi wilayah agar "JATIM", " jatim " dan "Jatim" dianggap sama. */
 function normalizeRegion($value): string
 {
     $value = preg_replace('/\s+/u', ' ', trim((string) $value)) ?? '';
     return mb_strtolower($value, 'UTF-8');
+}
+
+/** Label tampilan wilayah (hanya untuk teks, bukan untuk filter). */
+function regionLabel($value): string
+{
+    $map = [
+        'jatim'   => 'Surabaya (Jawa Timur)',
+        'jakarta' => 'Jakarta',
+    ];
+    $key = normalizeRegion($value);
+    return $map[$key] ?? trim((string) $value);
 }
 
 /** Pecah teks fasilitas menjadi daftar butir (baris baru, ; | atau koma). */
@@ -369,6 +380,9 @@ $applyUpgradeFilter = $statusLangganan === 'active' && $hasCurrent && $paketSpee
 $currentRegionKey   = normalizeRegion($paketWilayah);
 $applyRegionFilter  = $applyUpgradeFilter && $regionCol !== null && $currentRegionKey !== '';
 $regionUnknown      = $applyUpgradeFilter && $regionCol !== null && $currentRegionKey === '';
+
+/* Label hanya untuk tampilan. Kunci filter di atas diambil dari nilai asli database. */
+$paketWilayah = regionLabel($paketWilayah);
 
 if ($applyUpgradeFilter && $regionCol === null) {
     error_log('Packages YESNET: kolom wilayah tidak ditemukan di paket_wifi, filter wilayah tidak diterapkan.');
