@@ -192,6 +192,13 @@ function isTruthyFlag($value): bool
     return in_array(strtolower(trim((string) $value)), ['1', 'ya', 'yes', 'true', 'aktif', 'rekomendasi', 'recommended'], true);
 }
 
+/** Normalisasi wilayah agar "Surabaya", " surabaya " dan "SURABAYA" dianggap sama. */
+function normalizeRegion($value): string
+{
+    $value = preg_replace('/\s+/u', ' ', trim((string) $value)) ?? '';
+    return mb_strtolower($value, 'UTF-8');
+}
+
 /** Pecah teks fasilitas menjadi daftar butir (baris baru, ; | atau koma). */
 function parseBenefits($text): array
 {
@@ -219,6 +226,7 @@ $packages = [];
 $paketNama = null;
 $paketSpeed = null;
 $paketHarga = null;
+$paketWilayah = '';
 $currentPaketId = 0;
 
 /* ======================== CUSTOMER ======================== */
@@ -234,6 +242,11 @@ if (!tableExists($conn, 'customers')
 $paketTableReady = allColumnsExist($conn, 'paket_wifi', ['id', 'nama_paket', 'speed_mbps', 'harga']);
 $customerHasPaketId = columnExists($conn, 'customers', 'paket_id');
 $customerStatusAvailable = columnExists($conn, 'customers', 'status_langganan');
+
+/* Kolom wilayah pada paket_wifi (daftar kandidat tetap, aman untuk SQL). */
+$regionCol = $paketTableReady
+    ? firstExistingColumn($conn, 'paket_wifi', ['wilayah', 'nama_wilayah', 'lokasi', 'kota', 'area', 'region', 'cabang', 'wilayah_id', 'id_wilayah'])
+    : null;
 
 $customerSelect = ['c.id'];
 foreach (['paket_id', 'status_langganan', 'nama', 'name'] as $column) {
@@ -288,7 +301,8 @@ if (!isset($statusMap[$statusLangganan])) {
 
 /* ======================== PAKET AKTIF PELANGGAN ======================== */
 /* Sumber utama: langganan aktif terakhir milik pelanggan yang login (tabel subscription).
-   Jika tabel/kolomnya tidak ada atau tidak ada langganan aktif, pakai customers.paket_id. */
+   Jika tabel/kolomnya tidak ada atau tidak ada langganan aktif, pakai customers.paket_id.
+   Kecepatan dan wilayah SELALU diambil dari baris paket_wifi milik paket aktif tersebut. */
 
 if ($customerHasPaketId) {
     $currentPaketId = (int) ($customer['paket_id'] ?? 0);
@@ -323,9 +337,11 @@ if (
 
 if ($currentPaketId > 0 && $paketTableReady) {
     try {
+        $curSelect = 'nama_paket, speed_mbps, harga'
+            . ($regionCol !== null ? ", `{$regionCol}` AS wilayah" : ', NULL AS wilayah');
         $curRows = queryRows(
             $conn,
-            'SELECT nama_paket, speed_mbps, harga FROM paket_wifi WHERE id = ? LIMIT 1',
+            "SELECT {$curSelect} FROM paket_wifi WHERE id = ? LIMIT 1",
             'i',
             [$currentPaketId]
         );
@@ -334,6 +350,7 @@ if ($currentPaketId > 0 && $paketTableReady) {
             $paketNama = trim((string) ($cur['nama_paket'] ?? '')) ?: null;
             $paketSpeed = is_numeric($cur['speed_mbps'] ?? null) ? (float) $cur['speed_mbps'] : null;
             $paketHarga = is_numeric($cur['harga'] ?? null) ? (float) $cur['harga'] : null;
+            $paketWilayah = trim((string) ($cur['wilayah'] ?? ''));
         }
     } catch (Throwable $e) {
         error_log('Packages YESNET current package lookup failed: ' . $e->getMessage());
@@ -344,6 +361,18 @@ $hasCurrent = $currentPaketId > 0 && $paketNama !== null && $paketNama !== '';
 
 /* Filter upgrade hanya berlaku jika layanan aktif, paket aktif ada, dan kecepatannya diketahui. */
 $applyUpgradeFilter = $statusLangganan === 'active' && $hasCurrent && $paketSpeed !== null;
+
+/* Filter wilayah: ikut paket aktif. Hanya dijalankan bersama filter upgrade.
+   - kolom wilayah ada & wilayah paket aktif terisi  -> filter wilayah diterapkan
+   - kolom wilayah ada tetapi wilayah paket aktif kosong -> tidak ada paket yang ditampilkan (aman)
+   - kolom wilayah tidak ada di database -> filter wilayah tidak dapat diterapkan (dicatat di log) */
+$currentRegionKey   = normalizeRegion($paketWilayah);
+$applyRegionFilter  = $applyUpgradeFilter && $regionCol !== null && $currentRegionKey !== '';
+$regionUnknown      = $applyUpgradeFilter && $regionCol !== null && $currentRegionKey === '';
+
+if ($applyUpgradeFilter && $regionCol === null) {
+    error_log('Packages YESNET: kolom wilayah tidak ditemukan di paket_wifi, filter wilayah tidak diterapkan.');
+}
 
 /* ======================== DAFTAR PAKET ======================== */
 /* Kolom wajib: id, nama_paket, speed_mbps, harga. Kolom lain dipakai hanya jika memang ada. */
@@ -362,6 +391,7 @@ if (!$paketTableReady) {
     $select[] = $descCol    ? "`{$descCol}` AS `deskripsi`"      : 'NULL AS `deskripsi`';
     $select[] = $benefitCol ? "`{$benefitCol}` AS `fasilitas`"   : 'NULL AS `fasilitas`';
     $select[] = $recCol     ? "`{$recCol}` AS `rekomendasi`"     : 'NULL AS `rekomendasi`';
+    $select[] = $regionCol  ? "`{$regionCol}` AS `wilayah`"      : 'NULL AS `wilayah`';
 
     $where = '';
     if ($statusCol !== null) {
@@ -402,9 +432,17 @@ if (!$paketTableReady) {
         $group = 'other';
 
         if ($applyUpgradeFilter) {
-            /* Pelanggan aktif: hanya paket dengan kecepatan LEBIH TINGGI dari paket aktif.
-               Paket yang sama, kecepatan sama, lebih rendah, atau tanpa data kecepatan disembunyikan. */
+            /* Pelanggan aktif: hanya paket di wilayah yang sama dengan paket aktif
+               DAN dengan kecepatan LEBIH TINGGI dari paket aktif.
+               Paket yang sama, kecepatan sama, lebih rendah, tanpa data kecepatan,
+               atau di wilayah lain disembunyikan. */
+            if ($regionUnknown) {
+                continue;
+            }
             if ($id === $currentPaketId) {
+                continue;
+            }
+            if ($applyRegionFilter && normalizeRegion($row['wilayah'] ?? '') !== $currentRegionKey) {
                 continue;
             }
             if ($speed === null || $speed <= $paketSpeed + 0.0001) {
@@ -456,8 +494,8 @@ if (!$paketTableReady) {
 
 $totalPackages = count($packages);
 
-/* Pelanggan aktif sudah di paket tertinggi: filter aktif, tidak ada error, dan tidak ada paket lebih tinggi. */
-$highestReached = $applyUpgradeFilter && !$packagesError && $totalPackages === 0;
+/* Pelanggan aktif sudah di paket tertinggi (pada wilayahnya): filter aktif, tidak ada error, dan tidak ada paket lebih tinggi. */
+$highestReached = $applyUpgradeFilter && !$packagesError && !$regionUnknown && $totalPackages === 0;
 
 /* ======================== NOTIFIKASI (hanya jumlah belum dibaca) ======================== */
 
@@ -520,9 +558,11 @@ $menuService = match ($statusLangganan) {
 };
 
 $heroText = match ($statusLangganan) {
-    'active'             => $applyUpgradeFilter
-        ? 'Pilihan paket di bawah ini memiliki kecepatan lebih tinggi dari paket yang kamu gunakan saat ini.'
-        : 'Lihat paket yang kamu gunakan dan pilihan paket YESNET lainnya.',
+    'active'             => $applyRegionFilter
+        ? 'Pilihan paket di bawah ini tersedia di wilayah ' . $paketWilayah . ' dan memiliki kecepatan lebih tinggi dari paket yang kamu gunakan saat ini.'
+        : ($applyUpgradeFilter
+            ? 'Pilihan paket di bawah ini memiliki kecepatan lebih tinggi dari paket yang kamu gunakan saat ini.'
+            : 'Lihat paket yang kamu gunakan dan pilihan paket YESNET lainnya.'),
     'pending'            => 'Pengajuan pemasangan kamu sedang diproses. Kamu tetap bisa melihat daftar paket YESNET.',
     'suspended'          => 'Layanan kamu sedang ditangguhkan. Hubungi Customer Service untuk mengaktifkan kembali.',
     'terminated'         => 'Layanan kamu sudah berakhir. Hubungi Customer Service untuk informasi lebih lanjut.',
@@ -538,7 +578,9 @@ $heroText = match ($statusLangganan) {
 };
 
 $listKicker = $applyUpgradeFilter ? 'Pilihan upgrade' : 'Pilihan paket';
-$listTitle  = $applyUpgradeFilter ? 'Paket upgrade untuk kamu' : 'Semua paket YESNET';
+$listTitle  = $applyRegionFilter
+    ? 'Paket upgrade wilayah ' . $paketWilayah
+    : ($applyUpgradeFilter ? 'Paket upgrade untuk kamu' : 'Semua paket YESNET');
 
 $csrfToken = e($_SESSION['csrf_notification'] ??= bin2hex(random_bytes(32)));
 ?>
@@ -730,8 +772,8 @@ $csrfToken = e($_SESSION['csrf_notification'] ??= bin2hex(random_bytes(32)));
                                 <strong><?= $paketHarga !== null ? e(rupiah($paketHarga)) . ' <small>/ bulan</small>' : 'Belum tersedia'; ?></strong>
                             </div>
                             <div>
-                                <span>Status langganan</span>
-                                <strong><?= e($statusLabel); ?></strong>
+                                <span><?= $paketWilayah !== '' ? 'Wilayah' : 'Status langganan'; ?></span>
+                                <strong><?= e($paketWilayah !== '' ? $paketWilayah : $statusLabel); ?></strong>
                             </div>
                         </div>
                     <?php else: ?>
@@ -788,13 +830,25 @@ $csrfToken = e($_SESSION['csrf_notification'] ??= bin2hex(random_bytes(32)));
                     <p>Terjadi kendala saat memuat data paket. Silakan coba lagi nanti atau hubungi Customer Service.</p>
                     <a href="chat.php" class="state-button"><i class="bi bi-headset"></i> Hubungi Customer Service</a>
                 </section>
+            <?php elseif ($regionUnknown): ?>
+                <section class="state-card plan-state unknown-state">
+                    <div class="state-icon"><i class="bi bi-geo-alt"></i></div>
+                    <span class="state-label">Wilayah paket</span>
+                    <h2>Wilayah paket aktif belum tersedia</h2>
+                    <p>
+                        Kami belum dapat menentukan wilayah dari paket <strong><?= e($paketNama); ?></strong>,
+                        sehingga pilihan upgrade belum dapat ditampilkan. Hubungi Customer Service untuk bantuan.
+                    </p>
+                    <a href="chat.php" class="state-button"><i class="bi bi-headset"></i> Hubungi Customer Service</a>
+                </section>
             <?php elseif ($highestReached): ?>
                 <section class="state-card plan-state max-state">
                     <div class="state-icon"><i class="bi bi-trophy-fill"></i></div>
                     <span class="state-label">Paket tertinggi</span>
                     <h2>Belum tersedia paket upgrade yang lebih tinggi</h2>
                     <p>
-                        Kamu sudah menggunakan paket tertinggi kami, yaitu <strong><?= e($paketNama); ?></strong>
+                        Kamu sudah menggunakan paket tertinggi<?= $applyRegionFilter ? ' di wilayah ' . e($paketWilayah) : ''; ?>,
+                        yaitu <strong><?= e($paketNama); ?></strong>
                         (<?= e(formatSpeed($paketSpeed)); ?>). Kami akan menampilkan pilihan baru di sini
                         saat paket dengan kecepatan lebih tinggi tersedia.
                     </p>
@@ -812,7 +866,11 @@ $csrfToken = e($_SESSION['csrf_notification'] ??= bin2hex(random_bytes(32)));
                     <div class="plan-scope-note" role="status">
                         <i class="bi bi-funnel-fill"></i>
                         <span>
-                            Menampilkan <strong><?= $totalPackages; ?> paket</strong> dengan kecepatan di atas
+                            Menampilkan <strong><?= $totalPackages; ?> paket</strong>
+                            <?php if ($applyRegionFilter): ?>
+                                di wilayah <strong><?= e($paketWilayah); ?></strong>
+                            <?php endif; ?>
+                            dengan kecepatan di atas
                             <strong><?= e($paketNama); ?> (<?= e(formatSpeed($paketSpeed)); ?>)</strong>.
                         </span>
                     </div>
