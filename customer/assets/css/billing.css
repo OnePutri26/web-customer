@@ -223,29 +223,92 @@
     white-space: nowrap;
 }
 
+/* CID di catatan pembayaran */
+.bill-invoice-note strong {
+    padding: 1px 7px;
+    border-radius: 6px;
+    color: #fff;
+    background: rgba(255, 255, 255, .16);
+    font-weight: 800;
+    letter-spacing: .3px;
+    white-space: nowrap;
+}
+
+/* Catatan + tombol bayar selalu di bagian bawah kartu */
+.bill-invoice.no-invoice .bill-pay-note {
+    margin-top: auto;
+    padding-top: 20px;
+}
+
 .bill-pay-button {
+    position: relative;
+    z-index: 2;
     width: fit-content;
-    min-height: 40px;
-    margin-top: 20px;
-    padding: 0 18px;
+    min-height: 44px;              /* ukuran area tap yang nyaman di HP */
+    margin-top: 16px;
+    padding: 0 22px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    border-radius: 10px;
+    border: 0;
+    border-radius: 12px;
     background: #fff;
     color: #1d4ed8;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 800;
+    line-height: 1;
+    text-decoration: none;         /* hapus underline bawaan Bootstrap */
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;    /* hilangkan delay tap di mobile */
     box-shadow: 0 9px 22px rgba(8, 45, 125, .18);
-    transition: .2s ease;
+    transition: transform .2s ease, box-shadow .2s ease, background .2s ease, color .2s ease;
+}
+
+.bill-pay-button i {
+    font-size: 13px;
+    transition: transform .2s ease;
+}
+
+.bill-pay-button:hover,
+.bill-pay-button:focus {
+    color: #123f9e;
+    background: #eff6ff;
+    text-decoration: none;
 }
 
 .bill-pay-button:hover {
-    color: #123f9e;
-    background: #eff6ff;
     transform: translateY(-2px);
     box-shadow: 0 13px 28px rgba(8, 45, 125, .26);
+}
+
+.bill-pay-button:hover i {
+    transform: translate(2px, -2px);
+}
+
+/* Efek saat ditekan (tap) */
+.bill-pay-button:active {
+    transform: translateY(0) scale(.97);
+    background: #dbeafe;
+    box-shadow: 0 5px 14px rgba(8, 45, 125, .20);
+}
+
+/* Warna tombol di kartu hijau (tidak ada tagihan) */
+.bill-invoice.no-invoice .bill-pay-button {
+    color: #0f5a46;
+    box-shadow: 0 9px 22px rgba(10, 70, 50, .20);
+}
+
+.bill-invoice.no-invoice .bill-pay-button:hover,
+.bill-invoice.no-invoice .bill-pay-button:focus {
+    color: #0b4536;
+    background: #ecfdf3;
+}
+
+.bill-invoice.no-invoice .bill-pay-button:active {
+    background: #d1fae5;
 }
 
 .bill-pay-button:focus-visible,
@@ -634,6 +697,20 @@
     color: #dc2626;
 }
 
+/* Tombol bayar tetap putih & terbaca di tema gelap */
+.dashboard-page[data-theme="dark"] .bill-invoice .bill-pay-button {
+    background: #fff;
+    color: #1d4ed8;
+}
+
+.dashboard-page[data-theme="dark"] .bill-invoice.no-invoice .bill-pay-button {
+    color: #0f5a46;
+}
+
+.dashboard-page[data-theme="dark"] .bill-invoice .bill-pay-button:hover {
+    background: #eff6ff;
+}
+
 .dashboard-page[data-theme="dark"] .status-pill {
     color: #f0c36a;
     background: #3a2f16;
@@ -707,6 +784,8 @@
 
     .bill-pay-button {
         width: 100%;
+        min-height: 48px;
+        font-size: 13px;
     }
 
     .bill-table {
@@ -718,8 +797,15 @@
 @media (prefers-reduced-motion: reduce) {
 
     .bill-pay-button,
+    .bill-pay-button i,
     .bill-tip-link {
         transition: none;
+    }
+
+    .bill-pay-button:hover,
+    .bill-pay-button:active,
+    .bill-pay-button:hover i {
+        transform: none;
     }
 
 }
