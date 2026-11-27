@@ -1079,28 +1079,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
                             </div>
 
-                            <?php if ($canPay): ?>
-                                <?php if ($cid !== ''): ?>
-                                    <p class="bill-invoice-note">
-                                        Anda akan melanjutkan ke halaman pembayaran resmi Sinar Alam Abadi.
-                                        Masukkan CID Anda di halaman tersebut. Membuka halaman ini tidak mengubah status pembayaran.
-                                    </p>
-                                    <a
-                                        href="<?= e(EXTERNAL_PAYMENT_URL); ?>"
-                                        class="bill-pay-button"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                    >
-                                        <i class="bi bi-box-arrow-up-right"></i>
-                                        Bayar Sekarang
-                                    </a>
-                                <?php else: ?>
-                                    <p class="bill-invoice-note">
-                                        CID belum tersedia pada akun ini. Hubungi Customer Service sebelum melanjutkan pembayaran.
-                                    </p>
-                                <?php endif; ?>
-                            <?php endif; ?>
-
                         <?php else: ?>
 
                             <div class="bill-invoice-amount bill-invoice-empty">
@@ -1114,6 +1092,26 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                             </p>
 
                         <?php endif; ?>
+
+                        <!-- TOMBOL BAYAR: selalu tampil, tap langsung ke halaman pembayaran -->
+                        <p class="bill-invoice-note">
+                            Anda akan melanjutkan ke halaman pembayaran resmi Sinar Alam Abadi.
+                            <?php if ($cid !== ''): ?>
+                                Masukkan CID <strong><?= e($cid); ?></strong> di halaman tersebut.
+                            <?php else: ?>
+                                Siapkan CID Anda untuk dimasukkan di halaman tersebut.
+                            <?php endif; ?>
+                        </p>
+
+                        <a
+                            href="<?= e(EXTERNAL_PAYMENT_URL); ?>"
+                            class="bill-pay-button"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            <i class="bi bi-box-arrow-up-right"></i>
+                            Bayar Sekarang
+                        </a>
 
                     </section>
 
